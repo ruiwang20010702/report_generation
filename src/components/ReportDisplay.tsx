@@ -136,25 +136,31 @@ export const ReportDisplay = ({ data, onBack }: ReportDisplayProps) => {
         })
       );
 
-      // 获取报告容器的当前实际渲染宽度
-      const actualWidth = reportElement.offsetWidth;
-      const computedStyle = window.getComputedStyle(reportElement);
-      const actualPaddingLeft = parseFloat(computedStyle.paddingLeft);
-      const actualPaddingRight = parseFloat(computedStyle.paddingRight);
-      const contentWidth = actualWidth + actualPaddingLeft + actualPaddingRight;
-
       // 保存原始样式
       const originalWidth = reportElement.style.width;
       const originalMaxWidth = reportElement.style.maxWidth;
       
-      // 使用实际渲染宽度作为固定宽度，确保长图和桌面版完全一致
-      // 如果实际宽度小于 max-w-5xl (1024px)，使用 1024px 来确保完整桌面版布局
-      const targetWidth = Math.max(contentWidth, 1024);
-      reportElement.style.width = `${targetWidth}px`;
-      reportElement.style.maxWidth = `${targetWidth}px`;
+      // 设置固定宽度为桌面版宽度 (max-w-5xl = 1024px)
+      reportElement.style.width = '1024px';
+      reportElement.style.maxWidth = '1024px';
+
+      // 找到所有响应式网格，临时强制为两栏布局
+      const gridElements = reportElement.querySelectorAll('.grid');
+      const originalGridClasses: { element: Element; classList: string[] }[] = [];
+      
+      gridElements.forEach((grid) => {
+        const classList = Array.from(grid.classList);
+        originalGridClasses.push({ element: grid, classList: [...classList] });
+        
+        // 移除响应式类，强制添加两栏布局
+        grid.classList.remove('grid-cols-1');
+        if (!grid.classList.contains('grid-cols-2')) {
+          grid.classList.add('grid-cols-2');
+        }
+      });
 
       // 等待浏览器重新渲染
-      await new Promise(resolve => setTimeout(resolve, 200));
+      await new Promise(resolve => setTimeout(resolve, 300));
 
       // 使用html2canvas将HTML转换为canvas（生成完整长图，无分页）
       const canvas = await html2canvas(reportElement, {
@@ -176,6 +182,11 @@ export const ReportDisplay = ({ data, onBack }: ReportDisplayProps) => {
       // 恢复原始样式
       reportElement.style.width = originalWidth;
       reportElement.style.maxWidth = originalMaxWidth;
+
+      // 恢复网格的原始类
+      originalGridClasses.forEach(({ element, classList }) => {
+        element.className = classList.join(' ');
+      });
 
       // 恢复按钮显示
       if (buttons) {
