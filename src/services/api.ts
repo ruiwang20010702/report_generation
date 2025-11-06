@@ -152,6 +152,45 @@ export class VideoAnalysisAPI {
       throw new Error('分析视频时出错，请稍后重试');
     }
   }
+
+  /**
+   * 通过 ID 获取保存的报告
+   */
+  async getReport(id: string): Promise<any> {
+    try {
+      console.log('Fetching report from:', `${this.baseURL}/api/analysis/report/${id}`);
+      
+      const response = await axios.get(
+        `${this.baseURL}/api/analysis/report/${id}`,
+        {
+          timeout: 10000, // 10秒超时
+        }
+      );
+
+      if (response.data.success && response.data.data) {
+        return response.data.data;
+      } else {
+        throw new Error('报告数据格式错误');
+      }
+    } catch (error) {
+      console.error('Get report request failed:', error);
+      
+      if (axios.isAxiosError(error)) {
+        const axiosError = error as AxiosError;
+        
+        if (axiosError.response?.status === 404) {
+          throw new Error('未找到该报告');
+        } else if (axiosError.response) {
+          const errorData = axiosError.response.data as { error?: string; message?: string };
+          throw new Error(errorData.error || errorData.message || '获取报告失败');
+        } else if (axiosError.request) {
+          throw new Error('服务器无响应');
+        }
+      }
+      
+      throw new Error('获取报告时出错，请稍后重试');
+    }
+  }
 }
 
 // 导出默认实例

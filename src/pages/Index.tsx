@@ -162,6 +162,7 @@ const Index = () => {
       const result = await videoAnalysisAPI.analyzeVideos(data);
       console.log('✅ API response received:', result);
       setReportData(result);
+      
       setAppState("report");
       
       toast({
