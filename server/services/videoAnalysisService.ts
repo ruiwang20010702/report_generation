@@ -622,6 +622,7 @@ ${JSON.stringify(video2Analysis, null, 2)}
         },
         grammar: {
           overview: "整体语法很好，但在一些细节上可以做得更完美。",
+          details: "在动词变化和时态一致性方面偶尔出现小错误。",
           examples: [
             {
               sentence: "She is feeds her cat",
