@@ -6,7 +6,6 @@ import { Download, TrendingUp, TrendingDown, Minus, ArrowLeft, Volume2, Code2, M
 import { useToast } from "@/hooks/use-toast";
 import logo51Talk from "@/assets/51talk-logo-new.jpg";
 import monkeyMascot from "@/assets/monkey-mascot-new.png";
-import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 
 interface ReportData {
@@ -121,16 +120,18 @@ export const ReportDisplay = ({ data, onBack }: ReportDisplayProps) => {
       }
 
       toast({
-        title: "正在生成PDF...",
+        title: "正在生成长图...",
         description: "请稍候，这可能需要几秒钟",
       });
 
-      // 使用html2canvas将HTML转换为canvas
+      // 使用html2canvas将HTML转换为canvas（生成完整长图，无分页）
       const canvas = await html2canvas(reportElement, {
-        scale: 2, // 提高分辨率
+        scale: 2, // 提高分辨率，生成高清图片
         useCORS: true,
         logging: false,
         backgroundColor: '#ffffff',
+        windowWidth: reportElement.scrollWidth,
+        windowHeight: reportElement.scrollHeight,
       });
 
       // 恢复按钮显示
@@ -138,39 +139,28 @@ export const ReportDisplay = ({ data, onBack }: ReportDisplayProps) => {
         buttons.style.display = 'flex';
       }
 
-      const imgWidth = 210; // A4 宽度（mm）
-      const pageHeight = 297; // A4 高度（mm）
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-      let heightLeft = imgHeight;
-      let position = 0;
+      // 将canvas转换为PNG图片数据
+      const imgData = canvas.toDataURL('image/png', 1.0);
 
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      const imgData = canvas.toDataURL('image/jpeg', 0.95);
-
-      // 添加第一页
-      pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
-      heightLeft -= pageHeight;
-
-      // 如果内容超过一页，添加更多页面
-      while (heightLeft > 0) {
-        position = heightLeft - imgHeight;
-        pdf.addPage();
-        pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
-        heightLeft -= pageHeight;
-      }
-
-      // 下载PDF
-      const fileName = `51Talk学习报告_${data.studentName}_${new Date().toLocaleDateString('zh-CN').replace(/\//g, '-')}.pdf`;
-      pdf.save(fileName);
+      // 创建下载链接
+      const link = document.createElement('a');
+      const fileName = `51Talk学习报告_${data.studentName}_${new Date().toLocaleDateString('zh-CN').replace(/\//g, '-')}.png`;
+      link.download = fileName;
+      link.href = imgData;
+      
+      // 触发下载
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
 
       toast({
-        title: "PDF生成成功！",
+        title: "长图生成成功！",
         description: `报告已保存为 ${fileName}`,
       });
     } catch (error) {
-      console.error('PDF生成失败:', error);
+      console.error('长图生成失败:', error);
       toast({
-        title: "PDF生成失败",
+        title: "长图生成失败",
         description: "请稍后重试或联系技术支持",
         variant: "destructive",
       });
@@ -571,7 +561,7 @@ export const ReportDisplay = ({ data, onBack }: ReportDisplayProps) => {
             ) : (
               <>
                 <Download className="w-5 h-5 mr-2" />
-                下载PDF报告
+                下载长图报告
               </>
             )}
           </Button>
