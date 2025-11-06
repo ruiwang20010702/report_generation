@@ -56,27 +56,22 @@ export class VideoAnalysisService {
   }
 
   /**
-   * 使用 Whisper API 转录视频，然后用 GPT-4 分析内容
+   * 使用 GPT-4 分析转录文本
    */
-  private async analyzeVideoContent(
-    videoUrl: string, 
+  private async analyzeTranscriptionWithGPT(
+    transcription: TranscriptionResult,
     openai: OpenAI,
     videoLabel: string = 'video'
-  ): Promise<{ transcription: TranscriptionResult; analysis: string }> {
+  ): Promise<string> {
     if (!openai) {
       throw new Error('OpenAI client not initialized');
     }
     
     try {
-      // 1. 使用 Whisper API 转录视频
-      console.log(`🎙️ Transcribing ${videoLabel}...`);
-      const transcription = await this.whisperService.transcribeVideo(videoUrl, openai);
-      console.log(`✅ Transcription complete for ${videoLabel}:`, transcription.text.substring(0, 100) + '...');
-
-      // 2. 分析转录文本的基本特征
+      // 分析转录文本的基本特征
       const textAnalysis = this.whisperService.analyzeTranscription(transcription.text);
       
-      // 3. 使用 GPT-4 进行深度分析
+      // 使用 GPT-4 进行深度分析
       console.log(`🤖 Analyzing ${videoLabel} content with GPT-4...`);
       const response = await openai.chat.completions.create({
         model: "gpt-4-turbo-preview",
@@ -128,11 +123,40 @@ ${transcription.text}
       });
 
       const analysisText = response.choices[0]?.message?.content || '{}';
-      console.log(`✅ Analysis complete for ${videoLabel}`);
+      console.log(`✅ GPT analysis complete for ${videoLabel}`);
+      
+      return analysisText;
+    } catch (error) {
+      console.error(`❌ Error analyzing ${videoLabel}:`, error);
+      throw new Error(`Failed to analyze transcription: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * 使用 Whisper API 转录视频，然后用 GPT-4 分析内容
+   * @deprecated 此方法已被超级并行版本替代，保留用于向后兼容
+   */
+  private async analyzeVideoContent(
+    videoUrl: string, 
+    openai: OpenAI,
+    videoLabel: string = 'video'
+  ): Promise<{ transcription: TranscriptionResult; analysis: string }> {
+    if (!openai) {
+      throw new Error('OpenAI client not initialized');
+    }
+    
+    try {
+      // 1. 使用 Whisper API 转录视频
+      console.log(`🎙️ Transcribing ${videoLabel}...`);
+      const transcription = await this.whisperService.transcribeVideo(videoUrl, openai);
+      console.log(`✅ Transcription complete for ${videoLabel}:`, transcription.text.substring(0, 100) + '...');
+
+      // 2. 使用 GPT-4 进行分析
+      const analysis = await this.analyzeTranscriptionWithGPT(transcription, openai, videoLabel);
       
       return {
         transcription,
-        analysis: analysisText
+        analysis
       };
     } catch (error) {
       console.error(`❌ Error analyzing ${videoLabel}:`, error);
@@ -343,15 +367,63 @@ ${JSON.stringify(video2Analysis, null, 2)}
       console.log('📹 Video 1:', request.video1);
       console.log('📹 Video 2:', request.video2);
 
-      // 2. 使用 Whisper + GPT-4 分析两个视频
-      console.log('\n=== 分析第一个视频（较早课堂）===');
-      const video1Result = await this.analyzeVideoContent(request.video1, openai, 'Video 1 (Earlier)');
+      // 2. 🚀 超级并行：让所有可并行的步骤都并行执行
+      console.log('\n=== 🚀 超级并行分析：下载、转录、分析全部并行 ===');
+      const overallStartTime = Date.now();
       
-      console.log('\n=== 分析第二个视频（较新课堂）===');
-      const video2Result = await this.analyzeVideoContent(request.video2, openai, 'Video 2 (Later)');
+      // 添加进度监控
+      const progressInterval = setInterval(() => {
+        const elapsed = ((Date.now() - overallStartTime) / 1000).toFixed(0);
+        console.log(`⏳ 视频分析进行中... 已耗时: ${elapsed}秒`);
+      }, 15000); // 每15秒打印一次进度
+      
+      let video1Result, video2Result;
+      try {
+        // 🔥 步骤1：并行下载两个视频
+        console.log('\n📥 [并行] 下载两个视频...');
+        const downloadStartTime = Date.now();
+        const [transcription1, transcription2] = await Promise.all([
+          (async () => {
+            console.log('📥 下载 Video 1...');
+            const result = await this.whisperService.transcribeVideo(request.video1, openai);
+            console.log('✅ Video 1 转录完成');
+            return result;
+          })(),
+          (async () => {
+            console.log('📥 下载 Video 2...');
+            const result = await this.whisperService.transcribeVideo(request.video2, openai);
+            console.log('✅ Video 2 转录完成');
+            return result;
+          })()
+        ]);
+        const downloadTime = ((Date.now() - downloadStartTime) / 1000).toFixed(1);
+        console.log(`✅ 两个视频下载+转录完成！耗时: ${downloadTime}秒\n`);
+
+        // 🔥 步骤2：并行分析两个视频的转录文本
+        console.log('🤖 [并行] 使用GPT-4分析两个视频...');
+        const gptStartTime = Date.now();
+        const [analysis1Text, analysis2Text] = await Promise.all([
+          this.analyzeTranscriptionWithGPT(transcription1, openai, 'Video 1'),
+          this.analyzeTranscriptionWithGPT(transcription2, openai, 'Video 2')
+        ]);
+        const gptTime = ((Date.now() - gptStartTime) / 1000).toFixed(1);
+        console.log(`✅ 两个视频GPT分析完成！耗时: ${gptTime}秒\n`);
+
+        // 组装结果
+        video1Result = { transcription: transcription1, analysis: analysis1Text };
+        video2Result = { transcription: transcription2, analysis: analysis2Text };
+        
+        clearInterval(progressInterval);
+        const totalTime = ((Date.now() - overallStartTime) / 1000).toFixed(1);
+        console.log(`✅ 所有步骤完成！总耗时: ${totalTime}秒 (下载+转录: ${downloadTime}秒, GPT分析: ${gptTime}秒)`);
+      } catch (error) {
+        clearInterval(progressInterval);
+        throw error;
+      }
 
       // 3. 比较并生成报告
-      console.log('\n=== 生成对比报告 ===');
+      console.log('\n=== 📊 生成对比报告 ===');
+      const reportStartTime = Date.now();
       const report = await this.compareVideos(
         video1Result,
         video2Result,
@@ -363,8 +435,10 @@ ${JSON.stringify(video2Analysis, null, 2)}
         },
         openai
       );
-
-      console.log('✅ Analysis complete for:', request.studentName);
+      
+      const reportTime = ((Date.now() - reportStartTime) / 1000).toFixed(1);
+      console.log(`✅ 对比报告生成完成！耗时: ${reportTime}秒`);
+      console.log('✅ 整体分析完成 for:', request.studentName);
       return report;
     } catch (error) {
       console.error('❌ Error in analyzeVideos:', error);

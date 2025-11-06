@@ -125,7 +125,7 @@ export class VideoAnalysisAPI {
           headers: {
             'Content-Type': 'application/json',
           },
-          timeout: 300000, // 5分钟超时（真实AI分析需要更长时间）
+          timeout: 600000, // 10分钟超时（真实AI分析需要更长时间，包括视频下载、转录、分析）
         }
       );
 
@@ -138,7 +138,7 @@ export class VideoAnalysisAPI {
         
         if (axiosError.code === 'ECONNABORTED') {
           // 超时错误
-          throw new Error('请求超时（超过5分钟）。可能原因：1) 视频文件太大 2) 网络速度慢 3) OpenAI API 响应慢。建议使用较短的视频（3-5分钟）。');
+          throw new Error('请求超时（超过10分钟）。可能原因：1) 视频文件太大（建议<50MB） 2) 网络速度慢 3) OpenAI API 响应慢。建议使用较短的视频（3-5分钟）。');
         } else if (axiosError.response) {
           // 服务器返回了错误响应
           const errorData = axiosError.response.data as { error?: string; message?: string };
