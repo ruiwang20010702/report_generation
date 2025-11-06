@@ -75,7 +75,7 @@ export class VideoAnalysisService {
       // 使用 GPT-4 进行深度分析
       console.log(`🤖 Analyzing ${videoLabel} content with GPT-4...`);
       const response = await openai.chat.completions.create({
-        model: "gpt-4-turbo-preview",
+        model: "gpt-4o",
         messages: [
           {
             role: "system",
@@ -354,8 +354,8 @@ ${JSON.stringify(video2Analysis, null, 2)}
           "description": "详细的练习建议，包括具体的练习句子和方法"
         }
       ]
-    }
   }
+}
 }
 
 重要提示：
@@ -365,7 +365,7 @@ ${JSON.stringify(video2Analysis, null, 2)}
 4. 确保返回有效的JSON格式，不要包含注释或其他非JSON内容`;
 
       const response = await openai.chat.completions.create({
-        model: "gpt-4-turbo-preview",
+        model: "gpt-4o",
         messages: [
           {
             role: "system",
@@ -515,7 +515,7 @@ ${JSON.stringify(video2Analysis, null, 2)}
         },
         openai
       );
-      
+
       const reportTime = ((Date.now() - reportStartTime) / 1000).toFixed(1);
       console.log(`✅ 对比报告生成完成！耗时: ${reportTime}秒`);
       console.log('✅ 整体分析完成 for:', request.studentName);

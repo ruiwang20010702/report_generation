@@ -47,7 +47,7 @@ class AssemblyAIService {
       this.client = new AssemblyAI({
         apiKey: this.apiKey
       });
-      console.log('✅ AssemblyAI service initialized');
+      console.log('✅ AssemblyAI service initialized successfully');
     } else {
       console.warn('⚠️  AssemblyAI API key not found. Service will not be available.');
     }
@@ -155,7 +155,7 @@ class AssemblyAIService {
           end: word.end / 1000,
           confidence: word.confidence
         })),
-        duration: transcript.audio_duration,
+        duration: transcript.audio_duration ?? undefined,
         language: options.language || 'en'
       };
     } catch (error: any) {
@@ -225,7 +225,7 @@ class AssemblyAIService {
           end: word.end / 1000,
           confidence: word.confidence
         })),
-        duration: transcript.audio_duration
+        duration: transcript.audio_duration ?? undefined
       };
 
       onProgress({
@@ -266,12 +266,38 @@ class AssemblyAIService {
         end: word.end / 1000,
         confidence: word.confidence
       })),
-      duration: transcript.audio_duration
+      duration: transcript.audio_duration ?? undefined
     };
   }
 }
 
-// Singleton instance
-export const assemblyAIService = new AssemblyAIService();
+// Lazy singleton initialization
+// We don't create the instance immediately because environment variables
+// might not be loaded yet when this module is imported
+let _assemblyAIServiceInstance: AssemblyAIService | null = null;
+
+export function getAssemblyAIService(): AssemblyAIService {
+  if (!_assemblyAIServiceInstance) {
+    _assemblyAIServiceInstance = new AssemblyAIService();
+  }
+  return _assemblyAIServiceInstance;
+}
+
+// For backward compatibility, export a proxy that creates the instance on first access
+export const assemblyAIService = {
+  get isAvailable() {
+    return getAssemblyAIService().isAvailable.bind(getAssemblyAIService());
+  },
+  get hasRemainingQuota() {
+    return getAssemblyAIService().hasRemainingQuota.bind(getAssemblyAIService());
+  },
+  get getStats() {
+    return getAssemblyAIService().getStats.bind(getAssemblyAIService());
+  },
+  get transcribeFromURL() {
+    return getAssemblyAIService().transcribeFromURL.bind(getAssemblyAIService());
+  }
+};
+
 export type { TranscriptionResult, TranscriptionProgress, AssemblyAIStats };
 

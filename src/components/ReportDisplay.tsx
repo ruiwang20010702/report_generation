@@ -429,42 +429,42 @@ export const ReportDisplay = ({ data, onBack }: ReportDisplayProps) => {
                 {/* Grammar Examples */}
                 {data.improvementAreas.grammar.examples && data.improvementAreas.grammar.examples.length > 0 && (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {data.improvementAreas.grammar.examples.map((example, idx) => (
-                      <div key={idx} className="p-4 rounded-lg bg-accent/20 border border-accent">
-                        <div className="flex items-center gap-2 mb-3">
-                          <span className="text-destructive text-xl">👤</span>
+                  {data.improvementAreas.grammar.examples.map((example, idx) => (
+                    <div key={idx} className="p-4 rounded-lg bg-accent/20 border border-accent">
+                      <div className="flex items-center gap-2 mb-3">
+                        <span className="text-destructive text-xl">👤</span>
                           <h4 className="font-semibold text-accent-foreground">例子 {idx + 1}</h4>
-                        </div>
-                        <div className="space-y-2 text-sm">
-                          <div className="flex items-start gap-2">
-                            <X className="w-4 h-4 text-destructive flex-shrink-0 mt-0.5" />
+                      </div>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex items-start gap-2">
+                          <X className="w-4 h-4 text-destructive flex-shrink-0 mt-0.5" />
                             <span className="text-destructive line-through">"{example.sentence}"</span>
                           </div>
                           <div className="text-xs text-muted-foreground px-6">
                             错误: {example.error}
-                          </div>
-                          <div className="flex items-start gap-2">
-                            <Check className="w-4 h-4 text-success flex-shrink-0 mt-0.5" />
+                        </div>
+                        <div className="flex items-start gap-2">
+                          <Check className="w-4 h-4 text-success flex-shrink-0 mt-0.5" />
                             <span className="text-success font-medium">"{example.correction}"</span>
-                          </div>
+                        </div>
                           <p className="text-xs text-muted-foreground mt-2 px-6">
                             <strong>语法规则:</strong> {example.rule}
                           </p>
-                        </div>
                       </div>
-                    ))}
-                  </div>
+                    </div>
+                  ))}
+                </div>
                 )}
 
                 {/* Grammar Suggestions */}
                 {data.improvementAreas.grammar.suggestions && data.improvementAreas.grammar.suggestions.length > 0 && (
-                  <div className="p-5 rounded-lg bg-secondary/10 border-2 border-secondary/30">
-                    <h4 className="font-bold text-secondary mb-4 flex items-center gap-2">
-                      <Lightbulb className="w-5 h-5" />
-                      提升建议
-                    </h4>
+                <div className="p-5 rounded-lg bg-secondary/10 border-2 border-secondary/30">
+                  <h4 className="font-bold text-secondary mb-4 flex items-center gap-2">
+                    <Lightbulb className="w-5 h-5" />
+                    提升建议
+                  </h4>
                     <ul className="space-y-3">
-                      {data.improvementAreas.grammar.suggestions.map((suggestion, idx) => (
+                    {data.improvementAreas.grammar.suggestions.map((suggestion, idx) => (
                         <li key={idx} className="text-sm text-foreground">
                           <div className="flex gap-2">
                             <span className="text-secondary flex-shrink-0">•</span>
@@ -473,10 +473,10 @@ export const ReportDisplay = ({ data, onBack }: ReportDisplayProps) => {
                               <span>{suggestion.description}</span>
                             </div>
                           </div>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
                 )}
               </div>
             )}
@@ -520,11 +520,11 @@ export const ReportDisplay = ({ data, onBack }: ReportDisplayProps) => {
 
                 {/* Intonation Suggestions */}
                 {data.improvementAreas.intonation.suggestions && data.improvementAreas.intonation.suggestions.length > 0 && (
-                  <div className="p-5 rounded-lg bg-secondary/10 border-2 border-secondary/30">
-                    <h4 className="font-bold text-secondary mb-4 flex items-center gap-2">
-                      <Lightbulb className="w-5 h-5" />
-                      提升建议
-                    </h4>
+                <div className="p-5 rounded-lg bg-secondary/10 border-2 border-secondary/30">
+                  <h4 className="font-bold text-secondary mb-4 flex items-center gap-2">
+                    <Lightbulb className="w-5 h-5" />
+                    提升建议
+                  </h4>
                     <ul className="space-y-3">
                       {data.improvementAreas.intonation.suggestions.map((suggestion, idx) => (
                         <li key={idx} className="text-sm text-foreground">
@@ -538,7 +538,7 @@ export const ReportDisplay = ({ data, onBack }: ReportDisplayProps) => {
                         </li>
                       ))}
                     </ul>
-                  </div>
+                </div>
                 )}
               </div>
             )}

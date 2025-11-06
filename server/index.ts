@@ -1,10 +1,12 @@
 import express, { Express, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import analysisRouter from './routes/analysis';
 
-// 加载环境变量
+// ⚠️ 必须先加载环境变量，再导入其他模块
+// 因为 assemblyAIService 等服务在模块加载时就会初始化
 dotenv.config();
+
+import analysisRouter from './routes/analysis';
 
 const app: Express = express();
 const PORT = process.env.PORT || 3001;
