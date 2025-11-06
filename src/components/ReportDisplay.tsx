@@ -136,16 +136,25 @@ export const ReportDisplay = ({ data, onBack }: ReportDisplayProps) => {
         })
       );
 
+      // 获取报告容器的当前实际渲染宽度
+      const actualWidth = reportElement.offsetWidth;
+      const computedStyle = window.getComputedStyle(reportElement);
+      const actualPaddingLeft = parseFloat(computedStyle.paddingLeft);
+      const actualPaddingRight = parseFloat(computedStyle.paddingRight);
+      const contentWidth = actualWidth + actualPaddingLeft + actualPaddingRight;
+
       // 保存原始样式
       const originalWidth = reportElement.style.width;
       const originalMaxWidth = reportElement.style.maxWidth;
       
-      // 临时设置固定宽度以确保布局一致（桌面版宽度）
-      reportElement.style.width = '1024px';
-      reportElement.style.maxWidth = '1024px';
+      // 使用实际渲染宽度作为固定宽度，确保长图和桌面版完全一致
+      // 如果实际宽度小于 max-w-5xl (1024px)，使用 1024px 来确保完整桌面版布局
+      const targetWidth = Math.max(contentWidth, 1024);
+      reportElement.style.width = `${targetWidth}px`;
+      reportElement.style.maxWidth = `${targetWidth}px`;
 
       // 等待浏览器重新渲染
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise(resolve => setTimeout(resolve, 200));
 
       // 使用html2canvas将HTML转换为canvas（生成完整长图，无分页）
       const canvas = await html2canvas(reportElement, {
