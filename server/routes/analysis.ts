@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { VideoAnalysisService } from '../services/videoAnalysisService';
 import { VideoAnalysisRequest } from '../types';
+import { assemblyAIService } from '../services/assemblyAIService';
 
 const router = Router();
 const analysisService = new VideoAnalysisService();
@@ -93,6 +94,42 @@ router.get('/health', (req: Request, res: Response) => {
     timestamp: new Date().toISOString(),
     useMock: process.env.USE_MOCK_ANALYSIS === 'true'
   });
+});
+
+/**
+ * GET /api/analysis/quota
+ * 获取 AssemblyAI 使用量统计
+ */
+router.get('/quota', (req: Request, res: Response) => {
+  try {
+    const stats = assemblyAIService.getStats();
+    const isAvailable = assemblyAIService.isAvailable();
+    
+    res.json({
+      service: 'AssemblyAI',
+      available: isAvailable,
+      quota: {
+        totalMinutes: stats.freeMinutesLimit,
+        usedMinutes: stats.totalMinutesUsed,
+        remainingMinutes: stats.remainingMinutes,
+        usagePercentage: Math.round((stats.totalMinutesUsed / stats.freeMinutesLimit) * 100)
+      },
+      period: {
+        startDate: stats.lastReset,
+        resetFrequency: 'monthly'
+      },
+      costSavings: {
+        estimatedSavings: `$${(stats.totalMinutesUsed * 0.006).toFixed(2)}`,
+        description: 'Compared to OpenAI Whisper ($0.006/minute)'
+      }
+    });
+  } catch (error) {
+    console.error('Error getting quota stats:', error);
+    res.status(500).json({
+      error: 'Failed to get quota statistics',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
 });
 
 export default router;

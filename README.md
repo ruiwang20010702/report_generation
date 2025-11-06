@@ -5,19 +5,22 @@
 ## ✨ 主要功能
 
 - 📹 **视频对比分析** - 上传两个不同时期的学习视频，AI自动分析进步情况
-- 🎙️ **语音转文字** - 使用 OpenAI Whisper API 将视频音频转录为文字
+- 🎙️ **智能语音转录** - 优先使用 AssemblyAI 免费服务，自动降级到 Whisper（**每月节省 $1.80+**）
 - 🤖 **真实 AI 分析** - GPT-4 分析转录内容，生成专业学习报告
+- 💰 **成本优化** - AssemblyAI 每月 5 小时免费额度，降低运营成本
 - 📊 **多维度评估** - 从流利度、自信度、语言应用、句型复杂度等维度全面评估
 - 📈 **数据可视化** - 清晰展示举手次数、回答长度、完整句子率等关键指标
 - 🎯 **个性化建议** - 针对发音、语法、语调等方面提供具体改进建议
 - 📄 **PDF报告导出** - 一键导出专业的学习分析报告
 - 🔄 **双模式支持** - 可选择真实 AI 分析或模拟数据测试
+- 🚀 **性能优化** - 直接传 URL 转录，无需下载视频，节省时间和空间
 
 ## 🚀 快速开始
 
 ### 前置要求
 - Node.js 16+ 和 npm
-- OpenAI API密钥（用于真实的AI视频分析）
+- OpenAI API密钥（用于 GPT-4 分析）
+- AssemblyAI API密钥（可选，用于免费转录服务）- [获取免费密钥](https://www.assemblyai.com/)
 
 ### 安装和运行
 
@@ -122,8 +125,10 @@ npm run dev:all
 ### 后端技术
 - **Node.js + Express** - 后端服务器
 - **TypeScript** - 类型安全
-- **OpenAI Whisper API** - 语音转文字（视频音频转录）
+- **AssemblyAI API** - 免费语音转文字服务（优先使用，5小时/月免费）
+- **OpenAI Whisper API** - 备用语音转文字（降级方案）
 - **OpenAI GPT-4 API** - AI 内容分析和报告生成
+- **智能降级策略** - AssemblyAI → Whisper 自动切换
 - **Axios** - HTTP 客户端（下载视频文件）
 - **form-data** - 文件上传处理
 - **https-proxy-agent** - 代理支持
@@ -153,7 +158,8 @@ npm run dev:all
 │
 ├── server/                       # 后端源码
 │   ├── services/                 # 业务逻辑层
-│   │   ├── videoAnalysisService.ts  # 视频分析服务
+│   │   ├── videoAnalysisService.ts  # 视频分析服务（智能降级）
+│   │   ├── assemblyAIService.ts  # AssemblyAI 转录服务
 │   │   └── whisperService.ts     # Whisper 转录服务
 │   ├── routes/                   # API路由
 │   │   └── analysis.ts           # 分析相关路由
@@ -173,8 +179,11 @@ npm run dev:all
 - [x] 完整的三阶段用户流程（表单 → 加载 → 报告）
 - [x] 表单验证和错误提示
 - [x] 实时URL验证和预览
-- [x] **真实 AI 视频分析**（OpenAI Whisper + GPT-4）
-- [x] **视频音频转文字**（Whisper API）
+- [x] **真实 AI 视频分析**（AssemblyAI/Whisper + GPT-4）
+- [x] **智能转录服务**（AssemblyAI 免费 5 小时/月）
+- [x] **智能降级策略**（AssemblyAI → Whisper 自动切换）
+- [x] **成本优化**（每月节省 $1.80+）
+- [x] **使用量追踪**（API 端点监控免费额度）
 - [x] **智能内容分析**（GPT-4 Turbo）
 - [x] **后端API服务**（Express + TypeScript）
 - [x] **前后端分离架构**
@@ -250,7 +259,10 @@ npm run lint
 
 ```bash
 # OpenAI API配置
-OPENAI_API_KEY=your_openai_api_key_here  # 必填（真实分析时）
+OPENAI_API_KEY=your_openai_api_key_here  # 必填（GPT-4 分析）
+
+# AssemblyAI API配置（可选，免费 5 小时/月）
+ASSEMBLYAI_API_KEY=your_assemblyai_api_key_here  # 推荐配置，节省成本
 
 # 服务器配置
 PORT=3001                                 # 后端端口
@@ -266,6 +278,16 @@ USE_MOCK_ANALYSIS=true                    # true=模拟数据, false=真实AI分
 # 前端API URL
 VITE_API_URL=http://localhost:3001        # 后端API地址
 ```
+
+### 如何获取 AssemblyAI API 密钥（推荐）
+
+1. 访问 [AssemblyAI](https://www.assemblyai.com/)
+2. 注册免费账户
+3. 在 Dashboard 获取 API Key
+4. **免费额度：5 小时/月**（300 分钟）
+5. 每月节省约 **$1.80** 转录成本
+
+> **提示**: AssemblyAI 提供免费转录服务，配置后系统会自动优先使用，节省成本！
 
 ### 如何获取OpenAI API密钥
 
@@ -290,8 +312,8 @@ VITE_API_URL=http://localhost:3001        # 后端API地址
 使用 OpenAI Whisper + GPT-4 进行真实分析：
 
 #### 工作流程
-1. **视频下载** - 从 URL 下载视频文件
-2. **语音转录** - 使用 Whisper API 将音频转为文字
+1. **智能转录** - 优先使用 AssemblyAI（免费），自动降级到 Whisper
+2. **并行处理** - 两个视频同时转录，节省时间
 3. **内容分析** - GPT-4 分析转录文本，提取学习特征
 4. **对比报告** - GPT-4 对比两个视频，生成进步报告
 
@@ -302,10 +324,12 @@ VITE_API_URL=http://localhost:3001        # 后端API地址
 4. 填写学生信息和视频链接
 5. 提交表单，等待 30-60 秒
 
-#### 成本估算
-- **Whisper API**: ~$0.006 / 分钟
+#### 成本估算（优化后）
+- **AssemblyAI**: 免费（前 300 分钟/月）
+- **Whisper API**: ~$0.006 / 分钟（仅在超额时）
 - **GPT-4 Turbo**: ~$0.10 - $0.30 / 次分析
-- **总计**: 约 $0.15 - $0.40 / 次（两个5分钟视频）
+- **总计**: 约 $0.10 - $0.30 / 次（使用 AssemblyAI）
+- **节省**: 每月约 **$1.80**（假设每天 10 个 5 分钟视频）
 
 #### 注意事项
 - 视频必须包含音频内容
@@ -315,6 +339,49 @@ VITE_API_URL=http://localhost:3001        # 后端API地址
 - 国内用户建议配置代理（设置 `HTTPS_PROXY` 环境变量）
 
 详细测试指南请参考：[test-ai-analysis.md](./test-ai-analysis.md)
+
+## 📊 API 端点
+
+### 分析视频
+```
+POST /api/analysis/analyze
+```
+
+提交视频分析请求，系统会自动使用最优的转录服务。
+
+### 健康检查
+```
+GET /api/analysis/health
+```
+
+检查服务器状态。
+
+### 查询使用量（新增！）
+```
+GET /api/analysis/quota
+```
+
+查询 AssemblyAI 免费额度使用情况：
+
+**响应示例：**
+```json
+{
+  "service": "AssemblyAI",
+  "available": true,
+  "quota": {
+    "totalMinutes": 300,
+    "usedMinutes": 45,
+    "remainingMinutes": 255,
+    "usagePercentage": 15
+  },
+  "costSavings": {
+    "estimatedSavings": "$0.27",
+    "description": "Compared to OpenAI Whisper ($0.006/minute)"
+  }
+}
+```
+
+**详细文档：** [AssemblyAI 集成指南](./docs/ASSEMBLYAI_INTEGRATION.md)
 
 ## 🚨 故障排除
 

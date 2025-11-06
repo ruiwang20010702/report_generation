@@ -3,6 +3,7 @@ import axios from 'axios';
 import { VideoAnalysisRequest, VideoAnalysisResponse } from '../types';
 import { HttpsProxyAgent } from 'https-proxy-agent';
 import { WhisperService, TranscriptionResult } from './whisperService';
+import { assemblyAIService } from './assemblyAIService';
 
 export class VideoAnalysisService {
   private defaultOpenai: OpenAI | null;
@@ -129,6 +130,60 @@ ${transcription.text}
     } catch (error) {
       console.error(`❌ Error analyzing ${videoLabel}:`, error);
       throw new Error(`Failed to analyze transcription: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * 🚀 智能转录：优先使用 AssemblyAI（免费），降级到 Whisper（付费）
+   * 
+   * 策略：
+   * 1. 优先使用 AssemblyAI（免费5小时/月，直接传URL，无需下载）
+   * 2. 如果 AssemblyAI 不可用或超额 → 降级到 Whisper（付费但便宜）
+   * 3. 自动追踪使用量，透明化成本
+   */
+  private async transcribeVideoSmart(
+    videoUrl: string,
+    videoLabel: string = 'video'
+  ): Promise<TranscriptionResult> {
+    try {
+      // 🎯 策略1：优先尝试 AssemblyAI（免费）
+      if (assemblyAIService.isAvailable()) {
+        console.log(`🎯 [${videoLabel}] 使用 AssemblyAI（免费服务）`);
+        console.log(`💰 当前剩余免费额度: ${assemblyAIService.getStats().remainingMinutes} 分钟`);
+        
+        try {
+          const result = await assemblyAIService.transcribeFromURL(videoUrl, {
+            language: 'en'
+          });
+          
+          console.log(`✅ [${videoLabel}] AssemblyAI 转录成功！`);
+          console.log(`💰 更新后剩余额度: ${assemblyAIService.getStats().remainingMinutes} 分钟`);
+          
+          return result;
+        } catch (error: any) {
+          console.warn(`⚠️  [${videoLabel}] AssemblyAI 转录失败，降级到 Whisper:`, error.message);
+          // 继续执行降级策略
+        }
+      } else {
+        console.log(`ℹ️  [${videoLabel}] AssemblyAI 不可用（${
+          !assemblyAIService.hasRemainingQuota() ? '免费额度已用完' : '未配置 API Key'
+        }），使用 Whisper`);
+      }
+
+      // 🔄 策略2：降级到 Whisper（需要 OpenAI）
+      console.log(`🎙️ [${videoLabel}] 使用 OpenAI Whisper（付费服务）`);
+      
+      // 注意：这里需要 OpenAI 客户端，我们在调用处传入
+      throw new Error('FALLBACK_TO_WHISPER');
+      
+    } catch (error) {
+      // 如果是降级标记，抛出让调用方处理
+      if (error instanceof Error && error.message === 'FALLBACK_TO_WHISPER') {
+        throw error;
+      }
+      
+      console.error(`❌ [${videoLabel}] 转录失败:`, error);
+      throw error;
     }
   }
 
@@ -379,25 +434,50 @@ ${JSON.stringify(video2Analysis, null, 2)}
       
       let video1Result, video2Result;
       try {
-        // 🔥 步骤1：并行下载两个视频
-        console.log('\n📥 [并行] 下载两个视频...');
-        const downloadStartTime = Date.now();
+        // 🔥 步骤1：并行转录两个视频（智能选择 AssemblyAI 或 Whisper）
+        console.log('\n🎯 [并行] 智能转录两个视频（优先使用免费服务）...');
+        const transcribeStartTime = Date.now();
         const [transcription1, transcription2] = await Promise.all([
           (async () => {
-            console.log('📥 下载 Video 1...');
-            const result = await this.whisperService.transcribeVideo(request.video1, openai);
-            console.log('✅ Video 1 转录完成');
-            return result;
+            console.log('📥 转录 Video 1...');
+            try {
+              // 尝试使用智能转录
+              const result = await this.transcribeVideoSmart(request.video1, 'Video 1');
+              console.log('✅ Video 1 转录完成（AssemblyAI）');
+              return result;
+            } catch (error: any) {
+              // 如果需要降级到 Whisper
+              if (error.message === 'FALLBACK_TO_WHISPER') {
+                console.log('🔄 Video 1 降级到 Whisper...');
+                const result = await this.whisperService.transcribeVideo(request.video1, openai);
+                console.log('✅ Video 1 转录完成（Whisper）');
+                return result;
+              }
+              throw error;
+            }
           })(),
           (async () => {
-            console.log('📥 下载 Video 2...');
-            const result = await this.whisperService.transcribeVideo(request.video2, openai);
-            console.log('✅ Video 2 转录完成');
-            return result;
+            console.log('📥 转录 Video 2...');
+            try {
+              // 尝试使用智能转录
+              const result = await this.transcribeVideoSmart(request.video2, 'Video 2');
+              console.log('✅ Video 2 转录完成（AssemblyAI）');
+              return result;
+            } catch (error: any) {
+              // 如果需要降级到 Whisper
+              if (error.message === 'FALLBACK_TO_WHISPER') {
+                console.log('🔄 Video 2 降级到 Whisper...');
+                const result = await this.whisperService.transcribeVideo(request.video2, openai);
+                console.log('✅ Video 2 转录完成（Whisper）');
+                return result;
+              }
+              throw error;
+            }
           })()
         ]);
-        const downloadTime = ((Date.now() - downloadStartTime) / 1000).toFixed(1);
-        console.log(`✅ 两个视频下载+转录完成！耗时: ${downloadTime}秒\n`);
+        const transcribeTime = ((Date.now() - transcribeStartTime) / 1000).toFixed(1);
+        console.log(`✅ 两个视频转录完成！耗时: ${transcribeTime}秒`);
+        console.log(`💰 当前 AssemblyAI 剩余免费额度: ${assemblyAIService.getStats().remainingMinutes} 分钟\n`);
 
         // 🔥 步骤2：并行分析两个视频的转录文本
         console.log('🤖 [并行] 使用GPT-4分析两个视频...');
@@ -415,7 +495,7 @@ ${JSON.stringify(video2Analysis, null, 2)}
         
         clearInterval(progressInterval);
         const totalTime = ((Date.now() - overallStartTime) / 1000).toFixed(1);
-        console.log(`✅ 所有步骤完成！总耗时: ${totalTime}秒 (下载+转录: ${downloadTime}秒, GPT分析: ${gptTime}秒)`);
+        console.log(`✅ 所有步骤完成！总耗时: ${totalTime}秒 (转录: ${transcribeTime}秒, GPT分析: ${gptTime}秒)`);
       } catch (error) {
         clearInterval(progressInterval);
         throw error;
