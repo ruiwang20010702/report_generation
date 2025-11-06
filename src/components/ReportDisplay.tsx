@@ -124,15 +124,49 @@ export const ReportDisplay = ({ data, onBack }: ReportDisplayProps) => {
         description: "请稍候，这可能需要几秒钟",
       });
 
+      // 等待所有图片加载完成
+      const images = reportElement.querySelectorAll('img');
+      await Promise.all(
+        Array.from(images).map((img) => {
+          if (img.complete) return Promise.resolve();
+          return new Promise((resolve) => {
+            img.onload = resolve;
+            img.onerror = resolve;
+          });
+        })
+      );
+
+      // 保存原始样式
+      const originalWidth = reportElement.style.width;
+      const originalMaxWidth = reportElement.style.maxWidth;
+      
+      // 临时设置固定宽度以确保布局一致（桌面版宽度）
+      reportElement.style.width = '1024px';
+      reportElement.style.maxWidth = '1024px';
+
+      // 等待浏览器重新渲染
+      await new Promise(resolve => setTimeout(resolve, 100));
+
       // 使用html2canvas将HTML转换为canvas（生成完整长图，无分页）
       const canvas = await html2canvas(reportElement, {
         scale: 2, // 提高分辨率，生成高清图片
         useCORS: true,
+        allowTaint: true,
         logging: false,
         backgroundColor: '#ffffff',
+        width: reportElement.scrollWidth,
+        height: reportElement.scrollHeight,
         windowWidth: reportElement.scrollWidth,
         windowHeight: reportElement.scrollHeight,
+        x: 0,
+        y: 0,
+        scrollX: 0,
+        scrollY: 0,
       });
+
+      // 恢复原始样式
+      reportElement.style.width = originalWidth;
+      reportElement.style.maxWidth = originalMaxWidth;
 
       // 恢复按钮显示
       if (buttons) {
