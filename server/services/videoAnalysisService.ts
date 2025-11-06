@@ -624,10 +624,10 @@ ${JSON.stringify(video2Analysis, null, 2)}
           overview: "整体语法很好，但在一些细节上可以做得更完美。",
           examples: [
             {
-              category: "第三人称单数",
-              incorrect: "She is feeds her cat",
-              correct: "She feeds her cat",
-              explanation: "应当使用动词原形加s的形式"
+              sentence: "She is feeds her cat",
+              error: "第三人称单数误用",
+              correction: "She feeds her cat",
+              rule: "应当使用动词原形加s的形式"
             }
           ],
           suggestions: [
@@ -637,7 +637,15 @@ ${JSON.stringify(video2Analysis, null, 2)}
           ]
         },
         intonation: {
-          observation: "语调起伏较少，听起来略显平淡。",
+          overview: "语调起伏较少，听起来略显平淡。",
+          details: "在句子结尾和疑问句时，语调变化不够明显。",
+          examples: [
+            {
+              sentence: "Can I have some water?",
+              issue: "语调平淡，不像疑问句",
+              improvement: "句尾语调应该上扬"
+            }
+          ],
           suggestions: [
             {
               point: "多听自然的英语对话，感受和模仿语调变化。"
