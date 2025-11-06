@@ -1,9 +1,9 @@
 import OpenAI from 'openai';
 import axios from 'axios';
-import { VideoAnalysisRequest, VideoAnalysisResponse } from '../types';
+import { VideoAnalysisRequest, VideoAnalysisResponse } from '../types/index.js';
 import { HttpsProxyAgent } from 'https-proxy-agent';
-import { WhisperService, TranscriptionResult } from './whisperService';
-import { assemblyAIService } from './assemblyAIService';
+import { WhisperService, TranscriptionResult } from './whisperService.js';
+import { assemblyAIService } from './assemblyAIService.js';
 
 export class VideoAnalysisService {
   private defaultOpenai: OpenAI | null;
