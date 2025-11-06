@@ -44,3 +44,6 @@ tmp/
 
 # Build outputs
 *.tsbuildinfo
+
+# Vercel
+.vercel/

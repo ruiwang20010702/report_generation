@@ -1,0 +1,59 @@
+# Dependencies
+node_modules
+
+# Testing
+coverage
+*.test.ts
+*.test.tsx
+*.spec.ts
+*.spec.tsx
+
+# Build files (will be rebuilt)
+dist
+.vite
+
+# Environment files
+.env.local
+.env*.local
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Editor directories
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+tmp
+temp
+*.tmp
+
+# Documentation (not needed for deployment)
+docs/*.md
+*.md
+!README.md
+
+# Development scripts
+scripts/dev-*
+quick-test.sh
+diagnose-issue.sh
+
+# Database files (if local)
+*.sqlite
+*.db
+
+# Uploads directory (use cloud storage instead)
+uploads/
+
