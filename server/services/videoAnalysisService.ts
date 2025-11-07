@@ -266,7 +266,7 @@ ${speakerInfo}
     try {
       const video1Analysis = JSON.parse(video1Result.analysis);
       const video2Analysis = JSON.parse(video2Result.analysis);
-      
+
       // 构建说话人对话信息
       let video1Dialogues = '';
       let video2Dialogues = '';
@@ -528,8 +528,8 @@ ${JSON.stringify(video2Analysis, null, 2)}
           "description": "第二个练习建议和方法（至少50词）"
         }
       ]
-    }
   }
+}
 }
 
 **重要提示：**
