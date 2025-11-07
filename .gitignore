@@ -53,3 +53,4 @@ tmp/
 new_UI_2/
 backend.log
 frontend.log
+.env.backup

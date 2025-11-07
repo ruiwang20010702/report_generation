@@ -4,6 +4,20 @@ import { VideoAnalysisRequest, VideoAnalysisResponse } from '../types/index.js';
 import { HttpsProxyAgent } from 'https-proxy-agent';
 import { WhisperService, TranscriptionResult } from './whisperService.js';
 import { assemblyAIService } from './assemblyAIService.js';
+import { aliyunTranscriptionService } from './aliyunTranscriptionService.js';
+
+/**
+ * 🎯 AI 提供商配置接口
+ */
+interface AIProviderConfig {
+  name: string;           // 提供商标识：'DeepSeek' | 'GLM' | 'Qwen' | 'OpenAI'
+  apiKey: string;         // API 密钥
+  baseURL?: string;       // API 基础 URL（可选，OpenAI 使用默认）
+  model: string;          // 模型名称
+  displayName: string;    // 显示名称
+  emoji: string;          // 图标
+  features: string[];     // 特性列表
+}
 
 export class VideoAnalysisService {
   private defaultOpenai: OpenAI | null;
@@ -12,26 +26,114 @@ export class VideoAnalysisService {
 
   constructor() {
     this.whisperService = new WhisperService();
-    const apiKey = process.env.OPENAI_API_KEY;
-    this.defaultUseMock = process.env.USE_MOCK_ANALYSIS === 'true' || !apiKey;
     
-    if (this.defaultUseMock) {
+    // 🌟 自动检测并选择最优 AI 提供商
+    const aiProvider = this.detectAIProvider();
+    
+    if (aiProvider) {
+      this.defaultOpenai = this.createAIClient(aiProvider);
+      this.defaultUseMock = false;
+    } else {
       console.log('⚠️  Default mode: MOCK - using simulated data');
       console.log('💡 Users can provide their own API Key in the form for real AI analysis');
       this.defaultOpenai = null;
-    } else {
-      console.log('✅ Default mode: REAL - using server OpenAI API');
-      
-      // 支持代理配置
-      const config: any = { apiKey: apiKey! };
+      this.defaultUseMock = true;
+    }
+  }
+
+  /**
+   * 🎯 检测并返回可用的 AI 提供商配置
+   * 优先级：国内服务（GLM > DeepSeek > Qwen） > 国际服务（OpenAI）
+   */
+  private detectAIProvider(): AIProviderConfig | null {
+    // 1️⃣ 智谱 GLM - 质量最高的国内模型（测试得分 98/100）
+    if (process.env.GLM_API_KEY) {
+      return {
+        name: 'GLM',
+        apiKey: process.env.GLM_API_KEY,
+        baseURL: 'https://open.bigmodel.cn/api/paas/v4',
+        model: 'glm-4-plus',
+        displayName: '智谱 GLM-4-Plus',
+        emoji: '🧠',
+        features: ['国内直连', '质量最高', '128K上下文']
+      };
+    }
+
+    // 2️⃣ DeepSeek - 性价比最高的国内模型
+    if (process.env.DEEPSEEK_API_KEY) {
+      return {
+        name: 'DeepSeek',
+        apiKey: process.env.DEEPSEEK_API_KEY,
+        baseURL: 'https://api.deepseek.com/v1',
+        model: 'deepseek-chat',
+        displayName: 'DeepSeek',
+        emoji: '🔷',
+        features: ['国内直连', '超高性价比', '强大推理能力']
+      };
+    }
+
+    // 3️⃣ 通义千问 - 阿里云大模型
+    if (process.env.QWEN_API_KEY) {
+      return {
+        name: 'Qwen',
+        apiKey: process.env.QWEN_API_KEY,
+        baseURL: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+        model: 'qwen-plus',
+        displayName: '通义千问',
+        emoji: '🇨🇳',
+        features: ['国内直连', '阿里云服务', '免费额度大']
+      };
+    }
+
+    // 4️⃣ OpenAI - 国际服务（可能需要代理）
+    if (process.env.OPENAI_API_KEY) {
+      return {
+        name: 'OpenAI',
+        apiKey: process.env.OPENAI_API_KEY,
+        baseURL: undefined, // 使用默认 URL
+        model: 'gpt-4o',
+        displayName: 'OpenAI GPT-4',
+        emoji: '🤖',
+        features: ['国际领先', '需要代理', '响应可能较慢']
+      };
+    }
+
+    // 检查是否强制使用 Mock
+    if (process.env.USE_MOCK_ANALYSIS === 'true') {
+      return null;
+    }
+
+    return null;
+  }
+
+  /**
+   * 🏗️ 创建 AI 客户端实例
+   */
+  private createAIClient(config: AIProviderConfig): OpenAI {
+    console.log(`\n${'='.repeat(60)}`);
+    console.log(`${config.emoji} 使用 AI 服务: ${config.displayName}`);
+    console.log(`📋 模型: ${config.model}`);
+    console.log(`✨ 特性: ${config.features.join(' | ')}`);
+    console.log(`${'='.repeat(60)}\n`);
+
+    const clientConfig: any = {
+      apiKey: config.apiKey,
+    };
+
+    if (config.baseURL) {
+      clientConfig.baseURL = config.baseURL;
+    }
+
+    // 为 OpenAI 添加代理支持
+    if (config.name === 'OpenAI') {
       const proxyUrl = process.env.HTTPS_PROXY || process.env.HTTP_PROXY;
       if (proxyUrl) {
         console.log('🌐 Using proxy:', proxyUrl.replace(/\/\/[^:]+:[^@]+@/, '//***:***@'));
-        config.httpAgent = new HttpsProxyAgent(proxyUrl);
+        clientConfig.httpAgent = new HttpsProxyAgent(proxyUrl);
       }
-      
-      this.defaultOpenai = new OpenAI(config);
     }
+
+    return new OpenAI(clientConfig);
   }
 
   /**
@@ -54,6 +156,43 @@ export class VideoAnalysisService {
       return new OpenAI(config);
     }
     return this.defaultOpenai;
+  }
+
+  /**
+   * 🎯 根据客户端自动选择合适的模型
+   */
+  private getModelName(openai: OpenAI): string {
+    const baseURL = (openai as any).baseURL;
+    
+    // DeepSeek
+    if (baseURL?.includes('deepseek.com')) {
+      return 'deepseek-chat';
+    }
+    
+    // 智谱 GLM
+    if (baseURL?.includes('bigmodel.cn')) {
+      return 'glm-4-plus';
+    }
+    
+    // 通义千问
+    if (baseURL?.includes('dashscope.aliyuncs.com')) {
+      return 'qwen-plus';
+    }
+    
+    // OpenAI（默认）
+    return 'gpt-4o';
+  }
+
+  /**
+   * 📊 获取当前使用的 AI 提供商信息
+   */
+  private getProviderInfo(openai: OpenAI): string {
+    const baseURL = (openai as any).baseURL;
+    
+    if (baseURL?.includes('deepseek.com')) return '🔷 DeepSeek';
+    if (baseURL?.includes('bigmodel.cn')) return '🧠 智谱GLM-4';
+    if (baseURL?.includes('dashscope.aliyuncs.com')) return '🇨🇳 通义千问';
+    return '🤖 OpenAI GPT-4';
   }
 
   /**
@@ -84,10 +223,12 @@ export class VideoAnalysisService {
         speakerInfo = '\n【说明】转录文本中未包含说话人识别信息，请根据语义推测师生对话内容。';
       }
       
-      // 使用 GPT-4 进行深度分析
-      console.log(`🤖 Analyzing ${videoLabel} content with GPT-4...`);
+      // 使用 AI 模型进行深度分析
+      const model = this.getModelName(openai);
+      const provider = this.getProviderInfo(openai);
+      console.log(`${provider} 正在分析 ${videoLabel}，模型: ${model}`);
       const response = await openai.chat.completions.create({
-        model: "gpt-4o",
+        model: model,
         messages: [
           {
             role: "system",
@@ -164,21 +305,47 @@ ${speakerInfo}
   }
 
   /**
-   * 🚀 智能转录：优先使用 AssemblyAI（免费），降级到 Whisper（付费）
+   * 🚀 智能转录：多级降级策略（国内优先）
    * 
-   * 策略：
-   * 1. 优先使用 AssemblyAI（免费5小时/月，直接传URL，无需下载）
-   * 2. 如果 AssemblyAI 不可用或超额 → 降级到 Whisper（付费但便宜）
-   * 3. 自动追踪使用量，透明化成本
+   * 策略（按优先级）：
+   * 1. 优先使用阿里云（国内服务，免费2小时/月，直接传URL，无需下载）✅ 国内推荐
+   * 2. 降级到 AssemblyAI（国外服务，免费5小时/月，需要VPN）
+   * 3. 最终降级到 Whisper（付费但便宜，$0.006/分钟）
+   * 4. 自动追踪使用量，透明化成本
    */
   private async transcribeVideoSmart(
     videoUrl: string,
     videoLabel: string = 'video'
   ): Promise<TranscriptionResult> {
     try {
-      // 🎯 策略1：优先尝试 AssemblyAI（免费）
+      // 🇨🇳 策略1：优先尝试阿里云（国内用户首选）
+      if (aliyunTranscriptionService.isAvailable()) {
+        console.log(`🇨🇳 [${videoLabel}] 使用阿里云语音服务（国内免费服务）`);
+        console.log(`💰 当前剩余免费额度: ${aliyunTranscriptionService.getStats().remainingMinutes} 分钟`);
+        
+        try {
+          const result = await aliyunTranscriptionService.transcribeFromURL(videoUrl, {
+            language: 'en',
+            speakerLabels: true
+          });
+          
+          console.log(`✅ [${videoLabel}] 阿里云转录成功！`);
+          console.log(`💰 更新后剩余额度: ${aliyunTranscriptionService.getStats().remainingMinutes} 分钟`);
+          
+          return result;
+        } catch (error: any) {
+          console.warn(`⚠️  [${videoLabel}] 阿里云转录失败，尝试下一个服务:`, error.message);
+          // 继续执行降级策略
+        }
+      } else {
+        console.log(`ℹ️  [${videoLabel}] 阿里云语音服务不可用（${
+          !aliyunTranscriptionService.hasRemainingQuota() ? '免费额度已用完' : '未配置 API Key'
+        }）`);
+      }
+
+      // 🌍 策略2：尝试 AssemblyAI（需要国际网络访问）
       if (assemblyAIService.isAvailable()) {
-        console.log(`🎯 [${videoLabel}] 使用 AssemblyAI（免费服务）`);
+        console.log(`🌍 [${videoLabel}] 使用 AssemblyAI（国际免费服务，可能需要VPN）`);
         console.log(`💰 当前剩余免费额度: ${assemblyAIService.getStats().remainingMinutes} 分钟`);
         
         try {
@@ -198,11 +365,11 @@ ${speakerInfo}
       } else {
         console.log(`ℹ️  [${videoLabel}] AssemblyAI 不可用（${
           !assemblyAIService.hasRemainingQuota() ? '免费额度已用完' : '未配置 API Key'
-        }），使用 Whisper`);
+        }）`);
       }
 
-      // 🔄 策略2：降级到 Whisper（需要 OpenAI）
-      console.log(`🎙️ [${videoLabel}] 使用 OpenAI Whisper（付费服务）`);
+      // 💰 策略3：最终降级到 Whisper（需要 OpenAI）
+      console.log(`🎙️ [${videoLabel}] 使用 OpenAI Whisper（付费服务，$0.006/分钟）`);
       
       // 注意：这里需要 OpenAI 客户端，我们在调用处传入
       throw new Error('FALLBACK_TO_WHISPER');
@@ -541,8 +708,12 @@ ${JSON.stringify(video2Analysis, null, 2)}
 6. 所有文字描述要详实、具体、有数据支撑
 7. **发音示例（pronunciation.examples）中，incorrect 和 correct 字段必须是不同的音标！** incorrect 应该是学生实际发出的错误发音，correct 是该单词的标准正确发音。例如：如果学生把 "nine" /naɪn/ 错读成 /nɪn/，那么 incorrect 应该填 "/nɪn/"，correct 应该填 "/naɪn/"。请基于实际听到的发音错误填写，如果无法确定具体错误，请提供常见的错误发音模式。`;
 
+      const model = this.getModelName(openai);
+      const provider = this.getProviderInfo(openai);
+      console.log(`${provider} 正在生成对比报告，模型: ${model}`);
+
       const response = await openai.chat.completions.create({
-        model: "gpt-4o",
+        model: model,
         messages: [
           {
             role: "system",
