@@ -431,7 +431,7 @@ ${JSON.stringify(video2Analysis, null, 2)}
   "progressDimensions": {
     "fluency": {
       "analysis": "口语流利度的深度分析，包括：1) 具体数据对比；2) 语速、停顿、连贯性变化；3) 专业解读。至少150词。",
-      "example": "两次课堂的原文对话对比案例，必须严格按照以下格式排版（每个部分单独成段，使用换行符分隔）：\n\n【早期课堂】老师：'You can say how are you.' 学生：'How are you?'\n\n【最近课堂】老师：'Are you ready with our lesson for today?' 学生：'Yes, I'm ready.'\n\n【对比分析】小明在最近课堂中表现出更少的犹豫，显示出语速和流利度的提高。\n\n请提供至少2组类似的对比案例，每组都要包含【早期课堂】【最近课堂】【对比分析】三个部分，且每部分单独成段。"
+      "example": "两次课堂的原文对话对比案例，必须严格按照以下格式排版（每个部分单独成段，使用换行符分隔）：\n\n💡 示例：\n\n【早期课堂】老师：'You can say how are you.' 学生：'How are you?'\n\n【最近课堂】老师：'Are you ready with our lesson for today?' 学生：'Yes, I'm ready.'\n\n【对比分析】小明在最近课堂中表现出更少的犹豫，显示出语速和流利度的提高。\n\n请只提供1组最具代表性的对比案例，必须包含【早期课堂】【最近课堂】【对比分析】三个部分，且每部分单独成段。"
     },
     "confidence": {
       "analysis": "自信心与互动的深度分析（融入量化数据），至少150词。",

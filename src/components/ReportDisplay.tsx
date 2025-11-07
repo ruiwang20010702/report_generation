@@ -335,11 +335,8 @@ export const ReportDisplay = ({ data, onBack }: ReportDisplayProps) => {
                     </div>
                     <p className="text-foreground mb-4 text-base flex-grow leading-relaxed">{value.analysis}</p>
                     <div className="bg-gradient-to-r from-accent/30 to-accent/50 p-4 rounded-xl border-l-4 border-secondary mt-auto shadow-sm">
-                      <div className="text-base font-medium text-accent-foreground">
-                        <span className="font-bold text-secondary">💡 示例：</span>
-                        <div className="mt-2 whitespace-pre-line">
-                          {value.example}
-                        </div>
+                      <div className="text-base font-medium text-accent-foreground whitespace-pre-line">
+                        {value.example}
                       </div>
                     </div>
                   </div>
