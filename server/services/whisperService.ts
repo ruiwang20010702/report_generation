@@ -9,6 +9,19 @@ import ffmpegPath from '@ffmpeg-installer/ffmpeg';
 
 export interface TranscriptionResult {
   text: string;
+  words?: Array<{
+    text: string;
+    start: number;
+    end: number;
+    confidence: number;
+    speaker?: string;
+  }>;
+  utterances?: Array<{
+    text: string;
+    start: number;
+    end: number;
+    speaker: string;
+  }>;
   duration?: number;
   language?: string;
 }

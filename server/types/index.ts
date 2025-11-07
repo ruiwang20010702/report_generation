@@ -1,6 +1,8 @@
 export interface VideoAnalysisRequest {
   video1: string;
   video2: string;
+  video1Time?: string; // 第一个视频的上课时间
+  video2Time?: string; // 第二个视频的上课时间
   studentName: string;
   grade: string;
   level: string;
@@ -28,10 +30,10 @@ export interface PronunciationExample {
 }
 
 export interface GrammarExample {
-  sentence: string;
-  error: string;
-  correction: string;
-  rule: string;
+  category: string;
+  incorrect: string;
+  correct: string;
+  explanation: string;
 }
 
 export interface IntonationExample {
@@ -41,9 +43,8 @@ export interface IntonationExample {
 }
 
 export interface Suggestion {
-  title?: string;
-  description?: string;
-  point?: string;
+  title: string;
+  description: string;
 }
 
 export interface VideoAnalysisResponse {
@@ -83,7 +84,6 @@ export interface VideoAnalysisResponse {
     intonation?: {
       overview: string;
       details: string;
-      examples: IntonationExample[];
       suggestions: Suggestion[];
     };
   };

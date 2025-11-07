@@ -39,9 +39,8 @@ export interface GrammarExample {
 }
 
 export interface Suggestion {
-  title?: string;
-  description?: string;
-  point?: string;
+  title: string;
+  description: string;
 }
 
 export interface VideoAnalysisResponse {
@@ -74,11 +73,13 @@ export interface VideoAnalysisResponse {
     };
     grammar?: {
       overview: string;
+      details: string;
       examples: GrammarExample[];
       suggestions: Suggestion[];
     };
     intonation?: {
-      observation: string;
+      overview: string;
+      details: string;
       suggestions: Suggestion[];
     };
   };

@@ -14,6 +14,13 @@ interface TranscriptionResult {
     start: number;
     end: number;
     confidence: number;
+    speaker?: string;
+  }>;
+  utterances?: Array<{
+    text: string;
+    start: number;
+    end: number;
+    speaker: string;
   }>;
   duration?: number;
   language?: string;
@@ -146,14 +153,21 @@ class AssemblyAIService {
       console.log('✅ AssemblyAI transcription completed');
       console.log(`📊 Usage: ${this.stats.remainingMinutes} minutes remaining`);
 
-      // Return formatted result
+      // Return formatted result with speaker labels if available
       return {
         text: transcript.text || '',
         words: transcript.words?.map(word => ({
           text: word.text,
           start: word.start / 1000, // Convert to seconds
           end: word.end / 1000,
-          confidence: word.confidence
+          confidence: word.confidence,
+          speaker: (word as any).speaker || undefined
+        })),
+        utterances: transcript.utterances?.map(utterance => ({
+          text: utterance.text,
+          start: utterance.start / 1000,
+          end: utterance.end / 1000,
+          speaker: utterance.speaker
         })),
         duration: transcript.audio_duration ?? undefined,
         language: options.language || 'en'
@@ -223,7 +237,14 @@ class AssemblyAIService {
           text: word.text,
           start: word.start / 1000,
           end: word.end / 1000,
-          confidence: word.confidence
+          confidence: word.confidence,
+          speaker: (word as any).speaker || undefined
+        })),
+        utterances: transcript.utterances?.map(utterance => ({
+          text: utterance.text,
+          start: utterance.start / 1000,
+          end: utterance.end / 1000,
+          speaker: utterance.speaker
         })),
         duration: transcript.audio_duration ?? undefined
       };
@@ -264,7 +285,14 @@ class AssemblyAIService {
         text: word.text,
         start: word.start / 1000,
         end: word.end / 1000,
-        confidence: word.confidence
+        confidence: word.confidence,
+        speaker: (word as any).speaker || undefined
+      })),
+      utterances: transcript.utterances?.map(utterance => ({
+        text: utterance.text,
+        start: utterance.start / 1000,
+        end: utterance.end / 1000,
+        speaker: utterance.speaker
       })),
       duration: transcript.audio_duration ?? undefined
     };

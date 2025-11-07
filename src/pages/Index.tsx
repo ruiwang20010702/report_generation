@@ -25,22 +25,22 @@ interface FormData {
 const MOCK_REPORT_DATA = {
   learningData: {
     handRaising: {
-      trend: "提升",
+      trend: "提升" as const,
       percentage: "↑ 15%",
       analysis: "本周主动发言次数相比上周增加了15%，展现出更强的课堂参与意愿"
     },
     answerLength: {
-      trend: "提升",
+      trend: "提升" as const,
       percentage: "↑ 23%",
       analysis: "回答平均长度从5个词增加到7个词，语言表达更加完整"
     },
     completeSentences: {
-      trend: "提升",
+      trend: "提升" as const,
       percentage: "↑ 18%",
       analysis: "完整句子使用率从60%提升至78%，语法结构更加规范"
     },
     readingAccuracy: {
-      trend: "持平",
+      trend: "持平" as const,
       percentage: "92%",
       analysis: "保持了较高的阅读准确率，发音清晰准确"
     }
@@ -111,6 +111,7 @@ const MOCK_REPORT_DATA = {
     },
     grammar: {
       overview: "您的整体语法很好，但在一些细节上可以做得更完美。",
+      details: "主要问题集中在第三人称单数、动词搭配和介词使用等方面。",
       examples: [
         {
           category: "第三人称单数",
@@ -133,18 +134,22 @@ const MOCK_REPORT_DATA = {
       ],
       suggestions: [
         {
-          point: "在口语练习前，可以进行简短的语法复习，思考句子的构造规则，思考对于英语还原的习惯。"
+          title: "语法复习",
+          description: "在口语练习前，可以进行简短的语法复习，思考句子的构造规则，思考对于英语还原的习惯。"
         },
         {
-          point: "针对性地做一些第三人称单数'喂养基础练习'等基础语法点，并通过句型练习巩固。"
+          title: "针对性练习",
+          description: "针对性地做一些第三人称单数'喂养基础练习'等基础语法点，并通过句型练习巩固。"
         }
       ]
     },
     intonation: {
-      observation: "在7月7日的课程中，由于环境原因和阅读紧张，她的语调起伏较少，听起来略显平淡。",
+      overview: "语调方面还有提升空间",
+      details: "在7月7日的课程中，由于环境原因和阅读紧张，她的语调起伏较少，听起来略显平淡。",
       suggestions: [
         {
-          point: "多听一些自然的英语对话或故事（非正式演讲、生活化的内容），感受和模仿说话者的语调变化，让英语更富有生活情绪。"
+          title: "多听多模仿",
+          description: "多听一些自然的英语对话或故事（非正式演讲、生活化的内容），感受和模仿说话者的语调变化，让英语更富有生活情绪。"
         }
       ]
     }

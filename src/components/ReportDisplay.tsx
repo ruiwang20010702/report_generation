@@ -50,6 +50,7 @@ interface ReportData {
     };
     grammar?: {
       overview: string;
+      details: string;
       examples: Array<{
         category: string;
         incorrect: string;
@@ -57,13 +58,16 @@ interface ReportData {
         explanation: string;
       }>;
       suggestions: Array<{
-        point: string;
+        title: string;
+        description: string;
       }>;
     };
     intonation?: {
-      observation: string;
+      overview: string;
+      details: string;
       suggestions: Array<{
-        point: string;
+        title: string;
+        description: string;
       }>;
     };
   };
@@ -127,6 +131,14 @@ export const ReportDisplay = ({ data, onBack }: ReportDisplayProps) => {
         logging: false,
         windowWidth: reportElement.scrollWidth,
         windowHeight: reportElement.scrollHeight,
+        onclone: (clonedDoc) => {
+          // 确保克隆的文档中所有元素都渲染完成
+          const clonedElement = clonedDoc.getElementById('report-content');
+          if (clonedElement) {
+            // 强制所有 flex 容器使用固定布局
+            clonedElement.style.width = reportElement.scrollWidth + 'px';
+          }
+        },
       });
 
       // 恢复按钮显示
@@ -323,9 +335,12 @@ export const ReportDisplay = ({ data, onBack }: ReportDisplayProps) => {
                     </div>
                     <p className="text-foreground mb-4 text-base flex-grow leading-relaxed">{value.analysis}</p>
                     <div className="bg-gradient-to-r from-accent/30 to-accent/50 p-4 rounded-xl border-l-4 border-secondary mt-auto shadow-sm">
-                      <p className="text-base font-medium text-accent-foreground">
-                        <span className="font-bold text-secondary">💡 示例：</span> {value.example}
-                      </p>
+                      <div className="text-base font-medium text-accent-foreground">
+                        <span className="font-bold text-secondary">💡 示例：</span>
+                        <div className="mt-2 whitespace-pre-line">
+                          {value.example}
+                        </div>
+                      </div>
                     </div>
                   </div>
                 );
@@ -352,10 +367,10 @@ export const ReportDisplay = ({ data, onBack }: ReportDisplayProps) => {
             {data.improvementAreas.pronunciation && (
               <div className="space-y-5">
                 <div className="flex items-center gap-3 mb-4">
-                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-destructive/20 to-destructive/10 flex items-center justify-center shadow-sm">
+                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-destructive/20 to-destructive/10 flex items-center justify-center shadow-sm flex-shrink-0">
                     <img src={microphoneIcon} alt="Microphone" className="w-7 h-7" />
                   </div>
-                  <h3 className="text-2xl font-bold text-destructive">1. 发音准确性</h3>
+                  <h3 className="text-2xl font-bold text-destructive flex-shrink-0">1. 发音准确性</h3>
                 </div>
 
                 <div className="p-5 rounded-2xl bg-gradient-to-r from-destructive/5 to-destructive/10 border-l-4 border-destructive shadow-sm">
@@ -368,23 +383,23 @@ export const ReportDisplay = ({ data, onBack }: ReportDisplayProps) => {
                   <h4 className="font-bold text-foreground flex items-center gap-2 text-xl">
                     <span className="text-3xl">📝</span> 特定单词发音问题单
                   </h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                     {data.improvementAreas.pronunciation.examples.map((example, idx) => (
                       <div key={idx} className="p-5 rounded-2xl border-none shadow-md bg-gradient-to-br from-white to-muted/20 hover:shadow-lg transition-shadow">
-                        <div className="flex items-start justify-between mb-3">
-                          <span className="font-bold text-2xl text-foreground">{example.word}</span>
-                          <Badge variant="destructive" className="text-sm rounded-lg">{example.type}</Badge>
+                        <div className="flex items-center justify-between mb-3">
+                          <span className="font-bold text-2xl text-foreground flex-shrink-0">{example.word}</span>
+                          <Badge variant="destructive" className="text-sm rounded-lg flex-shrink-0 ml-2">{example.type}</Badge>
                         </div>
-                        <div className="space-y-1 text-base">
+                        <div className="space-y-2 text-base">
                           <div className="flex items-center gap-2">
-                            <X className="w-4 h-4 text-destructive" />
-                            <span className="text-muted-foreground">错误发音：</span>
-                            <span className="text-destructive font-mono">{example.incorrect}</span>
+                            <X className="w-4 h-4 text-destructive flex-shrink-0" />
+                            <span className="text-muted-foreground flex-shrink-0">错误发音：</span>
+                            <span className="text-destructive font-mono flex-shrink-0">{example.incorrect}</span>
                           </div>
                           <div className="flex items-center gap-2">
-                            <Check className="w-4 h-4 text-success" />
-                            <span className="text-muted-foreground">正确发音：</span>
-                            <span className="text-success font-mono">{example.correct}</span>
+                            <Check className="w-4 h-4 text-success flex-shrink-0" />
+                            <span className="text-muted-foreground flex-shrink-0">正确发音：</span>
+                            <span className="text-success font-mono flex-shrink-0">{example.correct}</span>
                           </div>
                         </div>
                       </div>
@@ -396,10 +411,10 @@ export const ReportDisplay = ({ data, onBack }: ReportDisplayProps) => {
                 {/* Suggestions */}
                 <div className="p-6 rounded-2xl bg-gradient-to-br from-secondary/10 to-secondary/5 border-none shadow-md">
                   <h4 className="font-bold text-secondary mb-5 flex items-center gap-3 text-xl">
-                    <div className="w-10 h-10 rounded-xl bg-secondary/20 flex items-center justify-center">
-                      <Lightbulb className="w-6 h-6 text-secondary" />
+                    <div className="w-10 h-10 rounded-xl bg-secondary/20 flex items-center justify-center flex-shrink-0">
+                      <Lightbulb className="w-6 h-6 text-secondary flex-shrink-0" />
                     </div>
-                    提升建议
+                    <span className="flex-shrink-0">提升建议</span>
                   </h4>
                   <div className="space-y-4">
                     {data.improvementAreas.pronunciation.suggestions.map((suggestion, idx) => (
@@ -422,27 +437,38 @@ export const ReportDisplay = ({ data, onBack }: ReportDisplayProps) => {
             {data.improvementAreas.intonation && (
               <div className="space-y-5">
                 <div className="flex items-center gap-3 mb-4">
-                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-secondary/20 to-secondary/10 flex items-center justify-center shadow-sm">
-                    <Music className="w-7 h-7 text-secondary" />
+                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center shadow-sm flex-shrink-0">
+                    <Music className="w-7 h-7 text-primary" />
                   </div>
-                  <h3 className="text-2xl font-bold text-secondary">2. 语调与节奏</h3>
+                  <h3 className="text-2xl font-bold text-primary flex-shrink-0">2. 语调与节奏</h3>
                 </div>
 
-                <div className="p-5 rounded-2xl bg-gradient-to-r from-muted/30 to-muted/50 border-l-4 border-secondary shadow-sm">
-                  <p className="text-base text-muted-foreground leading-relaxed">{data.improvementAreas.intonation.observation}</p>
+                <div className="p-5 rounded-2xl bg-gradient-to-r from-primary/5 to-primary/10 border-l-4 border-primary shadow-sm">
+                  <p className="font-bold text-primary mb-2 text-lg">{data.improvementAreas.intonation.overview}</p>
+                  <p className="text-base text-muted-foreground leading-relaxed">{data.improvementAreas.intonation.details}</p>
                 </div>
 
                 {/* Intonation Suggestions */}
                 <div className="p-6 rounded-2xl bg-gradient-to-br from-secondary/10 to-secondary/5 border-none shadow-md">
                   <h4 className="font-bold text-secondary mb-5 flex items-center gap-3 text-xl">
-                    <div className="w-10 h-10 rounded-xl bg-secondary/20 flex items-center justify-center">
-                      <Lightbulb className="w-6 h-6 text-secondary" />
+                    <div className="w-10 h-10 rounded-xl bg-secondary/20 flex items-center justify-center flex-shrink-0">
+                      <Lightbulb className="w-6 h-6 text-secondary flex-shrink-0" />
                     </div>
-                    提升建议
+                    <span className="flex-shrink-0">提升建议</span>
                   </h4>
-                  <p className="text-base text-muted-foreground">
-                    {data.improvementAreas.intonation.suggestions.map((s, idx) => s.point).join(' ')}
-                  </p>
+                  <div className="space-y-4">
+                    {data.improvementAreas.intonation.suggestions.map((suggestion, idx) => (
+                      <div key={idx} className="flex gap-4 p-4 rounded-xl bg-white/50 hover:bg-white/80 transition-colors">
+                        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-secondary to-secondary/80 text-secondary-foreground flex items-center justify-center flex-shrink-0 font-bold text-base shadow-sm">
+                          {idx + 1}
+                        </div>
+                        <div>
+                          <h5 className="font-bold text-foreground text-base mb-1">{suggestion.title}</h5>
+                          <p className="text-base text-muted-foreground leading-relaxed">{suggestion.description}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
             )}
@@ -451,14 +477,15 @@ export const ReportDisplay = ({ data, onBack }: ReportDisplayProps) => {
             {data.improvementAreas.grammar && (
               <div className="space-y-5">
                 <div className="flex items-center gap-3 mb-4">
-                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center shadow-sm">
-                    <Code2 className="w-7 h-7 text-primary" />
+                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-secondary/20 to-secondary/10 flex items-center justify-center shadow-sm flex-shrink-0">
+                    <Code2 className="w-7 h-7 text-secondary" />
                   </div>
-                  <h3 className="text-2xl font-bold text-primary">3. 语法细节</h3>
+                  <h3 className="text-2xl font-bold text-secondary flex-shrink-0">3. 语法细节</h3>
                 </div>
 
-                <div className="p-5 rounded-2xl bg-gradient-to-r from-muted/30 to-muted/50 border-l-4 border-primary shadow-sm">
-                  <p className="text-base text-muted-foreground leading-relaxed">{data.improvementAreas.grammar.overview}</p>
+                <div className="p-5 rounded-2xl bg-gradient-to-r from-secondary/5 to-secondary/10 border-l-4 border-secondary shadow-sm">
+                  <p className="font-bold text-secondary mb-2 text-lg">{data.improvementAreas.grammar.overview}</p>
+                  <p className="text-base text-muted-foreground leading-relaxed">{data.improvementAreas.grammar.details}</p>
                 </div>
 
                 {/* Grammar Examples */}
@@ -466,8 +493,8 @@ export const ReportDisplay = ({ data, onBack }: ReportDisplayProps) => {
                   {data.improvementAreas.grammar.examples.map((example, idx) => (
                     <div key={idx} className="p-5 rounded-2xl bg-gradient-to-br from-accent/20 to-accent/10 border-none shadow-md hover:shadow-lg transition-shadow">
                       <div className="flex items-center gap-2 mb-3">
-                        <span className="text-2xl">📖</span>
-                        <h4 className="font-bold text-accent-foreground text-base">{example.category}</h4>
+                        <span className="text-2xl flex-shrink-0">📖</span>
+                        <h4 className="font-bold text-accent-foreground text-base flex-shrink-0">{example.category}</h4>
                       </div>
                       <div className="space-y-2 text-base">
                         <div className="flex items-start gap-2">
@@ -487,19 +514,24 @@ export const ReportDisplay = ({ data, onBack }: ReportDisplayProps) => {
                 {/* Grammar Suggestions */}
                 <div className="p-6 rounded-2xl bg-gradient-to-br from-secondary/10 to-secondary/5 border-none shadow-md">
                   <h4 className="font-bold text-secondary mb-5 flex items-center gap-3 text-xl">
-                    <div className="w-10 h-10 rounded-xl bg-secondary/20 flex items-center justify-center">
-                      <Lightbulb className="w-6 h-6 text-secondary" />
+                    <div className="w-10 h-10 rounded-xl bg-secondary/20 flex items-center justify-center flex-shrink-0">
+                      <Lightbulb className="w-6 h-6 text-secondary flex-shrink-0" />
                     </div>
-                    提升建议
+                    <span className="flex-shrink-0">提升建议</span>
                   </h4>
-                  <ul className="space-y-2">
+                  <div className="space-y-4">
                     {data.improvementAreas.grammar.suggestions.map((suggestion, idx) => (
-                      <li key={idx} className="flex gap-2 text-base text-foreground">
-                        <span className="text-secondary">•</span>
-                        <span>{suggestion.point}</span>
-                      </li>
+                      <div key={idx} className="flex gap-4 p-4 rounded-xl bg-white/50 hover:bg-white/80 transition-colors">
+                        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-secondary to-secondary/80 text-secondary-foreground flex items-center justify-center flex-shrink-0 font-bold text-base shadow-sm">
+                          {idx + 1}
+                        </div>
+                        <div>
+                          <h5 className="font-bold text-foreground text-base mb-1">{suggestion.title}</h5>
+                          <p className="text-base text-muted-foreground leading-relaxed">{suggestion.description}</p>
+                        </div>
+                      </div>
                     ))}
-                  </ul>
+                  </div>
                 </div>
               </div>
             )}

@@ -21,7 +21,13 @@ const getAnalysisService = () => {
 router.post('/analyze', async (req: Request, res: Response) => {
   const startTime = Date.now();
   try {
-    const requestData: VideoAnalysisRequest = req.body;
+    // 字段映射：前端使用 date/date2，后端使用 video1Time/video2Time
+    const rawData = req.body;
+    const requestData: VideoAnalysisRequest = {
+      ...rawData,
+      video1Time: rawData.video1Time || rawData.date,
+      video2Time: rawData.video2Time || rawData.date2
+    };
 
     // 验证请求数据
     if (!requestData.video1 || !requestData.video2) {
@@ -42,6 +48,8 @@ router.post('/analyze', async (req: Request, res: Response) => {
     console.log('   Student:', requestData.studentName);
     console.log('   Video 1:', requestData.video1.substring(0, 50) + '...');
     console.log('   Video 2:', requestData.video2.substring(0, 50) + '...');
+    if (requestData.video1Time) console.log('   Video 1 Time:', requestData.video1Time);
+    if (requestData.video2Time) console.log('   Video 2 Time:', requestData.video2Time);
 
     // 检查是否使用mock模式（优先使用请求参数，其次使用环境变量）
     const useMock = requestData.useMockData ?? (process.env.USE_MOCK_ANALYSIS === 'true');
