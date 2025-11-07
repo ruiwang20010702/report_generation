@@ -41,9 +41,15 @@ Thumbs.db
 *.tmp
 temp/
 tmp/
+*.sh
 
 # Build outputs
 *.tsbuildinfo
 
 # Vercel
 .vercel/
+
+# Project specific
+new_UI_2/
+backend.log
+frontend.log
