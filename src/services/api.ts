@@ -9,6 +9,8 @@ export interface VideoAnalysisRequest {
   grade: string;
   level: string;
   unit: string;
+  date?: string;
+  date2?: string;
 }
 
 export interface LearningDataMetric {
@@ -30,16 +32,10 @@ export interface PronunciationExample {
 }
 
 export interface GrammarExample {
-  sentence: string;
-  error: string;
-  correction: string;
-  rule: string;
-}
-
-export interface IntonationExample {
-  sentence: string;
-  issue: string;
-  improvement: string;
+  category: string;
+  incorrect: string;
+  correct: string;
+  explanation: string;
 }
 
 export interface Suggestion {
@@ -78,14 +74,11 @@ export interface VideoAnalysisResponse {
     };
     grammar?: {
       overview: string;
-      details: string;
       examples: GrammarExample[];
       suggestions: Suggestion[];
     };
     intonation?: {
-      overview: string;
-      details: string;
-      examples: IntonationExample[];
+      observation: string;
       suggestions: Suggestion[];
     };
   };

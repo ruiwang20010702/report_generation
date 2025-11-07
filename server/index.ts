@@ -62,6 +62,8 @@ app.listen(PORT, () => {
   console.log(`🚀 Server is running on port ${PORT}`);
   console.log(`📊 API endpoint: http://localhost:${PORT}/api/analysis`);
   console.log(`🔧 Mock mode: ${process.env.USE_MOCK_ANALYSIS === 'true' ? 'ON' : 'OFF'}`);
+  console.log(`🔑 OpenAI API Key: ${process.env.OPENAI_API_KEY ? 'SET (length: ' + process.env.OPENAI_API_KEY.length + ')' : 'NOT SET'}`);
+  console.log(`🔑 AssemblyAI API Key: ${process.env.ASSEMBLYAI_API_KEY ? 'SET' : 'NOT SET'}`);
 });
 
 export default app;

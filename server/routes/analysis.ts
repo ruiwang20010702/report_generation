@@ -4,7 +4,15 @@ import { VideoAnalysisRequest } from '../types';
 import { assemblyAIService } from '../services/assemblyAIService';
 
 const router = Router();
-const analysisService = new VideoAnalysisService();
+
+// 延迟初始化，确保环境变量已加载
+let analysisService: VideoAnalysisService | null = null;
+const getAnalysisService = () => {
+  if (!analysisService) {
+    analysisService = new VideoAnalysisService();
+  }
+  return analysisService;
+};
 
 /**
  * POST /api/analysis/analyze
@@ -38,24 +46,35 @@ router.post('/analyze', async (req: Request, res: Response) => {
     // 检查是否使用mock模式（优先使用请求参数，其次使用环境变量）
     const useMock = requestData.useMockData ?? (process.env.USE_MOCK_ANALYSIS === 'true');
 
+    const service = getAnalysisService();
+    
     let result;
     if (useMock) {
       console.log('🎭 Using MOCK analysis mode');
-      result = await analysisService.analyzeMock(requestData);
+      result = await service.analyzeMock(requestData);
       console.log('✅ Mock analysis completed');
     } else {
       console.log('🤖 Using REAL AI analysis mode');
-      // 如果使用真实AI，需要API key
-      if (!requestData.apiKey) {
-        console.log('❌ Missing API key for real AI analysis');
+      
+      // 检查是否有可用的 API Key（用户提供的或服务器配置的）
+      const hasServerKey = !!process.env.OPENAI_API_KEY;
+      const hasUserKey = !!requestData.apiKey;
+      
+      if (!hasServerKey && !hasUserKey) {
+        console.log('❌ No API key available (neither server nor user provided)');
         return res.status(400).json({
           error: '使用真实AI分析需要提供 OpenAI API Key'
         });
       }
-      console.log('   API Key provided: ' + requestData.apiKey.substring(0, 10) + '...');
+      
+      if (hasUserKey) {
+        console.log('   Using user-provided API Key: ' + requestData.apiKey!.substring(0, 10) + '...');
+      } else {
+        console.log('   Using server-configured API Key');
+      }
       
       try {
-        result = await analysisService.analyzeVideos(requestData);
+        result = await service.analyzeVideos(requestData);
         const elapsedTime = ((Date.now() - startTime) / 1000).toFixed(2);
         console.log(`✅ Real AI analysis completed in ${elapsedTime}s`);
       } catch (analysisError) {

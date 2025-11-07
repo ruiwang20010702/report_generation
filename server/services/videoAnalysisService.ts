@@ -322,36 +322,25 @@ ${JSON.stringify(video2Analysis, null, 2)}
     },
     "grammar": {
       "overview": "语法方面的总体评价和主要问题",
-      "details": "详细的语法问题分析，包括时态、单复数、句式等",
       "examples": [
         {
-          "sentence": "学生说的错误句子",
-          "error": "具体的语法错误",
-          "correction": "正确的句子",
-          "rule": "相关的语法规则说明"
+          "category": "错误类别（如 '时态错误'）",
+          "incorrect": "学生说的错误句子",
+          "correct": "正确的句子",
+          "explanation": "错误解释和相关语法规则"
         }
       ],
       "suggestions": [
         {
-          "title": "建议标题（如 '时态练习'）",
-          "description": "详细的练习建议，包括具体的练习方法和例句"
+          "point": "具体的改进建议要点"
         }
       ]
     },
     "intonation": {
-      "overview": "语调和节奏方面的总体评价",
-      "details": "详细的语调节奏分析，包括重音、升降调、语速等",
-      "examples": [
-        {
-          "sentence": "示例句子",
-          "issue": "语调问题描述",
-          "improvement": "改进建议"
-        }
-      ],
+      "observation": "语调和节奏方面的总体观察，包括重音、升降调、语速等",
       "suggestions": [
         {
-          "title": "建议标题（如 '疑问句语调练习'）",
-          "description": "详细的练习建议，包括具体的练习句子和方法"
+          "point": "具体的语调改进建议"
         }
       ]
   }
@@ -360,9 +349,11 @@ ${JSON.stringify(video2Analysis, null, 2)}
 
 重要提示：
 1. 请确保每个部分都有实质性的内容，不要留空或只写占位符
-2. 对于 grammar 和 intonation 部分，请基于转录文本提供至少2-3个具体的例子和建议
-3. 所有的分析都应该基于两个视频的对比，突出学生的进步或需要改进的地方
-4. 确保返回有效的JSON格式，不要包含注释或其他非JSON内容`;
+2. 对于 grammar 部分，examples 数组中每个对象包含：category（错误类别）、incorrect（错误句子）、correct（正确句子）、explanation（解释）
+3. 对于 grammar 和 intonation 的 suggestions，每个对象只包含一个 point 字段（字符串）
+4. 对于 intonation 部分，使用 observation 字段（不是 overview），不需要 details 和 examples
+5. 所有的分析都应该基于两个视频的对比，突出学生的进步或需要改进的地方
+6. 确保返回有效的JSON格式，不要包含注释或其他非JSON内容`;
 
       const response = await openai.chat.completions.create({
         model: "gpt-4o",

@@ -4,10 +4,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Film, User, GraduationCap, TrendingUp, AlertCircle, ExternalLink, CheckCircle2, Key, Sparkles } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
-import { useToast } from "@/hooks/use-toast";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Film, User, GraduationCap, TrendingUp, Zap, CalendarIcon } from "lucide-react";
+import { format } from "date-fns";
+import { cn } from "@/lib/utils";
 
 interface FormData {
   video1: string;
@@ -16,7 +18,8 @@ interface FormData {
   grade: string;
   level: string;
   unit: string;
-  apiKey?: string;
+  date: string;
+  date2: string;
   useMockData?: boolean;
 }
 
@@ -33,7 +36,6 @@ const GRADES = [
 const LEVELS = ["Level 0", "Level 1", "Level 2", "Level 3", "Level 4", "Level 5", "Level 6", "Level 7", "Level 8", "Level 9"];
 
 export const VideoAnalysisForm = ({ onSubmit }: VideoAnalysisFormProps) => {
-  const { toast } = useToast();
   const [formData, setFormData] = useState<FormData>({
     video1: "",
     video2: "",
@@ -41,29 +43,34 @@ export const VideoAnalysisForm = ({ onSubmit }: VideoAnalysisFormProps) => {
     grade: "",
     level: "",
     unit: "",
-    apiKey: "",
-    useMockData: true
+    date: "",
+    date2: "",
+    useMockData: false
   });
 
-  const [errors, setErrors] = useState<Partial<FormData>>({});
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<Date>();
+  const [selectedDate2, setSelectedDate2] = useState<Date>();
 
-  // 快速填充测试数据
-  const fillTestData = () => {
+  const [errors, setErrors] = useState<Partial<FormData>>({});
+
+  // 快速测试功能：自动填充表单数据
+  const handleQuickTest = () => {
+    const date1 = new Date();
+    const date2 = new Date(date1.getTime() - 7 * 24 * 60 * 60 * 1000); // 7天前
+    setSelectedDate(date1);
+    setSelectedDate2(date2);
     setFormData({
-      video1: "https://www.youtube.com/watch?v=example1",
-      video2: "https://www.youtube.com/watch?v=example2",
-      studentName: "小明",
+      video1: "https://example.com/demo-video-1.mp4",
+      video2: "https://example.com/demo-video-2.mp4",
+      studentName: "张小明",
       grade: "小学三年级",
       level: "Level 3",
       unit: "5",
-      apiKey: "",
-      useMockData: true
+      date: format(date1, "yyyy-MM-dd"),
+      date2: format(date2, "yyyy-MM-dd"),
+      useMockData: true // 默认使用模拟数据进行快速测试
     });
-    toast({
-      title: "测试数据已填充",
-      description: "您可以直接提交查看效果（使用模拟数据）",
-    });
+    setErrors({});
   };
 
   const validateForm = (): boolean => {
@@ -95,11 +102,12 @@ export const VideoAnalysisForm = ({ onSubmit }: VideoAnalysisFormProps) => {
       newErrors.level = "请选择级别";
     }
 
-    // 如果不使用模拟数据，验证 API Key
-    if (!formData.useMockData && !formData.apiKey?.trim()) {
-      newErrors.apiKey = "请输入 OpenAI API Key，或选择使用模拟数据";
-    } else if (formData.apiKey && !formData.apiKey.startsWith('sk-')) {
-      newErrors.apiKey = "API Key 格式不正确（应以 sk- 开头）";
+    if (!formData.date) {
+      newErrors.date = "请选择日期";
+    }
+
+    if (!formData.date2) {
+      newErrors.date2 = "请选择日期";
     }
 
     setErrors(newErrors);
@@ -108,48 +116,21 @@ export const VideoAnalysisForm = ({ onSubmit }: VideoAnalysisFormProps) => {
 
   const isValidUrl = (url: string): boolean => {
     try {
-      const urlObj = new URL(url);
-      // 检查是否是http或https协议
-      return urlObj.protocol === 'http:' || urlObj.protocol === 'https:';
+      new URL(url);
+      return true;
     } catch {
       return false;
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!validateForm()) {
-      toast({
-        title: "表单验证失败",
-        description: "请检查所有必填字段是否正确填写",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setIsSubmitting(true);
-    
-    try {
+    if (validateForm()) {
       const submitData = {
         ...formData,
         unit: formData.unit ? `Unit ${formData.unit}` : ""
       };
-      
-      toast({
-        title: "提交成功！",
-        description: "正在开始分析您的视频...",
-      });
-      
       onSubmit(submitData);
-    } catch (error) {
-      toast({
-        title: "提交失败",
-        description: "请稍后重试或联系技术支持",
-        variant: "destructive",
-      });
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
@@ -157,19 +138,20 @@ export const VideoAnalysisForm = ({ onSubmit }: VideoAnalysisFormProps) => {
     <Card className="w-full max-w-2xl mx-auto shadow-elevated border-2 border-primary/20">
       <CardHeader className="space-y-2 bg-gradient-hero">
         <div className="flex items-start justify-between">
-          <div>
+          <div className="flex-1">
             <CardTitle className="text-3xl font-bold text-primary">英语学习视频分析</CardTitle>
             <CardDescription className="text-base text-muted-foreground">
               上传两个学习视频，让AI为您生成专业的学习分析报告
             </CardDescription>
           </div>
-          <Button
+          <Button 
             type="button"
             variant="outline"
             size="sm"
-            onClick={fillTestData}
-            className="border-secondary text-secondary hover:bg-secondary hover:text-secondary-foreground"
+            onClick={handleQuickTest}
+            className="ml-4 flex items-center gap-2 bg-secondary/10 hover:bg-secondary/20 border-secondary text-secondary-foreground font-semibold"
           >
+            <Zap className="w-4 h-4" />
             快速测试
           </Button>
         </div>
@@ -253,66 +235,65 @@ export const VideoAnalysisForm = ({ onSubmit }: VideoAnalysisFormProps) => {
             </div>
           </div>
 
-          {/* AI Configuration */}
-          <div className="space-y-4 pt-4 border-t border-border">
-            <Alert className="bg-secondary/10 border-secondary/30">
-              <Sparkles className="h-4 w-4 text-secondary" />
-              <AlertDescription className="ml-2">
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <div className="font-semibold text-foreground">使用真实 AI 分析</div>
-                      <div className="text-sm text-muted-foreground">
-                        {formData.useMockData 
-                          ? "当前使用模拟数据（免费测试）" 
-                          : "当前使用 OpenAI GPT-4 进行真实分析（需要 API Key）"}
-                      </div>
-                    </div>
-                    <Switch
-                      checked={!formData.useMockData}
-                      onCheckedChange={(checked) => setFormData({ ...formData, useMockData: !checked })}
-                    />
-                  </div>
-                  
-                  {!formData.useMockData && (
-                    <div className="space-y-2 pt-2 border-t border-border/50">
-                      <Label htmlFor="apiKey" className="flex items-center gap-2 text-sm font-semibold">
-                        <Key className="w-4 h-4 text-secondary" />
-                        OpenAI API Key
-                      </Label>
-                      <Input
-                        id="apiKey"
-                        type="password"
-                        placeholder="sk-..."
-                        value={formData.apiKey}
-                        onChange={(e) => setFormData({ ...formData, apiKey: e.target.value })}
-                        className={`h-10 font-mono text-sm ${errors.apiKey ? 'border-destructive' : ''}`}
-                      />
-                      {errors.apiKey && <p className="text-sm text-destructive">{errors.apiKey}</p>}
-                      <p className="text-xs text-muted-foreground">
-                        您的 API Key 仅用于本次分析，不会被存储。
-                        <a 
-                          href="https://platform.openai.com/api-keys" 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="text-secondary hover:underline ml-1"
-                        >
-                          获取 API Key →
-                        </a>
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </AlertDescription>
-            </Alert>
+          {/* 使用真实 AI 分析开关 */}
+          <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg border border-border">
+            <div className="flex-1">
+              <Label htmlFor="useMockData" className="text-base font-semibold cursor-pointer">
+                使用真实 AI 分析
+              </Label>
+              <p className="text-sm text-muted-foreground mt-1">
+                {formData.useMockData ? "当前使用模拟数据（即时响应）" : "当前使用真实 AI 分析（需要 2-3 分钟）"}
+              </p>
+            </div>
+            <Switch
+              id="useMockData"
+              checked={!formData.useMockData}
+              onCheckedChange={(checked) => setFormData({ ...formData, useMockData: !checked })}
+              className="ml-4"
+            />
           </div>
 
           {/* Video Links */}
           <div className="space-y-4 pt-4 border-t border-border">
             <div className="space-y-2">
+              <Label className="flex items-center gap-2 text-base font-semibold">
+                <CalendarIcon className="w-5 h-5 text-secondary" />
+                筛选日期
+              </Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "w-full h-12 justify-start text-left font-normal",
+                      !selectedDate && "text-muted-foreground",
+                      errors.date && "border-destructive"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {selectedDate ? format(selectedDate, "PPP") : <span>选择日期</span>}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={selectedDate}
+                    onSelect={(date) => {
+                      setSelectedDate(date);
+                      setFormData({ ...formData, date: date ? format(date, "yyyy-MM-dd") : "" });
+                    }}
+                    initialFocus
+                    className={cn("p-3 pointer-events-auto")}
+                  />
+                </PopoverContent>
+              </Popover>
+              {errors.date && <p className="text-sm text-destructive">{errors.date}</p>}
+            </div>
+
+            <div className="space-y-2">
               <Label htmlFor="video1" className="flex items-center gap-2 text-base font-semibold">
                 <Film className="w-5 h-5 text-secondary" />
-                第一个视频链接（较早的视频）
+                第一个视频链接
               </Label>
               <Input
                 id="video1"
@@ -323,27 +304,47 @@ export const VideoAnalysisForm = ({ onSubmit }: VideoAnalysisFormProps) => {
                 className={`h-12 ${errors.video1 ? 'border-destructive' : ''}`}
               />
               {errors.video1 && <p className="text-sm text-destructive">{errors.video1}</p>}
-              {formData.video1 && isValidUrl(formData.video1) && !errors.video1 && (
-                <div className="flex items-center gap-2 text-sm text-success">
-                  <CheckCircle2 className="w-4 h-4" />
-                  <span>有效的URL</span>
-                  <a 
-                    href={formData.video1} 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-1 text-secondary hover:underline"
+            </div>
+
+            <div className="space-y-2">
+              <Label className="flex items-center gap-2 text-base font-semibold">
+                <CalendarIcon className="w-5 h-5 text-secondary" />
+                筛选日期
+              </Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "w-full h-12 justify-start text-left font-normal",
+                      !selectedDate2 && "text-muted-foreground",
+                      errors.date2 && "border-destructive"
+                    )}
                   >
-                    <ExternalLink className="w-3 h-3" />
-                    预览
-                  </a>
-                </div>
-              )}
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {selectedDate2 ? format(selectedDate2, "PPP") : <span>选择日期</span>}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={selectedDate2}
+                    onSelect={(date) => {
+                      setSelectedDate2(date);
+                      setFormData({ ...formData, date2: date ? format(date, "yyyy-MM-dd") : "" });
+                    }}
+                    initialFocus
+                    className={cn("p-3 pointer-events-auto")}
+                  />
+                </PopoverContent>
+              </Popover>
+              {errors.date2 && <p className="text-sm text-destructive">{errors.date2}</p>}
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="video2" className="flex items-center gap-2 text-base font-semibold">
                 <Film className="w-5 h-5 text-secondary" />
-                第二个视频链接（较新的视频）
+                第二个视频链接
               </Label>
               <Input
                 id="video2"
@@ -354,31 +355,15 @@ export const VideoAnalysisForm = ({ onSubmit }: VideoAnalysisFormProps) => {
                 className={`h-12 ${errors.video2 ? 'border-destructive' : ''}`}
               />
               {errors.video2 && <p className="text-sm text-destructive">{errors.video2}</p>}
-              {formData.video2 && isValidUrl(formData.video2) && !errors.video2 && (
-                <div className="flex items-center gap-2 text-sm text-success">
-                  <CheckCircle2 className="w-4 h-4" />
-                  <span>有效的URL</span>
-                  <a 
-                    href={formData.video2} 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-1 text-secondary hover:underline"
-                  >
-                    <ExternalLink className="w-3 h-3" />
-                    预览
-                  </a>
-                </div>
-              )}
             </div>
           </div>
 
           <Button 
             type="submit" 
             size="lg"
-            disabled={isSubmitting}
-            className="w-full h-14 text-lg font-bold bg-primary hover:bg-primary/90 text-primary-foreground shadow-md hover:shadow-lg transition-all disabled:opacity-50"
+            className="w-full h-14 text-lg font-bold bg-primary hover:bg-primary/90 text-primary-foreground shadow-md hover:shadow-lg transition-all"
           >
-            {isSubmitting ? "提交中..." : "生成学习报告"}
+            生成学习报告
           </Button>
         </form>
       </CardContent>

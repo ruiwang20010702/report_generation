@@ -15,6 +15,10 @@ interface FormData {
   grade: string;
   level: string;
   unit: string;
+  date: string;
+  date2: string;
+  apiKey?: string;
+  useMockData?: boolean;
 }
 
 // Mock data for demonstration
@@ -23,7 +27,7 @@ const MOCK_REPORT_DATA = {
     handRaising: {
       trend: "提升",
       percentage: "↑ 15%",
-      analysis: "本周举手次数相比上周增加了15%，展现出更强的课堂参与意愿"
+      analysis: "本周主动发言次数相比上周增加了15%，展现出更强的课堂参与意愿"
     },
     answerLength: {
       trend: "提升",
@@ -47,7 +51,7 @@ const MOCK_REPORT_DATA = {
       example: "第二个视频中回答 'What did you do yesterday?' 时，能够流畅地说出完整句子：'I went to the park and played with my friends.'"
     },
     confidence: {
-      analysis: "自信心增强明显，声音洪亮，眼神交流更加自然。举手频率提升，愿意主动参与课堂互动。",
+      analysis: "自信心增强明显，声音洪亮，眼神交流更加自然。主动发言频率提升，愿意主动参与课堂互动。",
       example: "主动要求回答老师提问，并在回答时面带微笑，姿态自信"
     },
     languageApplication: {
@@ -157,18 +161,41 @@ const Index = () => {
     setAppState("loading");
     
     try {
-      console.log('📡 Calling API...');
-      // 调用真实的API
-      const result = await videoAnalysisAPI.analyzeVideos(data);
-      console.log('✅ API response received:', result);
-      setReportData(result);
-      
-      setAppState("report");
-      
-      toast({
-        title: "分析完成！",
-        description: "已成功生成学习报告",
-      });
+      // 如果使用模拟数据
+      if (data.useMockData) {
+        console.log('🎭 Using mock data...');
+        // 模拟API调用延迟
+        await new Promise(resolve => setTimeout(resolve, 8000));
+        
+        const mockResult: VideoAnalysisResponse = {
+          studentName: data.studentName,
+          grade: data.grade,
+          level: data.level,
+          unit: data.unit,
+          ...MOCK_REPORT_DATA
+        };
+        
+        setReportData(mockResult);
+        setAppState("report");
+        
+        toast({
+          title: "分析完成！（模拟数据）",
+          description: "已成功生成学习报告",
+        });
+      } else {
+        // 使用真实 API
+        console.log('📡 Calling real API...');
+        const result = await videoAnalysisAPI.analyzeVideos(data);
+        console.log('✅ API response received:', result);
+        setReportData(result);
+        
+        setAppState("report");
+        
+        toast({
+          title: "分析完成！",
+          description: "已成功生成学习报告",
+        });
+      }
     } catch (error) {
       console.error('❌ Analysis failed:', error);
       
