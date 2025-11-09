@@ -440,8 +440,8 @@ export const ReportDisplay = ({ data, onBack }: ReportDisplayProps) => {
                   <h3 className="text-2xl font-bold text-primary flex-shrink-0">2. 语调与节奏</h3>
                 </div>
 
-                <div className="p-5 rounded-2xl bg-gradient-to-r from-primary/5 to-primary/10 border-l-4 border-primary shadow-sm">
-                  <p className="font-bold text-primary mb-2 text-lg">{data.improvementAreas.intonation.overview}</p>
+                <div className="p-5 rounded-2xl bg-gradient-to-r from-primary/15 to-primary/25 border-l-4 border-primary shadow-sm">
+                  <p className="font-bold mb-2 text-lg" style={{ color: '#D4AF37' }}>{data.improvementAreas.intonation.overview}</p>
                   <p className="text-base text-muted-foreground leading-relaxed">{data.improvementAreas.intonation.details}</p>
                 </div>
 
