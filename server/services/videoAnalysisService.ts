@@ -27,26 +27,35 @@ export class VideoAnalysisService {
   constructor() {
     this.whisperService = new WhisperService();
     
-    // 🌟 自动检测并选择最优 AI 提供商
-    const aiProvider = this.detectAIProvider();
-    
-    if (aiProvider) {
-      this.defaultOpenai = this.createAIClient(aiProvider);
-      this.defaultUseMock = false;
-    } else {
-      console.log('⚠️  Default mode: MOCK - using simulated data');
-      console.log('💡 Users can provide their own API Key in the form for real AI analysis');
-      this.defaultOpenai = null;
-      this.defaultUseMock = true;
+    // 🌟 强制使用 GLM 模型（固定配置）
+    try {
+      const aiProvider = this.detectAIProvider();
+      if (aiProvider) {
+        this.defaultOpenai = this.createAIClient(aiProvider);
+        this.defaultUseMock = false;
+      } else {
+        // 检查是否强制使用 Mock
+        if (process.env.USE_MOCK_ANALYSIS === 'true') {
+          console.log('⚠️  Default mode: MOCK - using simulated data');
+          console.log('💡 Users can provide their own API Key in the form for real AI analysis');
+          this.defaultOpenai = null;
+          this.defaultUseMock = true;
+        } else {
+          throw new Error('GLM API Key 未配置且未启用 Mock 模式');
+        }
+      }
+    } catch (error) {
+      console.error('❌ AI 服务初始化失败:', error instanceof Error ? error.message : error);
+      throw error; // 重新抛出错误，让调用方知道配置有问题
     }
   }
 
   /**
-   * 🎯 检测并返回可用的 AI 提供商配置
-   * 优先级：国内服务（GLM > DeepSeek > Qwen） > 国际服务（OpenAI）
+   * 🔍 强制使用 GLM 模型（固定配置）
+   * 不再支持降级到其他模型，确保输出一致性
    */
   private detectAIProvider(): AIProviderConfig | null {
-    // 1️⃣ 智谱 GLM - 质量最高的国内模型（测试得分 98/100）
+    // 🧠 强制使用智谱 GLM - 质量最高的国内模型（测试得分 98/100）
     if (process.env.GLM_API_KEY) {
       return {
         name: 'GLM',
@@ -59,51 +68,12 @@ export class VideoAnalysisService {
       };
     }
 
-    // 2️⃣ DeepSeek - 性价比最高的国内模型
-    if (process.env.DEEPSEEK_API_KEY) {
-      return {
-        name: 'DeepSeek',
-        apiKey: process.env.DEEPSEEK_API_KEY,
-        baseURL: 'https://api.deepseek.com/v1',
-        model: 'deepseek-chat',
-        displayName: 'DeepSeek',
-        emoji: '🔷',
-        features: ['国内直连', '超高性价比', '强大推理能力']
-      };
-    }
-
-    // 3️⃣ 通义千问 - 阿里云大模型
-    if (process.env.QWEN_API_KEY) {
-      return {
-        name: 'Qwen',
-        apiKey: process.env.QWEN_API_KEY,
-        baseURL: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-        model: 'qwen-plus',
-        displayName: '通义千问',
-        emoji: '🇨🇳',
-        features: ['国内直连', '阿里云服务', '免费额度大']
-      };
-    }
-
-    // 4️⃣ OpenAI - 国际服务（可能需要代理）
-    if (process.env.OPENAI_API_KEY) {
-      return {
-        name: 'OpenAI',
-        apiKey: process.env.OPENAI_API_KEY,
-        baseURL: undefined, // 使用默认 URL
-        model: 'gpt-4o',
-        displayName: 'OpenAI GPT-4',
-        emoji: '🤖',
-        features: ['国际领先', '需要代理', '响应可能较慢']
-      };
-    }
-
-    // 检查是否强制使用 Mock
-    if (process.env.USE_MOCK_ANALYSIS === 'true') {
-      return null;
-    }
-
-    return null;
+    // ❌ GLM 不可用时抛出错误，不再降级
+    throw new Error(
+      '❌ GLM API Key 未配置！\n' +
+      '请设置环境变量 GLM_API_KEY 以使用智谱 GLM 模型。\n' +
+      '系统已配置为强制使用 GLM 模型，不再支持降级到其他模型。'
+    );
   }
 
   /**
@@ -290,7 +260,7 @@ ${speakerInfo}
           }
         ],
         response_format: { type: "json_object" },
-        temperature: 0.7,
+        temperature: 0.1,  // 降低到0.1以提高输出一致性（原值0.7导致30%随机性）
         max_tokens: 3000
       });
 
@@ -305,83 +275,49 @@ ${speakerInfo}
   }
 
   /**
-   * 🚀 智能转录：多级降级策略（国内优先）
-   * 
-   * 策略（按优先级）：
-   * 1. 优先使用阿里云（国内服务，免费2小时/月，直接传URL，无需下载）✅ 国内推荐
-   * 2. 降级到 AssemblyAI（国外服务，免费5小时/月，需要VPN）
-   * 3. 最终降级到 Whisper（付费但便宜，$0.006/分钟）
-   * 4. 自动追踪使用量，透明化成本
+   * 🚀 强制使用阿里云转录服务（固定配置）
+   * 不再支持降级到其他服务，确保输出一致性
    */
   private async transcribeVideoSmart(
     videoUrl: string,
     videoLabel: string = 'video'
   ): Promise<TranscriptionResult> {
+    // 🇨🇳 强制使用阿里云（国内服务，免费2小时/月，直接传URL，无需下载）
+    if (!aliyunTranscriptionService.isAvailable()) {
+      const reason = !aliyunTranscriptionService.hasRemainingQuota() 
+        ? '免费额度已用完' 
+        : '未配置 API Key';
+      throw new Error(
+        `❌ [${videoLabel}] 阿里云语音服务不可用（${reason}）！\n` +
+        '请配置环境变量 ALIYUN_ACCESS_KEY_ID 和 ALIYUN_ACCESS_KEY_SECRET，\n' +
+        '或检查免费额度是否已用完。\n' +
+        '系统已配置为强制使用阿里云转录服务，不再支持降级到其他服务。'
+      );
+    }
+
+    console.log(`🇨🇳 [${videoLabel}] 使用阿里云语音服务（强制使用，不再降级）`);
+    console.log(`💰 当前剩余免费额度: ${aliyunTranscriptionService.getStats().remainingMinutes} 分钟`);
+    
     try {
-      // 🇨🇳 策略1：优先尝试阿里云（国内用户首选）
-      if (aliyunTranscriptionService.isAvailable()) {
-        console.log(`🇨🇳 [${videoLabel}] 使用阿里云语音服务（国内免费服务）`);
-        console.log(`💰 当前剩余免费额度: ${aliyunTranscriptionService.getStats().remainingMinutes} 分钟`);
-        
-        try {
-          const result = await aliyunTranscriptionService.transcribeFromURL(videoUrl, {
-            language: 'en',
-            speakerLabels: true
-          });
-          
-          console.log(`✅ [${videoLabel}] 阿里云转录成功！`);
-          console.log(`💰 更新后剩余额度: ${aliyunTranscriptionService.getStats().remainingMinutes} 分钟`);
-          
-          return result;
-        } catch (error: any) {
-          console.warn(`⚠️  [${videoLabel}] 阿里云转录失败，尝试下一个服务:`, error.message);
-          // 继续执行降级策略
-        }
-      } else {
-        console.log(`ℹ️  [${videoLabel}] 阿里云语音服务不可用（${
-          !aliyunTranscriptionService.hasRemainingQuota() ? '免费额度已用完' : '未配置 API Key'
-        }）`);
-      }
-
-      // 🌍 策略2：尝试 AssemblyAI（需要国际网络访问）
-      if (assemblyAIService.isAvailable()) {
-        console.log(`🌍 [${videoLabel}] 使用 AssemblyAI（国际免费服务，可能需要VPN）`);
-        console.log(`💰 当前剩余免费额度: ${assemblyAIService.getStats().remainingMinutes} 分钟`);
-        
-        try {
-          const result = await assemblyAIService.transcribeFromURL(videoUrl, {
-            language: 'en',
-            speakerLabels: true
-          });
-          
-          console.log(`✅ [${videoLabel}] AssemblyAI 转录成功！`);
-          console.log(`💰 更新后剩余额度: ${assemblyAIService.getStats().remainingMinutes} 分钟`);
-          
-          return result;
-        } catch (error: any) {
-          console.warn(`⚠️  [${videoLabel}] AssemblyAI 转录失败，降级到 Whisper:`, error.message);
-          // 继续执行降级策略
-        }
-      } else {
-        console.log(`ℹ️  [${videoLabel}] AssemblyAI 不可用（${
-          !assemblyAIService.hasRemainingQuota() ? '免费额度已用完' : '未配置 API Key'
-        }）`);
-      }
-
-      // 💰 策略3：最终降级到 Whisper（需要 OpenAI）
-      console.log(`🎙️ [${videoLabel}] 使用 OpenAI Whisper（付费服务，$0.006/分钟）`);
+      const result = await aliyunTranscriptionService.transcribeFromURL(videoUrl, {
+        language: 'en',
+        speakerLabels: true
+      });
       
-      // 注意：这里需要 OpenAI 客户端，我们在调用处传入
-      throw new Error('FALLBACK_TO_WHISPER');
+      console.log(`✅ [${videoLabel}] 阿里云转录成功！`);
+      console.log(`💰 更新后剩余额度: ${aliyunTranscriptionService.getStats().remainingMinutes} 分钟`);
       
-    } catch (error) {
-      // 如果是降级标记，抛出让调用方处理
-      if (error instanceof Error && error.message === 'FALLBACK_TO_WHISPER') {
-        throw error;
-      }
-      
-      console.error(`❌ [${videoLabel}] 转录失败:`, error);
-      throw error;
+      return result;
+    } catch (error: any) {
+      console.error(`❌ [${videoLabel}] 阿里云转录失败:`, error.message);
+      throw new Error(
+        `❌ [${videoLabel}] 阿里云转录失败: ${error.message}\n` +
+        '系统已配置为强制使用阿里云转录服务，请检查：\n' +
+        '1. API Key 是否正确配置\n' +
+        '2. 网络连接是否正常\n' +
+        '3. 视频URL是否可访问\n' +
+        '4. 免费额度是否充足'
+      );
     }
   }
 
@@ -725,7 +661,7 @@ ${JSON.stringify(video2Analysis, null, 2)}
           }
         ],
         response_format: { type: "json_object" },
-        temperature: 0.7,
+        temperature: 0.1,  // 降低到0.1以提高输出一致性（原值0.7导致30%随机性）
         max_tokens: 4000
       });
 
@@ -782,53 +718,29 @@ ${JSON.stringify(video2Analysis, null, 2)}
       
       let video1Result, video2Result;
       try {
-        // 🔥 步骤1：并行转录两个视频（智能选择 AssemblyAI 或 Whisper）
-        console.log('\n🎯 [并行] 智能转录两个视频（优先使用免费服务）...');
+        // 🔥 步骤1：并行转录两个视频（强制使用阿里云）
+        console.log('\n🎯 [并行] 转录两个视频（强制使用阿里云，不再降级）...');
         const transcribeStartTime = Date.now();
         const [transcription1, transcription2] = await Promise.all([
           (async () => {
             console.log('📥 转录 Video 1...');
-            try {
-              // 尝试使用智能转录
-              const result = await this.transcribeVideoSmart(request.video1, 'Video 1');
-              console.log('✅ Video 1 转录完成（AssemblyAI）');
-              return result;
-            } catch (error: any) {
-              // 如果需要降级到 Whisper
-              if (error.message === 'FALLBACK_TO_WHISPER') {
-                console.log('🔄 Video 1 降级到 Whisper...');
-                const result = await this.whisperService.transcribeVideo(request.video1, openai);
-                console.log('✅ Video 1 转录完成（Whisper）');
-                return result;
-              }
-              throw error;
-            }
+            const result = await this.transcribeVideoSmart(request.video1, 'Video 1');
+            console.log('✅ Video 1 转录完成（阿里云）');
+            return result;
           })(),
           (async () => {
             console.log('📥 转录 Video 2...');
-            try {
-              // 尝试使用智能转录
-              const result = await this.transcribeVideoSmart(request.video2, 'Video 2');
-              console.log('✅ Video 2 转录完成（AssemblyAI）');
-              return result;
-            } catch (error: any) {
-              // 如果需要降级到 Whisper
-              if (error.message === 'FALLBACK_TO_WHISPER') {
-                console.log('🔄 Video 2 降级到 Whisper...');
-                const result = await this.whisperService.transcribeVideo(request.video2, openai);
-                console.log('✅ Video 2 转录完成（Whisper）');
-                return result;
-              }
-              throw error;
-            }
+            const result = await this.transcribeVideoSmart(request.video2, 'Video 2');
+            console.log('✅ Video 2 转录完成（阿里云）');
+            return result;
           })()
         ]);
         const transcribeTime = ((Date.now() - transcribeStartTime) / 1000).toFixed(1);
         console.log(`✅ 两个视频转录完成！耗时: ${transcribeTime}秒`);
-        console.log(`💰 当前 AssemblyAI 剩余免费额度: ${assemblyAIService.getStats().remainingMinutes} 分钟\n`);
+        console.log(`💰 当前阿里云剩余免费额度: ${aliyunTranscriptionService.getStats().remainingMinutes} 分钟\n`);
 
         // 🔥 步骤2：并行分析两个视频的转录文本
-        console.log('🤖 [并行] 使用GPT-4分析两个视频...');
+        console.log('🤖 [并行] 使用 GLM-4-Plus 分析两个视频...');
         const gptStartTime = Date.now();
         const [analysis1Text, analysis2Text] = await Promise.all([
           this.analyzeTranscriptionWithGPT(transcription1, openai, 'Video 1'),

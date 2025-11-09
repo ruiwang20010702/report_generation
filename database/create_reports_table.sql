@@ -18,10 +18,12 @@ CREATE INDEX IF NOT EXISTS idx_reports_student_name ON reports(student_name);
 ALTER TABLE reports ENABLE ROW LEVEL SECURITY;
 
 -- 创建策略：允许所有人读取报告
+DROP POLICY IF EXISTS "Enable read access for all users" ON reports;
 CREATE POLICY "Enable read access for all users" ON reports
   FOR SELECT USING (true);
 
 -- 创建策略：允许所有人插入报告
+DROP POLICY IF EXISTS "Enable insert access for all users" ON reports;
 CREATE POLICY "Enable insert access for all users" ON reports
   FOR INSERT WITH CHECK (true);
 
