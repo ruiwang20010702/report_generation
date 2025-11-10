@@ -14,12 +14,12 @@ const queryClient = new QueryClient();
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
+    <TooltipProvider>
+      <Toaster />
+      <Sonner />
         <AuthProvider>
-          <BrowserRouter>
-            <Routes>
+      <BrowserRouter>
+        <Routes>
               <Route path="/login" element={<Login />} />
               <Route
                 path="/"
@@ -29,10 +29,10 @@ const App = () => (
                   </ProtectedRoute>
                 }
               />
-            </Routes>
-          </BrowserRouter>
+        </Routes>
+      </BrowserRouter>
         </AuthProvider>
-      </TooltipProvider>
+    </TooltipProvider>
     </ThemeProvider>
   </QueryClientProvider>
 );

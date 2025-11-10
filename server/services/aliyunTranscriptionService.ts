@@ -10,8 +10,14 @@
  * - ✅ 支持英语识别
  */
 
+// ⚠️ 必须先加载环境变量，再初始化服务
+import dotenv from 'dotenv';
+dotenv.config();
+
 import axios, { AxiosInstance } from 'axios';
 import crypto from 'crypto';
+import https from 'https';
+import { HttpsProxyAgent } from 'https-proxy-agent';
 import { v4 as uuidv4 } from 'uuid';
 
 export interface TranscriptionResult {
@@ -71,9 +77,53 @@ class AliyunTranscriptionService {
       console.log('⚠️  阿里云语音服务未配置（将使用 Whisper 备用）');
     }
 
+    // 配置 HTTPS Agent，优化 TLS 连接
+    // ⚠️ 重要：阿里云是中国服务，不应该使用VPN代理
+    // 如果VPN设置了系统代理，可能会导致TLS握手失败
+    let httpsAgent: https.Agent | any;
+    
+    // 检查是否有代理配置
+    const proxyUrl = process.env.ALIYUN_PROXY_URL || process.env.HTTPS_PROXY || process.env.HTTP_PROXY;
+    const allowProxy = process.env.ALIYUN_ALLOW_PROXY === 'true';
+    const rejectUnauthorized = process.env.ALIYUN_REJECT_UNAUTHORIZED !== 'false';
+    
+    if (proxyUrl && allowProxy) {
+      console.log('🌐 阿里云服务将通过代理连接');
+      httpsAgent = new HttpsProxyAgent(proxyUrl);
+    } else {
+      if (proxyUrl && !allowProxy) {
+        console.warn('⚠️  检测到代理配置，但已设置为强制直连阿里云（ALIYUN_ALLOW_PROXY!=true）');
+        console.warn('   如果遇到连接问题，可以设置环境变量 ALIYUN_ALLOW_PROXY=true 以启用代理');
+      }
+      
+      // 强制使用直连配置（不使用代理）
+      httpsAgent = new https.Agent({
+        keepAlive: true,
+        keepAliveMsecs: 1000,
+        maxSockets: 50,
+        maxFreeSockets: 10,
+        timeout: 60000, // 连接超时60秒
+        // TLS 配置 - 使用更宽松的设置以提高兼容性
+        rejectUnauthorized, // 验证证书（生产环境应保持 true，除非显式禁用）
+        minVersion: 'TLSv1.2', // 最低 TLS 1.2
+        maxVersion: 'TLSv1.3', // 最高 TLS 1.3
+        // 移除限制性的 cipher 列表，让 Node.js 使用默认的兼容 cipher 套件
+      });
+      
+      console.log('🌐 阿里云服务将使用直连（不使用代理）');
+      if (!rejectUnauthorized) {
+        console.warn('⚠️  已禁用 TLS 证书校验（ALIYUN_REJECT_UNAUTHORIZED=false），仅建议在调试环境使用');
+      }
+    }
+
     this.client = axios.create({
       baseURL: this.API_ENDPOINT,
       timeout: 300000, // 5分钟超时
+      // 优化网络连接配置
+      httpsAgent: httpsAgent,
+      // 增加重试配置
+      maxRedirects: 5,
+      validateStatus: (status) => status < 500, // 不抛出4xx错误，只抛出5xx
     });
   }
 
@@ -140,6 +190,71 @@ class AliyunTranscriptionService {
   }
 
   /**
+   * 带重试的网络请求
+   */
+  private async retryRequest<T>(
+    requestFn: () => Promise<T>,
+    maxRetries: number = 3,
+    retryDelay: number = 2000
+  ): Promise<T> {
+    let lastError: any;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        return await requestFn();
+      } catch (error: any) {
+        lastError = error;
+        
+        // 检查是否是网络错误（TLS连接失败、超时等）
+        // axios 错误可能在不同位置：error.code, error.message, error.request
+        const errorMessage = error.message || error.toString() || '';
+        const errorCode = error.code || '';
+        
+        const isNetworkError = 
+          errorCode === 'ECONNRESET' ||
+          errorCode === 'ETIMEDOUT' ||
+          errorCode === 'ENOTFOUND' ||
+          errorCode === 'ECONNREFUSED' ||
+          errorCode === 'ESOCKETTIMEDOUT' ||
+          errorCode === 'ECONNABORTED' ||
+          errorCode === 'EPROTO' || // TLS 协议错误
+          errorCode === 'ERR_TLS_HANDSHAKE_TIMEOUT' || // TLS 握手超时
+          errorMessage.includes('socket disconnected') ||
+          errorMessage.includes('TLS connection') ||
+          errorMessage.includes('secure TLS connection') ||
+          errorMessage.includes('TLS handshake') ||
+          errorMessage.includes('network') ||
+          errorMessage.includes('timeout') ||
+          errorMessage.includes('ECONNRESET') ||
+          errorMessage.includes('ETIMEDOUT') ||
+          errorMessage.includes('before secure TLS') ||
+          // axios 特定错误：没有响应（网络问题）
+          (error.request && !error.response);
+        
+        if (isNetworkError && attempt < maxRetries) {
+          const delay = retryDelay * attempt; // 指数退避
+          console.log(`⚠️  网络连接失败（尝试 ${attempt}/${maxRetries}），${delay}ms 后重试...`);
+          console.log(`   错误信息: ${errorMessage || errorCode}`);
+          
+          // 如果是TLS握手失败，提供VPN相关提示
+          if (errorMessage.includes('before secure TLS') || errorMessage.includes('TLS handshake') || errorCode === 'EPROTO') {
+            console.log('   💡 提示: 如果使用了VPN，TLS握手失败可能是VPN代理导致的');
+            console.log('      阿里云是中国服务，建议关闭VPN或配置NO_PROXY排除阿里云域名');
+          }
+          
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
+        
+        // 如果不是网络错误，或者已经达到最大重试次数，直接抛出
+        throw error;
+      }
+    }
+    
+    throw lastError;
+  }
+
+  /**
    * 提交转录任务
    */
   private async submitTask(fileUrl: string, options: {
@@ -184,7 +299,12 @@ class AliyunTranscriptionService {
     params.Signature = signature;
 
     try {
-      const response = await this.client.post('/', null, { params });
+      // 使用重试机制提交任务
+      const response = await this.retryRequest(
+        () => this.client.post('/', null, { params }),
+        5, // 最多重试5次（TLS连接问题可能需要更多重试）
+        3000 // 初始延迟3秒（给网络更多时间恢复）
+      );
       
       if (response.data.StatusCode !== 21050000) {
         throw new Error(`提交任务失败: ${response.data.StatusText}`);
@@ -195,8 +315,24 @@ class AliyunTranscriptionService {
       
       return taskId;
     } catch (error: any) {
-      console.error('❌ 提交阿里云转录任务失败:', error.message);
-      throw new Error(`提交转录任务失败: ${error.message}`);
+      const errorMessage = error.message || error.toString() || '未知错误';
+      const errorCode = error.code || '';
+      
+      console.error('❌ 提交阿里云转录任务失败:', errorMessage);
+      console.error('   错误代码:', errorCode);
+        
+      // 如果是 TLS 连接问题，提供更详细的诊断信息
+      if (errorMessage.includes('TLS') || errorMessage.includes('socket disconnected') || errorCode === 'EPROTO' || errorMessage.includes('before secure TLS')) {
+        console.error('💡 TLS 连接问题诊断:');
+        console.error('   1. 检查网络连接是否稳定');
+      console.error('   2. 如果需要通过代理访问，请设置 ALIYUN_ALLOW_PROXY=true 并配置 HTTPS_PROXY/HTTP_PROXY');
+      console.error('   3. 检查VPN是否设置了系统代理，可能干扰了连接');
+      console.error('   4. 如果使用直连，可尝试设置 NO_PROXY 环境变量排除阿里云域名:');
+      console.error('      export NO_PROXY="*.aliyuncs.com,*.aliyun.com"');
+      console.error('   5. 如果必须使用VPN，请确保VPN配置了正确的DNS解析');
+      }
+      
+      throw new Error(`提交转录任务失败: ${errorMessage}`);
     }
   }
 
@@ -226,7 +362,12 @@ class AliyunTranscriptionService {
     const signature = this.generateSignature(params);
     params.Signature = signature;
 
-    const response = await this.client.get('/', { params });
+    // 查询任务状态也使用重试机制
+    const response = await this.retryRequest(
+      () => this.client.get('/', { params }),
+      2, // 查询状态最多重试2次
+      1000 // 初始延迟1秒
+    );
     return response.data;
   }
 

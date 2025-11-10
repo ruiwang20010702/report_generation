@@ -1,10 +1,13 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { VideoAnalysisForm } from "@/components/VideoAnalysisForm";
 import { LoadingState } from "@/components/LoadingState";
 import { ReportDisplay } from "@/components/ReportDisplay";
 import logo51Talk from "@/assets/51talk-logo.jpg";
 import { videoAnalysisAPI, VideoAnalysisResponse } from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
+import { Button } from "@/components/ui/button";
+import { LogOut } from "lucide-react";
 
 type AppState = "form" | "loading" | "report";
 
@@ -160,6 +163,7 @@ const Index = () => {
   const [appState, setAppState] = useState<AppState>("form");
   const [reportData, setReportData] = useState<VideoAnalysisResponse | null>(null);
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   const handleFormSubmit = async (data: FormData) => {
     console.log('🚀 Form submitted with data:', data);
@@ -206,10 +210,32 @@ const Index = () => {
       
       setAppState("form");
       
+      // 格式化错误消息，处理多行错误
+      let errorMessage = error instanceof Error ? error.message : "未知错误，请稍后重试";
+      
+      // 将换行符替换为空格，使错误消息在 toast 中更易读
+      errorMessage = errorMessage.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
+      
+      // 提取错误标题和描述
+      let errorTitle = "分析失败";
+      let errorDescription = errorMessage;
+      
+      // 如果是阿里云相关的错误，提取更友好的标题
+      if (errorMessage.includes('阿里云')) {
+        if (errorMessage.includes('未配置 API Key')) {
+          errorTitle = "阿里云 API Key 未配置";
+          errorDescription = "请配置环境变量 ALIYUN_ACCESS_KEY_ID 和 ALIYUN_ACCESS_KEY_SECRET。系统已配置为强制使用阿里云转录服务。";
+        } else if (errorMessage.includes('免费额度已用完')) {
+          errorTitle = "阿里云免费额度已用完";
+          errorDescription = "请检查免费额度是否已用完，或等待下月重置。系统已配置为强制使用阿里云转录服务。";
+        }
+      }
+      
       toast({
-        title: "分析失败",
-        description: error instanceof Error ? error.message : "未知错误，请稍后重试",
+        title: errorTitle,
+        description: errorDescription,
         variant: "destructive",
+        duration: 8000, // 显示更长时间以便用户阅读
       });
     }
   };
@@ -223,7 +249,21 @@ const Index = () => {
     <div className="min-h-screen bg-background">
       {appState === "form" && (
         <div className="min-h-screen flex flex-col items-center justify-center p-4">
-          <div className="w-full max-w-2xl mb-8 text-center">
+          <div className="w-full max-w-2xl mb-8">
+            <div className="flex justify-end mb-4">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => navigate("/login")}
+                className="flex items-center gap-2"
+              >
+                <LogOut className="w-4 h-4" />
+                <span className="hidden sm:inline">回到登录页面</span>
+                <span className="sm:hidden">登录</span>
+              </Button>
+            </div>
+            <div className="text-center">
             <img 
               src={logo51Talk} 
               alt="51Talk Logo" 
@@ -235,6 +275,7 @@ const Index = () => {
             <p className="text-lg text-muted-foreground">
               AI驱动的英语学习进步追踪系统
             </p>
+            </div>
           </div>
           <VideoAnalysisForm onSubmit={handleFormSubmit} />
         </div>

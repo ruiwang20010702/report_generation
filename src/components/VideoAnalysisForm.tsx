@@ -4,7 +4,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Switch } from "@/components/ui/switch";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Film, User, GraduationCap, TrendingUp, Zap, CalendarIcon } from "lucide-react";
@@ -52,6 +51,18 @@ export const VideoAnalysisForm = ({ onSubmit }: VideoAnalysisFormProps) => {
   const [selectedDate2, setSelectedDate2] = useState<Date>();
 
   const [errors, setErrors] = useState<Partial<FormData>>({});
+
+  // 更新表单字段，如果 useMockData 为 true，则重置为 false
+  const updateFormField = (updates: Partial<FormData>) => {
+    setFormData((prev) => {
+      // 如果用户手动修改了表单，且之前是使用 mock 数据，则重置 useMockData
+      const newData = { ...prev, ...updates };
+      if (prev.useMockData) {
+        newData.useMockData = false;
+      }
+      return newData;
+    });
+  };
 
   // 快速测试功能：自动填充表单数据
   const handleQuickTest = () => {
@@ -123,6 +134,48 @@ export const VideoAnalysisForm = ({ onSubmit }: VideoAnalysisFormProps) => {
     }
   };
 
+  // 从URL中提取日期（格式：YYYYMMDD）
+  const extractDateFromUrl = (url: string): Date | null => {
+    try {
+      // 匹配 URL 路径中的日期格式 YYYYMMDD（8位数字）
+      const dateMatch = url.match(/\/(\d{8})\//);
+      if (dateMatch) {
+        const dateStr = dateMatch[1];
+        const year = parseInt(dateStr.substring(0, 4));
+        const month = parseInt(dateStr.substring(4, 6)) - 1; // 月份从0开始
+        const day = parseInt(dateStr.substring(6, 8));
+        const date = new Date(year, month, day);
+        // 验证日期是否有效
+        if (date.getFullYear() === year && date.getMonth() === month && date.getDate() === day) {
+          return date;
+        }
+      }
+    } catch (error) {
+      // 如果解析失败，返回 null
+    }
+    return null;
+  };
+
+  // 处理视频链接输入，自动提取日期
+  const handleVideoInput = (field: 'video1' | 'video2', value: string) => {
+    // 尝试从URL中提取日期
+    const extractedDate = extractDateFromUrl(value);
+    
+    // 同时更新视频链接和日期（如果找到）
+    const updates: Partial<FormData> = { [field]: value };
+    if (extractedDate) {
+      const dateStr = format(extractedDate, "yyyy-MM-dd");
+      if (field === 'video1') {
+        setSelectedDate(extractedDate);
+        updates.date = dateStr;
+      } else if (field === 'video2') {
+        setSelectedDate2(extractedDate);
+        updates.date2 = dateStr;
+      }
+    }
+    updateFormField(updates);
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (validateForm()) {
@@ -149,7 +202,12 @@ export const VideoAnalysisForm = ({ onSubmit }: VideoAnalysisFormProps) => {
             variant="outline"
             size="sm"
             onClick={handleQuickTest}
-            className="ml-4 flex items-center gap-2 bg-secondary/10 hover:bg-secondary/20 border-secondary text-secondary-foreground font-semibold"
+            className={cn(
+              "ml-4 flex items-center gap-2 font-semibold",
+              formData.useMockData
+                ? "bg-yellow-500/20 hover:bg-yellow-500/30 border-yellow-500 text-yellow-700 dark:text-yellow-400"
+                : "bg-secondary/10 hover:bg-secondary/20 border-secondary text-secondary-foreground"
+            )}
           >
             <Zap className="w-4 h-4" />
             快速测试
@@ -170,19 +228,19 @@ export const VideoAnalysisForm = ({ onSubmit }: VideoAnalysisFormProps) => {
                 type="text"
                 placeholder="请输入学生姓名"
                 value={formData.studentName}
-                onChange={(e) => setFormData({ ...formData, studentName: e.target.value })}
+                onChange={(e) => updateFormField({ studentName: e.target.value })}
                 className={`h-12 ${errors.studentName ? 'border-destructive' : ''}`}
               />
               {errors.studentName && <p className="text-sm text-destructive">{errors.studentName}</p>}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="grade" className="flex items-center gap-2 text-base font-semibold">
                   <GraduationCap className="w-5 h-5 text-secondary" />
                   年级
                 </Label>
-                <Select value={formData.grade} onValueChange={(value) => setFormData({ ...formData, grade: value })}>
+                <Select value={formData.grade} onValueChange={(value) => updateFormField({ grade: value })}>
                   <SelectTrigger className={`h-12 ${errors.grade ? 'border-destructive' : ''}`}>
                     <SelectValue placeholder="选择年级" />
                   </SelectTrigger>
@@ -200,7 +258,7 @@ export const VideoAnalysisForm = ({ onSubmit }: VideoAnalysisFormProps) => {
                   <TrendingUp className="w-5 h-5 text-secondary" />
                   级别
                 </Label>
-                <Select value={formData.level} onValueChange={(value) => setFormData({ ...formData, level: value })}>
+                <Select value={formData.level} onValueChange={(value) => updateFormField({ level: value })}>
                   <SelectTrigger className={`h-12 ${errors.level ? 'border-destructive' : ''}`}>
                     <SelectValue placeholder="选择级别" />
                   </SelectTrigger>
@@ -212,149 +270,135 @@ export const VideoAnalysisForm = ({ onSubmit }: VideoAnalysisFormProps) => {
                 </Select>
                 {errors.level && <p className="text-sm text-destructive">{errors.level}</p>}
               </div>
-            </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="unit" className="flex items-center gap-2 text-base font-semibold">
-                <Film className="w-5 h-5 text-secondary" />
-                单元 <span className="text-xs text-muted-foreground font-normal">(可选)</span>
-              </Label>
-              <div className="flex items-center gap-2">
-                <span className="text-foreground font-medium whitespace-nowrap">Unit</span>
-                <Input
-                  id="unit"
-                  type="number"
-                  min="1"
-                  max="100"
-                  placeholder="输入数字，如 5"
-                  value={formData.unit}
-                  onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
-                  className="h-12 flex-1"
-                />
+              <div className="space-y-2">
+                <Label htmlFor="unit" className="flex items-center gap-2 text-base font-semibold">
+                  <Film className="w-5 h-5 text-secondary" />
+                  单元 <span className="text-xs text-muted-foreground font-normal">(可选)</span>
+                </Label>
+                <div className="flex items-center gap-2">
+                  <span className="text-foreground font-medium whitespace-nowrap">Unit</span>
+                  <Input
+                    id="unit"
+                    type="number"
+                    min="1"
+                    max="100"
+                    placeholder="输入数字，如 5"
+                    value={formData.unit}
+                    onChange={(e) => updateFormField({ unit: e.target.value })}
+                    className="h-12 flex-1"
+                  />
+                </div>
               </div>
             </div>
           </div>
 
-          {/* 使用真实 AI 分析开关 */}
-          <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg border border-border">
-            <div className="flex-1">
-              <Label htmlFor="useMockData" className="text-base font-semibold cursor-pointer">
-                使用真实 AI 分析
-              </Label>
-              <p className="text-sm text-muted-foreground mt-1">
-                {formData.useMockData ? "当前使用模拟数据（即时响应）" : "当前使用真实 AI 分析（需要 2-3 分钟）"}
-              </p>
-            </div>
-            <Switch
-              id="useMockData"
-              checked={!formData.useMockData}
-              onCheckedChange={(checked) => setFormData({ ...formData, useMockData: !checked })}
-              className="ml-4"
-            />
-          </div>
-
           {/* Video Links */}
           <div className="space-y-4 pt-4 border-t border-border">
-            <div className="space-y-2">
-              <Label className="flex items-center gap-2 text-base font-semibold">
-                <CalendarIcon className="w-5 h-5 text-secondary" />
-                筛选日期
-              </Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-full h-12 justify-start text-left font-normal",
-                      !selectedDate && "text-muted-foreground",
-                      errors.date && "border-destructive"
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {selectedDate ? format(selectedDate, "PPP") : <span>选择日期</span>}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={selectedDate}
-                    onSelect={(date) => {
-                      setSelectedDate(date);
-                      setFormData({ ...formData, date: date ? format(date, "yyyy-MM-dd") : "" });
-                    }}
-                    initialFocus
-                    className={cn("p-3 pointer-events-auto")}
-                  />
-                </PopoverContent>
-              </Popover>
-              {errors.date && <p className="text-sm text-destructive">{errors.date}</p>}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="video1" className="flex items-center gap-2 text-base font-semibold">
+                  <Film className="w-5 h-5 text-secondary" />
+                  第一个视频链接
+                </Label>
+                <Input
+                  id="video1"
+                  type="url"
+                  placeholder="https://example.com/video1"
+                  value={formData.video1}
+                  onChange={(e) => handleVideoInput('video1', e.target.value)}
+                  className={`h-12 ${errors.video1 ? 'border-destructive' : ''}`}
+                />
+                {errors.video1 && <p className="text-sm text-destructive">{errors.video1}</p>}
+              </div>
+
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2 text-base font-semibold">
+                  <CalendarIcon className="w-5 h-5 text-secondary" />
+                  筛选日期
+                </Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full h-12 justify-start text-left font-normal",
+                        !selectedDate && "text-muted-foreground",
+                        errors.date && "border-destructive"
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {selectedDate ? format(selectedDate, "PPP") : <span>选择日期</span>}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={selectedDate}
+                      onSelect={(date) => {
+                        setSelectedDate(date);
+                        updateFormField({ date: date ? format(date, "yyyy-MM-dd") : "" });
+                      }}
+                      initialFocus
+                      className={cn("p-3 pointer-events-auto")}
+                    />
+                  </PopoverContent>
+                </Popover>
+                {errors.date && <p className="text-sm text-destructive">{errors.date}</p>}
+              </div>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="video1" className="flex items-center gap-2 text-base font-semibold">
-                <Film className="w-5 h-5 text-secondary" />
-                第一个视频链接
-              </Label>
-              <Input
-                id="video1"
-                type="url"
-                placeholder="https://example.com/video1"
-                value={formData.video1}
-                onChange={(e) => setFormData({ ...formData, video1: e.target.value })}
-                className={`h-12 ${errors.video1 ? 'border-destructive' : ''}`}
-              />
-              {errors.video1 && <p className="text-sm text-destructive">{errors.video1}</p>}
-            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="video2" className="flex items-center gap-2 text-base font-semibold">
+                  <Film className="w-5 h-5 text-secondary" />
+                  第二个视频链接
+                </Label>
+                <Input
+                  id="video2"
+                  type="url"
+                  placeholder="https://example.com/video2"
+                  value={formData.video2}
+                  onChange={(e) => handleVideoInput('video2', e.target.value)}
+                  className={`h-12 ${errors.video2 ? 'border-destructive' : ''}`}
+                />
+                {errors.video2 && <p className="text-sm text-destructive">{errors.video2}</p>}
+              </div>
 
-            <div className="space-y-2">
-              <Label className="flex items-center gap-2 text-base font-semibold">
-                <CalendarIcon className="w-5 h-5 text-secondary" />
-                筛选日期
-              </Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-full h-12 justify-start text-left font-normal",
-                      !selectedDate2 && "text-muted-foreground",
-                      errors.date2 && "border-destructive"
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {selectedDate2 ? format(selectedDate2, "PPP") : <span>选择日期</span>}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={selectedDate2}
-                    onSelect={(date) => {
-                      setSelectedDate2(date);
-                      setFormData({ ...formData, date2: date ? format(date, "yyyy-MM-dd") : "" });
-                    }}
-                    initialFocus
-                    className={cn("p-3 pointer-events-auto")}
-                  />
-                </PopoverContent>
-              </Popover>
-              {errors.date2 && <p className="text-sm text-destructive">{errors.date2}</p>}
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="video2" className="flex items-center gap-2 text-base font-semibold">
-                <Film className="w-5 h-5 text-secondary" />
-                第二个视频链接
-              </Label>
-              <Input
-                id="video2"
-                type="url"
-                placeholder="https://example.com/video2"
-                value={formData.video2}
-                onChange={(e) => setFormData({ ...formData, video2: e.target.value })}
-                className={`h-12 ${errors.video2 ? 'border-destructive' : ''}`}
-              />
-              {errors.video2 && <p className="text-sm text-destructive">{errors.video2}</p>}
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2 text-base font-semibold">
+                  <CalendarIcon className="w-5 h-5 text-secondary" />
+                  筛选日期
+                </Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full h-12 justify-start text-left font-normal",
+                        !selectedDate2 && "text-muted-foreground",
+                        errors.date2 && "border-destructive"
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {selectedDate2 ? format(selectedDate2, "PPP") : <span>选择日期</span>}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={selectedDate2}
+                      onSelect={(date) => {
+                        setSelectedDate2(date);
+                        updateFormField({ date2: date ? format(date, "yyyy-MM-dd") : "" });
+                      }}
+                      initialFocus
+                      className={cn("p-3 pointer-events-auto")}
+                    />
+                  </PopoverContent>
+                </Popover>
+                {errors.date2 && <p className="text-sm text-destructive">{errors.date2}</p>}
+              </div>
             </div>
           </div>
 

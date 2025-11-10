@@ -1,10 +1,103 @@
 # 邮件服务配置指南
 
-## 问题说明
+## 功能说明
 
+系统支持通过邮箱验证码登录。当用户在应用中输入邮箱地址（如 `user@example.com` 或 `wangrui003@51talk.com`）并请求验证码时，系统会自动给该邮箱发送验证码。
+
+**重要说明：**
+- ✅ 配置好 SMTP 服务后，可以给**任何邮箱**（包括 gmail.com、qq.com、51talk.com 等）发送验证码
+- ✅ 收件人邮箱由用户在应用中输入，由代码动态决定
+- ✅ `SMTP_USER` 是您的**发件邮箱账号**（用来发送邮件的邮箱），不是收件人邮箱
+- ⚠️ 如果您的邮箱收不到验证码，可能是因为邮件服务尚未配置
+
+## 什么是 SMTP 服务？
+
+**SMTP**（Simple Mail Transfer Protocol，简单邮件传输协议）是互联网上用于发送电子邮件的标准协议。
+
+### 简单理解
+
+想象一下寄信的过程：
+- **SMTP 服务器** = 邮局
+- **您的邮箱账号** = 寄信人的地址
+- **收件人邮箱** = 收信人的地址
+- **邮件内容** = 信件内容
+
+当您的应用需要发送验证码邮件时：
+1. 应用连接到 SMTP 服务器（如 Gmail 的 `smtp.gmail.com`）
+2. 使用您的邮箱账号和密码进行身份验证
+3. 告诉 SMTP 服务器要发送邮件给谁（收件人邮箱）
+4. SMTP 服务器负责将邮件送达收件人的邮箱
+
+### 为什么需要配置 SMTP？
+
+- ✅ **发送邮件需要身份验证**：就像寄信需要证明身份一样，SMTP 服务器需要验证您有权限发送邮件
+- ✅ **防止垃圾邮件**：通过身份验证，确保只有授权用户才能发送邮件
+- ✅ **确保邮件送达**：SMTP 服务器负责将邮件正确送达收件人
+
+### 常见问题
+
+**Q: 我可以使用任何邮箱作为 SMTP 服务吗？**  
+A: 是的，只要该邮箱支持 SMTP 功能（大多数邮箱都支持），您就可以使用它来发送邮件。
+
+**Q: 使用 Gmail 发送邮件，可以给 QQ 邮箱发送吗？**  
+A: 可以！SMTP 服务是通用的，配置好 Gmail 的 SMTP 后，可以给任何邮箱（QQ、163、企业邮箱等）发送邮件。
+
+**Q: 收件人邮箱需要在 SMTP 配置中设置吗？**  
+A: 不需要。收件人邮箱是动态的，由用户在应用中输入，每次发送邮件时由代码指定。
+
+## 问题说明
 如果您的邮箱收不到验证码，可能是因为邮件服务尚未配置。系统目前支持通过 SMTP 服务器发送邮件。
 
-## 配置步骤
+## 🚀 快速开始（3 步完成配置）
+
+### 步骤 1：选择邮箱服务
+选择一个您常用的邮箱：
+- **Gmail** ⭐ 推荐（适合开发测试）
+- **QQ 邮箱** ⭐ 推荐（适合国内用户）
+- **163 邮箱**
+- **企业邮箱**
+
+### 步骤 2：获取授权码/密码
+
+**Gmail 用户：**
+1. 登录 Google 账号 → "安全性"设置
+2. 启用"两步验证"（如果未启用）
+3. 生成"应用专用密码"（16位密码）
+4. 复制这个密码，作为 `SMTP_PASS`
+
+**QQ 邮箱用户：**
+1. 登录 QQ 邮箱网页版
+2. 进入"设置" → "账户"
+3. 找到"POP3/IMAP/SMTP服务"
+4. 开启服务并"生成授权码"
+5. 复制授权码，作为 `SMTP_PASS`
+
+### 步骤 3：配置环境变量
+在项目根目录的 `.env` 文件中添加配置：
+
+**Gmail 配置：**
+```env
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=your-email@gmail.com
+SMTP_PASS=your-app-password
+```
+
+**QQ 邮箱配置：**
+```env
+SMTP_HOST=smtp.qq.com
+SMTP_PORT=587
+SMTP_USER=your-email@qq.com
+SMTP_PASS=your-authorization-code
+```
+
+**最后一步：重启服务器** ✅
+
+配置完成后，重启服务器，系统会自动测试邮件服务。如果看到 `✅ 邮件服务配置正确`，说明配置成功！
+
+---
+
+## 详细配置步骤
 
 ### 1. 选择邮件服务提供商（推荐使用密码验证方式）
 
@@ -88,8 +181,9 @@ SMTP_PASS=your-authorization-code
 ```env
 SMTP_HOST=smtp.mxhichina.com
 SMTP_PORT=465
-SMTP_USER=your-email@yourdomain.com
-SMTP_PASS=your-password
+SMTP_USER=your-email@yourdomain.com    # 您的企业邮箱账号（发件邮箱）
+SMTP_PASS=your-password                 # 您的邮箱密码
+SMTP_FROM=your-email@yourdomain.com     # 发件人地址
 ```
 
 **腾讯企业邮箱：**
@@ -100,23 +194,10 @@ SMTP_USER=your-email@yourdomain.com
 SMTP_PASS=your-password
 ```
 
-#### 企业邮箱配置
-
-**阿里云企业邮箱：**
-```env
-SMTP_HOST=smtp.mxhichina.com
-SMTP_PORT=465
-SMTP_USER=your-email@yourdomain.com
-SMTP_PASS=your-password
-```
-
-**腾讯企业邮箱：**
-```env
-SMTP_HOST=smtp.exmail.qq.com
-SMTP_PORT=465
-SMTP_USER=your-email@yourdomain.com
-SMTP_PASS=your-password
-```
+**重要提示：**
+- `SMTP_USER` 是您的**发件邮箱账号**（用来发送邮件的邮箱），不是收件人邮箱
+- 配置好 SMTP 后，可以给**任何邮箱**（包括 gmail.com、qq.com、51talk.com 等）发送验证码
+- 收件人邮箱地址由用户在应用中输入，由代码动态决定，不需要在 SMTP 配置中设置
 
 ---
 

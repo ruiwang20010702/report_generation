@@ -15,7 +15,7 @@ const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [otp, setOtp] = useState("");
-  const [loginMode, setLoginMode] = useState<LoginMode>("password");
+  const [loginMode, setLoginMode] = useState<LoginMode>("otp");
   const [isOtpSent, setIsOtpSent] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();

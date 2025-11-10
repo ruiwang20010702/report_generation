@@ -38,6 +38,9 @@ function getTransporter(): nodemailer.Transporter {
       user: SMTP_USER,
       pass: SMTP_PASS,
     },
+    connectionTimeout: 10000, // 10秒连接超时
+    greetingTimeout: 10000, // 10秒问候超时
+    socketTimeout: 10000, // 10秒 socket 超时
   });
 
   return transporter;
@@ -108,7 +111,15 @@ export async function testEmailService(): Promise<boolean> {
       return false;
     }
 
-    await transporter.verify();
+    console.log('⏳ 正在验证邮件服务配置（最多等待10秒）...');
+    
+    // 添加超时包装，防止卡住
+    const verifyPromise = transporter.verify();
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('连接超时：无法在10秒内连接到SMTP服务器')), 10000);
+    });
+
+    await Promise.race([verifyPromise, timeoutPromise]);
     console.log('✅ 邮件服务配置正确');
     return true;
   } catch (error: any) {

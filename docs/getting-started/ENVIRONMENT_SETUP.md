@@ -89,8 +89,9 @@ VITE_API_URL=http://localhost:3001  # 后端API地址
 
 # ============ 代理配置（可选）============
 # 如果在不支持的地区，需要配置代理
-# HTTPS_PROXY=http://127.0.0.1:7890
-# HTTP_PROXY=http://127.0.0.1:7890
+# HTTPS_PROXY=http://127.0.0.1:4780
+# HTTP_PROXY=http://127.0.0.1:4780
+# ALL_PROXY=socks5h://127.0.0.1:4781
 ```
 
 ## 安全提示

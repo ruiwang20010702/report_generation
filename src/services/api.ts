@@ -135,8 +135,35 @@ export class VideoAnalysisAPI {
           throw new Error('请求超时（超过10分钟）。可能原因：1) 视频文件太大（建议<50MB） 2) 网络速度慢 3) OpenAI API 响应慢。建议使用较短的视频（3-5分钟）。');
         } else if (axiosError.response) {
           // 服务器返回了错误响应
-          const errorData = axiosError.response.data as { error?: string; message?: string };
-          throw new Error(errorData.error || errorData.message || '分析失败');
+          const errorData = axiosError.response.data as { error?: string; message?: string; details?: string };
+          const status = axiosError.response.status;
+          
+          // 根据HTTP状态码提供更具体的错误信息
+          let errorMessage = errorData.message || errorData.error || '分析失败';
+          
+          if (status === 400) {
+            errorMessage = errorData.message || errorData.error || '请求参数错误。请检查：1) 视频链接是否有效 2) 是否提供了所有必需字段 3) 是否提供了 OpenAI API Key（如需要）';
+          } else if (status === 401) {
+            errorMessage = 'API Key 无效或缺失。使用真实AI分析需要提供有效的 OpenAI API Key';
+          } else if (status === 404) {
+            errorMessage = 'API 端点未找到。请检查后端服务是否正常运行';
+          } else if (status === 500) {
+            // 服务器内部错误，尝试使用服务器返回的详细错误信息
+            if (errorData.message && errorData.message !== '分析视频时出错') {
+              errorMessage = errorData.message;
+            } else {
+              errorMessage = '服务器内部错误。可能原因：1) 视频下载失败 2) 视频转录失败 3) AI 分析失败。请查看服务器日志获取详细信息';
+            }
+          } else if (status === 504) {
+            errorMessage = '请求超时。视频下载或AI分析耗时过长，请尝试使用较短的视频（3-5分钟）';
+          }
+          
+          // 如果有详细信息，添加到错误消息中
+          if (errorData.details && process.env.NODE_ENV === 'development') {
+            errorMessage += `\n详细信息: ${errorData.details}`;
+          }
+          
+          throw new Error(errorMessage);
         } else if (axiosError.request) {
           // 请求已发送但没有收到响应
           throw new Error('服务器无响应。请检查：1) 后端服务是否在运行 2) 端口3001是否可访问 3) 查看浏览器控制台和服务器日志获取详细信息');
