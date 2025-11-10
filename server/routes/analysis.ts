@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
-import { VideoAnalysisService } from '../services/videoAnalysisService';
-import { VideoAnalysisRequest } from '../types';
-import { assemblyAIService } from '../services/assemblyAIService';
+import { VideoAnalysisService } from '../services/videoAnalysisService.js';
+import { VideoAnalysisRequest } from '../types/index.js';
+import { assemblyAIService } from '../services/assemblyAIService.js';
 
 const router = Router();
 

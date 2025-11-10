@@ -1,8 +1,8 @@
 import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
-import { query } from '../config/database';
-import { sendVerificationEmail } from './emailService';
+import { query } from '../config/database.js';
+import { sendVerificationEmail } from './emailService.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
 const OTP_EXPIRY = 10 * 60 * 1000; // 10分钟（毫秒）

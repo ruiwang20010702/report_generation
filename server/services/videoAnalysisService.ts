@@ -311,7 +311,7 @@ ${speakerInfo}
     // 🇺🇸 优先使用 AssemblyAI（免费 5 小时/月，直接传 URL，无需下载）
     if (!assemblyAIService.isAvailable()) {
       const reason = !assemblyAIService.hasRemainingQuota()
-        ? '免费额度已用完'
+        ? '免费额度已用完' 
         : '未配置 API Key';
       throw new Error(
         `[${videoLabel}] AssemblyAI 语音服务不可用（${reason}）。请配置环境变量 ASSEMBLYAI_API_KEY，或检查免费额度是否已用完。`
@@ -320,18 +320,18 @@ ${speakerInfo}
 
     console.log(`🇺🇸 [${videoLabel}] 使用 AssemblyAI 语音服务（优先使用，不再降级）`);
     console.log(`💰 当前剩余免费额度: ${assemblyAIService.getStats().remainingMinutes} 分钟`);
-
-    try {
+        
+        try {
       const result = await assemblyAIService.transcribeFromURL(videoUrl, {
-        language: 'en',
-        speakerLabels: true
-      });
-
+            language: 'en',
+            speakerLabels: true
+          });
+          
       console.log(`✅ [${videoLabel}] AssemblyAI 转录成功！`);
       console.log(`💰 更新后剩余额度: ${assemblyAIService.getStats().remainingMinutes} 分钟`);
-
-      return result;
-    } catch (error: any) {
+          
+          return result;
+        } catch (error: any) {
       console.error(`❌ [${videoLabel}] AssemblyAI 转录失败:`, error.message);
       throw new Error(
         `[${videoLabel}] AssemblyAI 转录失败: ${error.message}。请检查：1. API Key 是否正确配置 2. 网络连接是否正常 3. 视频 URL 是否可访问 4. 免费额度是否充足`
@@ -742,15 +742,15 @@ ${JSON.stringify(video2Analysis, null, 2)}
         const [transcription1, transcription2] = await Promise.all([
           (async () => {
             console.log('📥 转录 Video 1...');
-            const result = await this.transcribeVideoSmart(request.video1, 'Video 1');
+              const result = await this.transcribeVideoSmart(request.video1, 'Video 1');
             console.log('✅ Video 1 转录完成（AssemblyAI）');
-            return result;
+              return result;
           })(),
           (async () => {
             console.log('📥 转录 Video 2...');
-            const result = await this.transcribeVideoSmart(request.video2, 'Video 2');
+              const result = await this.transcribeVideoSmart(request.video2, 'Video 2');
             console.log('✅ Video 2 转录完成（AssemblyAI）');
-            return result;
+              return result;
           })()
         ]);
         const transcribeTime = ((Date.now() - transcribeStartTime) / 1000).toFixed(1);

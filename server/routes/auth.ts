@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { sendOtp, verifyOtp, getCurrentUser, loginWithPassword, setPassword } from '../services/authService';
+import { sendOtp, verifyOtp, getCurrentUser, loginWithPassword, setPassword } from '../services/authService.js';
 
 const router = Router();
 

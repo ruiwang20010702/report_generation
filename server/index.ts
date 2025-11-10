@@ -7,10 +7,10 @@ import dotenv from 'dotenv';
 // 因为 assemblyAIService 等服务在模块加载时就会初始化
 dotenv.config();
 
-import analysisRouter from './routes/analysis';
-import authRouter from './routes/auth';
-import { testConnection } from './config/database';
-import { testEmailService } from './services/emailService';
+import analysisRouter from './routes/analysis.js';
+import authRouter from './routes/auth.js';
+import { testConnection } from './config/database.js';
+import { testEmailService } from './services/emailService.js';
 
 const app: Express = express();
 const PORT = process.env.PORT || 3001;

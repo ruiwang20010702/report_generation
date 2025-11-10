@@ -23,14 +23,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const refreshUser = async () => {
     try {
+      console.log('refreshUser: checking authentication...');
       if (isAuthenticated()) {
+        console.log('refreshUser: user is authenticated, fetching user data...');
         const response = await getCurrentUser();
+        console.log('refreshUser: getCurrentUser response:', response);
         if (response.data?.user) {
+          console.log('refreshUser: setting user:', response.data.user);
           setUser(response.data.user);
         } else {
+          console.log('refreshUser: no user data in response');
           setUser(null);
         }
       } else {
+        console.log('refreshUser: user is not authenticated');
         setUser(null);
       }
     } catch (error) {

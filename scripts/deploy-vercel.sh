@@ -24,6 +24,69 @@ print_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
+# 读取参数与环境变量（支持非交互）
+NON_INTERACTIVE="${NON_INTERACTIVE:-false}"      # true/false
+AUTO_YES="${AUTO_YES:-false}"                    # true/false 等价 --yes
+SKIP_TESTS="${SKIP_TESTS:-false}"                # true/false
+TARGET_ENV="${TARGET_ENV:-}"                     # production / preview
+VERCEL_TOKEN="${VERCEL_TOKEN:-}"                 # 可选：Vercel token
+VERCEL_ORG_ID="${VERCEL_ORG_ID:-}"               # 可选：组织 ID（已链接可忽略）
+VERCEL_PROJECT_ID="${VERCEL_PROJECT_ID:-}"       # 可选：项目 ID（已链接可忽略）
+PROJECT_NAME="${PROJECT_NAME:-}"                 # 可选：首次创建时自定义项目名
+
+# 支持命令行参数覆盖
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    production|prod)
+      TARGET_ENV="production"
+      shift
+      ;;
+    preview)
+      TARGET_ENV="preview"
+      shift
+      ;;
+    --yes|-y)
+      AUTO_YES="true"
+      NON_INTERACTIVE="true"
+      shift
+      ;;
+    --non-interactive)
+      NON_INTERACTIVE="true"
+      shift
+      ;;
+    --skip-tests)
+      SKIP_TESTS="true"
+      shift
+      ;;
+    --token)
+      VERCEL_TOKEN="$2"
+      shift 2
+      ;;
+    --org)
+      VERCEL_ORG_ID="$2"
+      shift 2
+      ;;
+    --project)
+      VERCEL_PROJECT_ID="$2"
+      shift 2
+      ;;
+    --name)
+      PROJECT_NAME="$2"
+      shift 2
+      ;;
+    *)
+      print_warn "未知参数: $1"
+      shift
+      ;;
+  esac
+done
+
+# 拼接 token 参数
+VERCEL_TOKEN_ARG=()
+if [[ -n "$VERCEL_TOKEN" ]]; then
+  VERCEL_TOKEN_ARG=(--token "$VERCEL_TOKEN")
+fi
+
 # 检查 Vercel CLI
 check_vercel_cli() {
     if ! command -v vercel &> /dev/null; then
@@ -85,10 +148,23 @@ deploy_to_vercel() {
     
     print_info "开始部署到 Vercel ($env)..."
     
+    # 确保已链接项目（首次）
+    if [[ ! -d ".vercel" ]]; then
+      print_warn "未检测到 .vercel 链接目录，将尝试 link"
+      LINK_ARGS=("${VERCEL_TOKEN_ARG[@]}")
+      if [[ -n "$VERCEL_ORG_ID" ]]; then
+        LINK_ARGS+=("--scope" "$VERCEL_ORG_ID")
+      fi
+      if [[ -n "$PROJECT_NAME" ]]; then
+        LINK_ARGS+=("--project" "$PROJECT_NAME")
+      fi
+      vercel link --yes "${LINK_ARGS[@]}"
+    fi
+    
     if [ "$env" == "production" ]; then
-        vercel --prod
+        vercel --confirm --prod "${VERCEL_TOKEN_ARG[@]}"
     else
-        vercel
+        vercel --confirm "${VERCEL_TOKEN_ARG[@]}"
     fi
     
     print_info "✓ 部署完成"
@@ -111,7 +187,7 @@ setup_env_vars() {
             value=$(echo "$value" | sed -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//")
             
             print_info "设置 $key..."
-            echo "$value" | vercel env add "$key" production --force || true
+            echo "$value" | vercel env add "$key" production --force "${VERCEL_TOKEN_ARG[@]}" || true
         done < .env
         
         print_info "✓ 环境变量设置完成"
@@ -141,7 +217,10 @@ show_deployment_info() {
 
 # 主函数
 main() {
-    local deployment_type=${1:-preview}
+    local deployment_type="${TARGET_ENV}"
+    if [[ -z "$deployment_type" ]]; then
+      deployment_type=${1:-preview}
+    fi
     
     echo "================================"
     echo "🚀 Vercel 部署脚本"
@@ -157,14 +236,26 @@ main() {
     echo ""
     
     # 步骤 3: 运行测试
+    if [[ "$SKIP_TESTS" != "true" ]]; then
+      if [[ "$NON_INTERACTIVE" == "true" || "$AUTO_YES" == "true" ]]; then
+        run_tests
+        echo ""
+      else
     print_info "是否运行构建测试? (y/n)"
     read -r run_test
     if [ "$run_test" == "y" ]; then
         run_tests
         echo ""
+        fi
+      fi
+    else
+      print_warn "已跳过本地构建测试（SKIP_TESTS=true）"
     fi
     
     # 步骤 4: 确认部署
+    if [[ "$NON_INTERACTIVE" == "true" || "$AUTO_YES" == "true" ]]; then
+      print_warn "即将部署到 $deployment_type 环境（非交互确认）"
+    else
     print_warn "即将部署到 $deployment_type 环境"
     print_warn "继续? (y/n)"
     read -r confirm
@@ -173,17 +264,22 @@ main() {
         exit 0
     fi
     echo ""
+    fi
     
     # 步骤 5: 部署
     deploy_to_vercel "$deployment_type"
     echo ""
     
     # 步骤 6: 设置环境变量（仅首次部署）
+    if [[ "$NON_INTERACTIVE" == "true" || "$AUTO_YES" == "true" ]]; then
+      print_info "跳过交互式环境变量设置。若需批量导入请运行： NON_INTERACTIVE=true ./scripts/deploy-vercel.sh --yes --skip-tests && ./scripts/deploy-vercel.sh --yes --skip-tests preview && true"
+    else
     print_info "是否需要设置环境变量? (y/n)"
     read -r setup_env
     if [ "$setup_env" == "y" ]; then
         setup_env_vars
         echo ""
+      fi
     fi
     
     # 步骤 7: 显示信息

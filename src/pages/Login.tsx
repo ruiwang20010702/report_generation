@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { sendOtp, verifyOtp, loginWithPassword } from "@/services/auth";
 import { useAuth } from "@/contexts/AuthContext";
@@ -20,7 +20,14 @@ const Login = () => {
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
-  const { login, refreshUser } = useAuth();
+  const { login, refreshUser, isAuthenticated, loading } = useAuth();
+
+  // 如果已登录，重定向到首页
+  useEffect(() => {
+    if (!loading && isAuthenticated) {
+      navigate("/");
+    }
+  }, [isAuthenticated, loading, navigate]);
 
   const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -81,10 +88,17 @@ const Login = () => {
     try {
       const response = await loginWithPassword(email, password);
 
+      console.log('Password login response:', response);
+
       // 更新认证上下文
       if (response.data?.user) {
+        console.log('Setting user in auth context:', response.data.user);
         login(response.data.user);
+        
+        // 等待用户状态刷新完成
         await refreshUser();
+        
+        console.log('User refreshed, navigating to home');
       }
 
       toast({
@@ -92,8 +106,12 @@ const Login = () => {
         description: "欢迎回来！",
       });
       
-      navigate("/");
+      // 使用 setTimeout 确保状态更新完成后再导航
+      setTimeout(() => {
+        navigate("/");
+      }, 100);
     } catch (error: any) {
+      console.error('Password login error:', error);
       toast({
         title: "登录失败",
         description: error.message || "登录失败，请检查邮箱和密码",
@@ -121,10 +139,17 @@ const Login = () => {
     try {
       const response = await verifyOtp(email, otp);
 
+      console.log('Verify OTP response:', response);
+
       // 更新认证上下文
       if (response.data?.user) {
+        console.log('Setting user in auth context:', response.data.user);
         login(response.data.user);
+        
+        // 等待用户状态刷新完成
         await refreshUser();
+        
+        console.log('User refreshed, navigating to home');
       }
 
       toast({
@@ -132,8 +157,12 @@ const Login = () => {
         description: "欢迎回来！",
       });
       
-      navigate("/");
+      // 使用 setTimeout 确保状态更新完成后再导航
+      setTimeout(() => {
+        navigate("/");
+      }, 100);
     } catch (error: any) {
+      console.error('Verify OTP error:', error);
       toast({
         title: "验证失败",
         description: error.message || "验证码错误或已过期，请重试",

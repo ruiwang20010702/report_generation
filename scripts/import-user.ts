@@ -1,5 +1,5 @@
 import bcrypt from 'bcrypt';
-import { query, closePool } from '../server/config/database';
+import { query, closePool } from '../server/config/database.js';
 import dotenv from 'dotenv';
 
 // 加载环境变量
