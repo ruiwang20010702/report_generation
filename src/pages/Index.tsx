@@ -8,6 +8,7 @@ import { videoAnalysisAPI, VideoAnalysisResponse } from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { LogOut } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 
 type AppState = "form" | "loading" | "report";
 
@@ -164,6 +165,7 @@ const Index = () => {
   const [reportData, setReportData] = useState<VideoAnalysisResponse | null>(null);
   const { toast } = useToast();
   const navigate = useNavigate();
+  const { logout } = useAuth();
 
   const handleFormSubmit = async (data: FormData) => {
     console.log('🚀 Form submitted with data:', data);
@@ -245,6 +247,17 @@ const Index = () => {
     setReportData(null);
   };
 
+  const handleBackToLogin = async () => {
+    try {
+      await logout();
+      navigate("/login");
+    } catch (error) {
+      console.error('Logout error:', error);
+      // 即使登出失败，也尝试导航到登录页
+      navigate("/login");
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       {appState === "form" && (
@@ -255,7 +268,7 @@ const Index = () => {
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={() => navigate("/login")}
+                onClick={handleBackToLogin}
                 className="flex items-center gap-2"
               >
                 <LogOut className="w-4 h-4" />

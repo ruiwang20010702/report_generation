@@ -3,7 +3,7 @@ import axios from 'axios';
 import { VideoAnalysisRequest, VideoAnalysisResponse } from '../types/index.js';
 import { HttpsProxyAgent } from 'https-proxy-agent';
 import { WhisperService, TranscriptionResult } from './whisperService.js';
-import { assemblyAIService } from './assemblyAIService.js';
+import { tingwuTranscriptionService } from './tingwuTranscriptionService.js';
 
 /**
  * 📝 报告字数配置
@@ -133,14 +133,18 @@ export class VideoAnalysisService {
   }
 
   /**
-   * 创建 OpenAI 客户端（支持动态 API Key 和代理）
+   * 创建 AI 客户端（支持动态 API Key 和代理）
+   * 注意：系统使用智谱 GLM 模型，用户提供的 API Key 也应该是 GLM 的
    */
   private getOpenAIClient(apiKey?: string): OpenAI | null {
     if (apiKey) {
-      console.log('🔑 Using user-provided API Key');
+      console.log('🔑 Using user-provided GLM API Key');
       
-      // 支持代理配置
-      const config: any = { apiKey };
+      // 配置 GLM 客户端（智谱AI）
+      const config: any = {
+        apiKey,
+        baseURL: 'https://open.bigmodel.cn/api/paas/v4', // GLM API 地址
+      };
       
       // 从环境变量读取代理设置
       const proxyUrl = process.env.HTTPS_PROXY || process.env.HTTP_PROXY;
@@ -192,7 +196,7 @@ export class VideoAnalysisService {
   }
 
   /**
-   * 使用 GPT-4 分析转录文本
+   * 使用 GLM-4-Plus 分析转录文本
    */
   private async analyzeTranscriptionWithGPT(
     transcription: TranscriptionResult,
@@ -286,12 +290,12 @@ ${speakerInfo}
           }
         ],
         response_format: { type: "json_object" },
-        temperature: 0.1,  // 降低到0.1以提高输出一致性（原值0.7导致30%随机性）
+        temperature: 0.1,  // 降低到0.1以提高输出一致性和确定性（原值0.7会产生更多随机性，0.1更稳定可靠）
         max_tokens: 3000
       });
 
       const analysisText = response.choices[0]?.message?.content || '{}';
-      console.log(`✅ GPT analysis complete for ${videoLabel}`);
+      console.log(`✅ AI analysis complete for ${videoLabel} (${model})`);
       
       return analysisText;
     } catch (error) {
@@ -301,46 +305,62 @@ ${speakerInfo}
   }
 
   /**
-   * 🚀 强制使用阿里云转录服务（固定配置）
-   * 不再支持降级到其他服务，确保输出一致性
+   * 🚀 使用通义听悟进行视频转录
+   * 通义听悟：价格便宜，免费额度高（每天2小时）
    */
   private async transcribeVideoSmart(
     videoUrl: string,
-    videoLabel: string = 'video'
+    videoLabel: string = 'video',
+    language: string = 'en',
+    speakerCount?: number
   ): Promise<TranscriptionResult> {
-    // 🇺🇸 优先使用 AssemblyAI（免费 5 小时/月，直接传 URL，无需下载）
-    if (!assemblyAIService.isAvailable()) {
-      const reason = !assemblyAIService.hasRemainingQuota()
-        ? '免费额度已用完' 
-        : '未配置 API Key';
+    // 🇨🇳 使用通义听悟服务
+    if (!tingwuTranscriptionService.isAvailable()) {
+      const reason = !tingwuTranscriptionService.hasRemainingQuota()
+        ? '免费额度已用完（每天2小时，请等待第二天重置）' 
+        : '未配置 AccessKey（需要 ALIYUN_ACCESS_KEY_ID 和 ALIYUN_ACCESS_KEY_SECRET）';
       throw new Error(
-        `[${videoLabel}] AssemblyAI 语音服务不可用（${reason}）。请配置环境变量 ASSEMBLYAI_API_KEY，或检查免费额度是否已用完。`
+        `[${videoLabel}] 通义听悟服务不可用：${reason}\n` +
+        `请配置环境变量：\n` +
+        `- ALIYUN_ACCESS_KEY_ID=your_access_key_id\n` +
+        `- ALIYUN_ACCESS_KEY_SECRET=your_access_key_secret`
       );
     }
 
-    console.log(`🇺🇸 [${videoLabel}] 使用 AssemblyAI 语音服务（优先使用，不再降级）`);
-    console.log(`💰 当前剩余免费额度: ${assemblyAIService.getStats().remainingMinutes} 分钟`);
+    console.log(`🇨🇳 [${videoLabel}] 使用通义听悟服务（教育网课场景）`);
+    console.log(`💰 当前剩余免费额度: ${tingwuTranscriptionService.getStats().remainingMinutes} 分钟/天`);
+    const diarizationSpeakerCount = speakerCount ?? 3;
+    console.log(`🎓 使用教育领域专属模型，说话人分离：${diarizationSpeakerCount}人，语言: ${language}`);
         
         try {
-      const result = await assemblyAIService.transcribeFromURL(videoUrl, {
-            language: 'en',
-            speakerLabels: true
+      const result = await tingwuTranscriptionService.transcribeFromURL(videoUrl, {
+            language,
+            speakerLabels: true, // 启用说话人分离
+            speakerCount: diarizationSpeakerCount, // 默认3个，或由请求覆盖
+            transcriptionModel: 'domain-education',
+            identityRecognitionEnabled: true,
+            identitySceneIntroduction: 'One-on-one online English class scenario',
+            identityContents: [
+              { Name: 'Teacher', Description: 'Asks questions, guides learning, explains key points, corrects mistakes, provides feedback and encouragement. Compared to students, teachers speak more fluently and clearly.' },
+              { Name: 'Student', Description: 'Answers teacher questions, repeats or retells, asks for clarification, practices learned content. Compared to teachers, students may speak less fluently and less clearly.' }
+            ]
           });
           
-      console.log(`✅ [${videoLabel}] AssemblyAI 转录成功！`);
-      console.log(`💰 更新后剩余额度: ${assemblyAIService.getStats().remainingMinutes} 分钟`);
+      console.log(`✅ [${videoLabel}] 通义听悟转录成功！`);
+      console.log(`💰 更新后剩余额度: ${tingwuTranscriptionService.getStats().remainingMinutes} 分钟/天`);
           
           return result;
         } catch (error: any) {
-      console.error(`❌ [${videoLabel}] AssemblyAI 转录失败:`, error.message);
+      console.error(`❌ [${videoLabel}] 通义听悟转录失败:`, error.message);
       throw new Error(
-        `[${videoLabel}] AssemblyAI 转录失败: ${error.message}。请检查：1. API Key 是否正确配置 2. 网络连接是否正常 3. 视频 URL 是否可访问 4. 免费额度是否充足`
+        `[${videoLabel}] 通义听悟转录失败：${error.message}\n` +
+        `请检查：1. AccessKey 是否正确配置 2. 网络连接是否正常 3. 视频 URL 是否可访问 4. 免费额度是否充足`
       );
     }
   }
 
   /**
-   * 使用 Whisper API 转录视频，然后用 GPT-4 分析内容
+   * 使用通义听悟转录视频，然后用 GLM-4-Plus 分析内容
    * @deprecated 此方法已被超级并行版本替代，保留用于向后兼容
    */
   private async analyzeVideoContent(
@@ -358,7 +378,7 @@ ${speakerInfo}
       const transcription = await this.whisperService.transcribeVideo(videoUrl, openai);
       console.log(`✅ Transcription complete for ${videoLabel}:`, transcription.text.substring(0, 100) + '...');
 
-      // 2. 使用 GPT-4 进行分析
+      // 2. 使用 GLM-4-Plus 进行分析
       const analysis = await this.analyzeTranscriptionWithGPT(transcription, openai, videoLabel);
       
       return {
@@ -385,8 +405,24 @@ ${speakerInfo}
     }
     
     try {
+      // 验证转录文本
+      if (!video1Result.transcription.text || video1Result.transcription.text.trim().length === 0) {
+        throw new Error('第一个视频的转录文本为空，无法进行比较分析');
+      }
+      if (!video2Result.transcription.text || video2Result.transcription.text.trim().length === 0) {
+        throw new Error('第二个视频的转录文本为空，无法进行比较分析。请检查：1) 视频是否包含语音内容 2) 视频链接是否有效');
+      }
+
       const video1Analysis = JSON.parse(video1Result.analysis);
       const video2Analysis = JSON.parse(video2Result.analysis);
+      
+      // 验证分析结果是否有效
+      if (!video1Analysis || typeof video1Analysis !== 'object') {
+        throw new Error('第一个视频的分析结果无效');
+      }
+      if (!video2Analysis || typeof video2Analysis !== 'object') {
+        throw new Error('第二个视频的分析结果无效');
+      }
 
       // 构建说话人对话信息
       let video1Dialogues = '';
@@ -679,7 +715,7 @@ ${JSON.stringify(video2Analysis, null, 2)}
           }
         ],
         response_format: { type: "json_object" },
-        temperature: 0.1,  // 降低到0.1以提高输出一致性（原值0.7导致30%随机性）
+        temperature: 0.1,  // 降低到0.1以提高输出一致性和确定性（原值0.7会产生更多随机性，0.1更稳定可靠）
         max_tokens: 4000
       });
 
@@ -712,10 +748,10 @@ ${JSON.stringify(video2Analysis, null, 2)}
       return this.analyzeMock(request);
     }
 
-    // 获取 OpenAI 客户端
+    // 获取 AI 客户端（GLM）
     const openai = this.getOpenAIClient(request.apiKey);
     if (!openai) {
-      throw new Error('No OpenAI API key available. Please provide an API key or use mock data.');
+      throw new Error('No GLM API key available. Please provide a GLM API key or use mock data.');
     }
 
     // 否则使用真实的OpenAI API
@@ -736,44 +772,78 @@ ${JSON.stringify(video2Analysis, null, 2)}
       
       let video1Result, video2Result;
       try {
-        // 🔥 步骤1：并行转录两个视频（使用 AssemblyAI）
-        console.log('\n🎯 [并行] 转录两个视频（优先使用 AssemblyAI，不再降级）...');
+        // 🔥 流水线模式：每个视频转录完成后立即开始分析，无需等待其他视频
+        console.log('\n🎯 [流水线] 转录和分析流水线执行（转录完成即开始分析）...');
         const transcribeStartTime = Date.now();
-        const [transcription1, transcription2] = await Promise.all([
+        
+        // 并行执行两个视频的完整流程（转录 → 分析）
+        const transcriptionLanguage =
+          request.language ||
+          process.env.TINGWU_LANGUAGE ||
+          'en';
+        console.log(`🌐 使用转录语言: ${transcriptionLanguage}`);
+        const requestedSpeakerCount = request.speakerCount ?? 3;
+        console.log(`👥 说话人数量（可配置）: ${requestedSpeakerCount}`);
+
+        const [result1, result2] = await Promise.all([
           (async () => {
             console.log('📥 转录 Video 1...');
-              const result = await this.transcribeVideoSmart(request.video1, 'Video 1');
-            console.log('✅ Video 1 转录完成（AssemblyAI）');
-              return result;
+            const transcription1 = await this.transcribeVideoSmart(
+              request.video1,
+              'Video 1',
+              transcriptionLanguage,
+              requestedSpeakerCount
+            );
+            console.log('✅ Video 1 转录完成');
+            
+            // 验证转录结果
+            if (!transcription1.text || transcription1.text.trim().length === 0) {
+              throw new Error('第一个视频转录失败：未提取到任何文本内容。可能原因：1) 视频中没有语音 2) 视频链接无效 3) 转录服务异常');
+            }
+            console.log(`📝 Video 1 转录文本长度: ${transcription1.text.length} 字符`);
+            
+            // 转录完成后立即开始分析（不等待 Video 2）
+            console.log('🤖 开始分析 Video 1...');
+            const analysis1Text = await this.analyzeTranscriptionWithGPT(transcription1, openai, 'Video 1');
+            console.log('✅ Video 1 分析完成');
+            
+            return { transcription: transcription1, analysis: analysis1Text };
           })(),
           (async () => {
             console.log('📥 转录 Video 2...');
-              const result = await this.transcribeVideoSmart(request.video2, 'Video 2');
-            console.log('✅ Video 2 转录完成（AssemblyAI）');
-              return result;
+            const transcription2 = await this.transcribeVideoSmart(
+              request.video2,
+              'Video 2',
+              transcriptionLanguage,
+              requestedSpeakerCount
+            );
+            console.log('✅ Video 2 转录完成');
+            
+            // 验证转录结果
+            if (!transcription2.text || transcription2.text.trim().length === 0) {
+              throw new Error('第二个视频转录失败：未提取到任何文本内容。可能原因：1) 视频中没有语音 2) 视频链接无效 3) 转录服务异常');
+            }
+            console.log(`📝 Video 2 转录文本长度: ${transcription2.text.length} 字符`);
+            
+            // 转录完成后立即开始分析（不等待 Video 1）
+            console.log('🤖 开始分析 Video 2...');
+            const analysis2Text = await this.analyzeTranscriptionWithGPT(transcription2, openai, 'Video 2');
+            console.log('✅ Video 2 分析完成');
+            
+            return { transcription: transcription2, analysis: analysis2Text };
           })()
         ]);
+        
+        video1Result = result1;
+        video2Result = result2;
+        
+        const totalTime = ((Date.now() - overallStartTime) / 1000).toFixed(1);
         const transcribeTime = ((Date.now() - transcribeStartTime) / 1000).toFixed(1);
-        console.log(`✅ 两个视频转录完成！耗时: ${transcribeTime}秒`);
-        console.log(`💰 当前 AssemblyAI 剩余免费额度: ${assemblyAIService.getStats().remainingMinutes} 分钟\n`);
-
-        // 🔥 步骤2：并行分析两个视频的转录文本
-        console.log('🤖 [并行] 使用 GLM-4-Plus 分析两个视频...');
-        const gptStartTime = Date.now();
-        const [analysis1Text, analysis2Text] = await Promise.all([
-          this.analyzeTranscriptionWithGPT(transcription1, openai, 'Video 1'),
-          this.analyzeTranscriptionWithGPT(transcription2, openai, 'Video 2')
-        ]);
-        const gptTime = ((Date.now() - gptStartTime) / 1000).toFixed(1);
-        console.log(`✅ 两个视频GPT分析完成！耗时: ${gptTime}秒\n`);
-
-        // 组装结果
-        video1Result = { transcription: transcription1, analysis: analysis1Text };
-        video2Result = { transcription: transcription2, analysis: analysis2Text };
+        console.log(`✅ 所有视频转录和分析完成！总耗时: ${totalTime}秒`);
+        // 显示使用的服务统计
+        console.log(`💰 当前通义听悟剩余免费额度: ${tingwuTranscriptionService.getStats().remainingMinutes} 分钟/天\n`);
         
         clearInterval(progressInterval);
-        const totalTime = ((Date.now() - overallStartTime) / 1000).toFixed(1);
-        console.log(`✅ 所有步骤完成！总耗时: ${totalTime}秒 (转录: ${transcribeTime}秒, GPT分析: ${gptTime}秒)`);
       } catch (error) {
         clearInterval(progressInterval);
         throw error;

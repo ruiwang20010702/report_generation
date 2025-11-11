@@ -8,7 +8,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     environment: process.env.NODE_ENV || 'production',
     services: {
       openai: !!process.env.OPENAI_API_KEY,
-      assemblyai: !!process.env.ASSEMBLYAI_API_KEY,
+      tingwu: !!process.env.ALIYUN_ACCESS_KEY_ID && !!process.env.ALIYUN_ACCESS_KEY_SECRET,
     },
   };
 

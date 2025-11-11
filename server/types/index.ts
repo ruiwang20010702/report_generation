@@ -9,6 +9,8 @@ export interface VideoAnalysisRequest {
   unit: string;
   apiKey?: string;
   useMockData?: boolean;
+  language?: string;
+  speakerCount?: number; // 说话人数量（可选，默认3）
 }
 
 export interface LearningDataMetric {

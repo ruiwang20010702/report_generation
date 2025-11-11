@@ -69,8 +69,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     console.log(`[${new Date().toISOString()}] Analysis request from ${clientIp}`);
     console.log('📋 Environment variables check:');
-    console.log(`   - OPENAI_API_KEY: ${process.env.OPENAI_API_KEY ? 'Set (' + process.env.OPENAI_API_KEY.substring(0, 20) + '...)' : 'Not set'}`);
-    console.log(`   - ASSEMBLYAI_API_KEY: ${process.env.ASSEMBLYAI_API_KEY ? 'Set (' + process.env.ASSEMBLYAI_API_KEY.substring(0, 20) + '...)' : 'Not set'}`);
+    console.log(`   - GLM_API_KEY: ${process.env.GLM_API_KEY ? 'Set (' + process.env.GLM_API_KEY.substring(0, 20) + '...)' : 'Not set'}`);
+    console.log(`   - ALIYUN_ACCESS_KEY_ID: ${process.env.ALIYUN_ACCESS_KEY_ID ? 'Set' : 'Not set'}`);
+    console.log(`   - ALIYUN_ACCESS_KEY_SECRET: ${process.env.ALIYUN_ACCESS_KEY_SECRET ? 'Set' : 'Not set'}`);
+    console.log(`   - ALIYUN_TINGWU_APP_KEY: ${process.env.ALIYUN_TINGWU_APP_KEY ? 'Set' : 'Not set (可选)'}`);
     console.log(`   - USE_MOCK_ANALYSIS: ${process.env.USE_MOCK_ANALYSIS || 'Not set'}`);
 
     const service = new VideoAnalysisService();
@@ -106,12 +108,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const useMock = requestData.useMockData ?? (process.env.USE_MOCK_ANALYSIS === 'true');
     
     // 如果不使用 Mock 且没有 API Key（前端传入或环境变量），返回错误
-    const hasApiKey = requestData.apiKey || process.env.OPENAI_API_KEY;
+    // 注意：系统使用智谱 GLM 模型，不是 OpenAI
+    const hasApiKey = requestData.apiKey || process.env.GLM_API_KEY;
     if (!useMock && !hasApiKey) {
       console.log('❌ Missing API key for real AI analysis');
       return res.status(400).json({ 
         error: 'Missing API Key',
-        message: '使用真实AI分析需要提供 OpenAI API Key'
+        message: '使用真实AI分析需要提供 GLM API Key（智谱AI）'
       });
     }
 
@@ -127,10 +130,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     console.error('❌ Analysis error:', error);
     
     // 根据错误类型返回适当的状态码
-    if (error.message?.includes('API key') || error.message?.includes('No OpenAI API key')) {
+    if (error.message?.includes('API key') || error.message?.includes('No OpenAI API key') || error.message?.includes('GLM API Key')) {
       return res.status(401).json({ 
         error: 'Unauthorized',
-        message: '使用真实AI分析需要提供 OpenAI API Key'
+        message: '使用真实AI分析需要提供 GLM API Key（智谱AI）'
       });
     }
 

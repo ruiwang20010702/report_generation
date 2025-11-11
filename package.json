@@ -16,6 +16,7 @@
     "test:glm": "node test-glm.js",
     "test:deepseek": "node test-deepseek.js",
     "test:qwen": "node test-qwen.js",
+    "test:tingwu": "tsx test-tingwu.ts",
     "verify:glm": "node verify-glm.js",
     "setup:ai": "node setup-ai.js",
     "test:db": "tsx scripts/test-database.ts",
@@ -24,6 +25,8 @@
     "setup:env": "tsx scripts/setup-env.ts"
   },
   "dependencies": {
+    "@alicloud/tingwu20220930": "^1.0.0",
+    "@alicloud/tingwu20230930": "^2.0.23",
     "@ffmpeg-installer/ffmpeg": "^1.1.0",
     "@hookform/resolvers": "^3.3.2",
     "@radix-ui/react-accordion": "^1.1.2",

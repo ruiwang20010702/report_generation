@@ -4,7 +4,7 @@ import cookieParser from 'cookie-parser';
 import dotenv from 'dotenv';
 
 // ⚠️ 必须先加载环境变量，再导入其他模块
-// 因为 assemblyAIService 等服务在模块加载时就会初始化
+// 因为 tingwuTranscriptionService 等服务在模块加载时就会初始化
 dotenv.config();
 
 import analysisRouter from './routes/analysis.js';
@@ -73,7 +73,8 @@ app.listen(PORT, async () => {
   console.log(`📊 API endpoint: http://localhost:${PORT}/api/analysis`);
   console.log(`🔧 Mock mode: ${process.env.USE_MOCK_ANALYSIS === 'true' ? 'ON' : 'OFF'}`);
   console.log(`🔑 OpenAI API Key: ${process.env.OPENAI_API_KEY ? 'SET (length: ' + process.env.OPENAI_API_KEY.length + ')' : 'NOT SET'}`);
-  console.log(`🔑 AssemblyAI API Key: ${process.env.ASSEMBLYAI_API_KEY ? 'SET' : 'NOT SET'}`);
+  console.log(`🔑 通义听悟 AccessKey: ${process.env.ALIYUN_ACCESS_KEY_ID ? 'SET' : 'NOT SET'}`);
+  console.log(`🔑 通义听悟 AppKey: ${process.env.ALIYUN_TINGWU_APP_KEY ? 'SET' : 'NOT SET (可选，某些API版本可能需要)'}`);
   
   // 测试数据库连接
   if (process.env.DB_HOST) {
