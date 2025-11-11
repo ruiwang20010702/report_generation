@@ -54,3 +54,7 @@ new_UI_2/
 backend.log
 frontend.log
 .env.backup
+
+# Secrets (ignored)
+.env.production
+.env.vercel
