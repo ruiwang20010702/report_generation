@@ -5,19 +5,46 @@
 ## ✨ 主要功能
 
 - 📹 **视频对比分析** - 上传两个不同时期的学习视频，AI自动分析进步情况
-- 🎙️ **语音转文字** - 使用 OpenAI Whisper API 将视频音频转录为文字
-- 🤖 **真实 AI 分析** - GPT-4 分析转录内容，生成专业学习报告
+- 🇨🇳 **国内优化** - 使用**阿里云语音服务**，国内访问无需VPN（每月免费2小时）
+- 🎙️ **语音转录服务** - 强制使用阿里云语音服务，确保输出一致性
+- 🤖 **真实 AI 分析** - 支持多种AI模型（GPT-4、通义千问、DeepSeek、GLM-4）分析转录内容
+- 💰 **成本优化** - 阿里云免费额度（120分钟/月），大幅降低运营成本
 - 📊 **多维度评估** - 从流利度、自信度、语言应用、句型复杂度等维度全面评估
 - 📈 **数据可视化** - 清晰展示举手次数、回答长度、完整句子率等关键指标
 - 🎯 **个性化建议** - 针对发音、语法、语调等方面提供具体改进建议
-- 📄 **PDF报告导出** - 一键导出专业的学习分析报告
+- 📄 **长图报告导出** - 一键导出高质量的长图学习分析报告
 - 🔄 **双模式支持** - 可选择真实 AI 分析或模拟数据测试
+- 🚀 **性能优化** - 直接传 URL 转录，无需下载视频，节省时间和空间
 
 ## 🚀 快速开始
 
+### 🇨🇳 国内用户推荐配置（5分钟搞定）
+
+**超高性价比方案** - 比纯 OpenAI 方案节省 **99.5%** 成本！
+
+#### 语音转文字：阿里云（免费）
+- 📝 [5分钟快速配置](./docs/getting-started/ALIYUN_QUICKSTART.md)
+- ✅ 每月免费 2 小时
+- ✅ 国内直连，无需 VPN
+- ✅ 速度快、质量好
+
+#### 智能分析：国内 AI 模型（3选1）
+
+| 模型 | 推荐场景 | 成本 | 配置时间 |
+|------|---------|------|---------|
+| 🔷 **DeepSeek** | 性价比首选 | ¥0.01/次 | [2分钟配置](./快速开始-国内AI模型.md#方案-1️⃣deepseek推荐---性价比最高) |
+| 🇨🇳 **通义千问** | 免费额度大 | 月1000次免费 | [2分钟配置](./快速开始-国内AI模型.md#方案-2️⃣通义千问推荐---免费额度大) |
+| 🧠 **智谱GLM** | 质量最好 | Flash免费 | [2分钟配置](./快速开始-国内AI模型.md#方案-3️⃣智谱-glm-4推荐---质量最好) |
+
+📚 **详细对比** → [AI模型对比.md](./AI模型对比.md) | 💡 **快速指南** → [快速开始-国内AI模型.md](./快速开始-国内AI模型.md)
+
+### 🌍 国际用户配置
+
+- **语音转文字**：AssemblyAI（需VPN，每月免费5小时）- [获取免费密钥](https://www.assemblyai.com/)
+- **智能分析**：OpenAI GPT-4（需代理）
+
 ### 前置要求
 - Node.js 16+ 和 npm
-- OpenAI API密钥（用于真实的AI视频分析）
 
 ### 安装和运行
 
@@ -60,7 +87,7 @@ npm run dev:all
 1. 点击 **"快速测试"** 按钮自动填充示例数据
 2. 或手动填写学生信息和视频链接
 3. 点击 **"生成学习报告"** 查看分析结果
-4. 点击 **"下载PDF报告"** 导出报告
+4. 点击 **"下载长图报告"** 导出报告
 
 ### ⚠️ 遇到问题？
 
@@ -113,7 +140,7 @@ npm run dev:all
 - **Vite** - 快速构建工具
 - **shadcn/ui** - 高质量UI组件库（基于Radix UI）
 - **Tailwind CSS** - 实用优先的CSS框架
-- **jsPDF + html2canvas** - PDF生成
+- **html2canvas** - 长图生成
 - **Lucide React** - 美观的图标库
 - **React Router** - 路由管理
 - **TanStack Query** - 数据获取和状态管理
@@ -122,8 +149,11 @@ npm run dev:all
 ### 后端技术
 - **Node.js + Express** - 后端服务器
 - **TypeScript** - 类型安全
-- **OpenAI Whisper API** - 语音转文字（视频音频转录）
-- **OpenAI GPT-4 API** - AI 内容分析和报告生成
+- **阿里云智能语音服务** - 语音转文字服务（强制使用，120分钟/月免费）
+- **OpenAI GPT-4 API** - AI 内容分析和报告生成（支持多种模型）
+- **通义千问 API** - 国内AI模型（可选，100万tokens/月免费）
+- **DeepSeek API** - 国内AI模型（可选，性价比高）
+- **智谱GLM-4 API** - 国内AI模型（可选，质量优秀）
 - **Axios** - HTTP 客户端（下载视频文件）
 - **form-data** - 文件上传处理
 - **https-proxy-agent** - 代理支持
@@ -153,7 +183,8 @@ npm run dev:all
 │
 ├── server/                       # 后端源码
 │   ├── services/                 # 业务逻辑层
-│   │   ├── videoAnalysisService.ts  # 视频分析服务
+│   │   ├── videoAnalysisService.ts  # 视频分析服务（智能降级）
+│   │   ├── assemblyAIService.ts  # AssemblyAI 转录服务
 │   │   └── whisperService.ts     # Whisper 转录服务
 │   ├── routes/                   # API路由
 │   │   └── analysis.ts           # 分析相关路由
@@ -173,15 +204,18 @@ npm run dev:all
 - [x] 完整的三阶段用户流程（表单 → 加载 → 报告）
 - [x] 表单验证和错误提示
 - [x] 实时URL验证和预览
-- [x] **真实 AI 视频分析**（OpenAI Whisper + GPT-4）
-- [x] **视频音频转文字**（Whisper API）
-- [x] **智能内容分析**（GPT-4 Turbo）
+- [x] **真实 AI 视频分析**（阿里云语音 + 多种AI模型）
+- [x] **语音转录服务**（阿里云智能语音，120分钟/月免费）
+- [x] **多AI模型支持**（GPT-4、通义千问、DeepSeek、GLM-4）
+- [x] **成本优化**（阿里云免费额度，大幅降低运营成本）
+- [x] **使用量追踪**（API 端点监控免费额度）
+- [x] **智能内容分析**（支持多种AI模型）
 - [x] **后端API服务**（Express + TypeScript）
 - [x] **前后端分离架构**
 - [x] **双模式支持**（真实 AI 分析 / 模拟数据测试）
 - [x] 模拟数据模式（用于开发测试）
 - [x] 丰富的数据可视化展示
-- [x] PDF报告一键导出
+- [x] 长图报告一键导出
 - [x] Toast消息提示
 - [x] 响应式设计（支持移动端、平板、桌面）
 - [x] 品牌化设计（51Talk黄蓝配色方案）
@@ -197,10 +231,10 @@ npm run dev:all
 - [ ] 转录结果缓存（节省成本）
 - [ ] 历史报告查看和管理
 - [ ] 用户认证和授权
-- [ ] 报告分享功能
 - [ ] 多语言支持（中英文切换）
 - [ ] 数据图表（趋势线、对比图）
 - [ ] 数据库集成（MongoDB/PostgreSQL）
+- [ ] 恢复智能降级策略（阿里云 → AssemblyAI → Whisper）
 
 ## 🧪 测试
 
@@ -250,7 +284,12 @@ npm run lint
 
 ```bash
 # OpenAI API配置
-OPENAI_API_KEY=your_openai_api_key_here  # 必填（真实分析时）
+OPENAI_API_KEY=your_openai_api_key_here  # 必填（GPT-4 分析）
+
+# 阿里云语音服务配置（国内用户推荐，免费 2 小时/月）
+ALIYUN_ACCESS_KEY_ID=your_access_key_id
+ALIYUN_ACCESS_KEY_SECRET=your_access_key_secret
+ALIYUN_NLS_APP_KEY=your_app_key
 
 # 服务器配置
 PORT=3001                                 # 后端端口
@@ -260,12 +299,28 @@ FRONTEND_URL=http://localhost:5173        # 前端URL（用于CORS）
 USE_MOCK_ANALYSIS=true                    # true=模拟数据, false=真实AI分析
 
 # 代理配置（可选，国内用户推荐）
-# HTTPS_PROXY=http://127.0.0.1:7890       # 代理服务器地址
-# HTTP_PROXY=http://127.0.0.1:7890
+# HTTPS_PROXY=http://127.0.0.1:4780       # HTTP(S) 代理地址
+# HTTP_PROXY=http://127.0.0.1:4780
+# ALL_PROXY=socks5h://127.0.0.1:4781      # 可选：SOCKS5 代理
 
 # 前端API URL
 VITE_API_URL=http://localhost:3001        # 后端API地址
 ```
+
+### 如何获取阿里云语音服务密钥（国内用户推荐）
+
+1. 访问 [阿里云官网](https://www.aliyun.com/)
+2. 注册并完成实名认证
+3. 进入 [智能语音交互控制台](https://nls-portal.console.aliyun.com/)
+4. 开通录音文件识别服务
+5. 创建项目并获取 AppKey
+6. 创建 AccessKey（ID 和 Secret）
+7. **免费额度：2 小时/月**（120 分钟）
+8. 每月节省约 **$0.72** 转录成本
+
+> **提示**: 阿里云提供免费转录服务，国内用户无需VPN即可使用，速度快、稳定性高！
+
+详细配置步骤请参考：[阿里云5分钟快速配置指南](./docs/getting-started/ALIYUN_QUICKSTART.md)
 
 ### 如何获取OpenAI API密钥
 
@@ -290,10 +345,10 @@ VITE_API_URL=http://localhost:3001        # 后端API地址
 使用 OpenAI Whisper + GPT-4 进行真实分析：
 
 #### 工作流程
-1. **视频下载** - 从 URL 下载视频文件
-2. **语音转录** - 使用 Whisper API 将音频转为文字
-3. **内容分析** - GPT-4 分析转录文本，提取学习特征
-4. **对比报告** - GPT-4 对比两个视频，生成进步报告
+1. **语音转录** - 使用阿里云智能语音服务（免费120分钟/月）
+2. **并行处理** - 两个视频同时转录，节省时间
+3. **内容分析** - AI模型分析转录文本，提取学习特征（支持多种模型）
+4. **对比报告** - AI模型对比两个视频，生成进步报告
 
 #### 使用步骤
 1. 准备两个包含英语对话的视频（公开 URL）
@@ -302,10 +357,14 @@ VITE_API_URL=http://localhost:3001        # 后端API地址
 4. 填写学生信息和视频链接
 5. 提交表单，等待 30-60 秒
 
-#### 成本估算
-- **Whisper API**: ~$0.006 / 分钟
-- **GPT-4 Turbo**: ~$0.10 - $0.30 / 次分析
-- **总计**: 约 $0.15 - $0.40 / 次（两个5分钟视频）
+#### 成本估算（优化后）
+- **阿里云语音**: 免费（前 120 分钟/月），超出后 ¥0.25/分钟
+- **AI分析模型**: 
+  - 通义千问：免费（100万tokens/月），超出后 ¥0.008/1K tokens
+  - DeepSeek：¥0.01/次分析
+  - GPT-4 Turbo：~$0.10 - $0.30 / 次分析
+- **总计**: 约 ¥0.01 - $0.30 / 次（取决于使用的AI模型）
+- **节省**: 每月约 **$0.72+**（假设每天 10 个 5 分钟视频，使用免费额度）
 
 #### 注意事项
 - 视频必须包含音频内容
@@ -316,6 +375,45 @@ VITE_API_URL=http://localhost:3001        # 后端API地址
 
 详细测试指南请参考：[test-ai-analysis.md](./test-ai-analysis.md)
 
+## 📊 API 端点
+
+### 分析视频
+```
+POST /api/analysis/analyze
+```
+
+提交视频分析请求，系统会自动使用最优的转录服务。
+
+### 健康检查
+```
+GET /api/analysis/health
+```
+
+检查服务器状态。
+
+### 查询使用量
+```
+GET /api/analysis/quota
+```
+
+查询阿里云语音服务免费额度使用情况：
+
+**响应示例：**
+```json
+{
+  "aliyun": {
+  "available": true,
+    "freeMinutesLimit": 120,
+    "totalMinutesUsed": 25,
+    "remainingMinutes": 95,
+    "usagePercentage": 21,
+    "resetDate": "2025-12-01T00:00:00.000Z"
+  }
+}
+```
+
+**详细文档：** [阿里云集成指南](./docs/technical/ALIYUN_INTEGRATION.md)
+
 ## 🚨 故障排除
 
 ### 问题1: 无法连接到服务器
@@ -323,15 +421,16 @@ VITE_API_URL=http://localhost:3001        # 后端API地址
 - 检查端口3001是否被占用
 - 验证 `.env` 中的 `VITE_API_URL` 配置正确
 
-### 问题2: OpenAI API错误
-- 验证 `OPENAI_API_KEY` 是否正确
-- 检查OpenAI账户余额
+### 问题2: AI API错误
+- 验证 API Key 是否正确（根据使用的模型检查对应的环境变量）
+- 检查账户余额（如果是付费服务）
 - 如需测试，设置 `USE_MOCK_ANALYSIS=true`
 
-### 问题3: PDF生成失败
+### 问题3: 长图生成失败
 - 确保报告页面完全加载
 - 检查浏览器控制台错误信息
 - 尝试刷新页面后重新生成
+- 确保浏览器支持 html2canvas 功能
 
 ## 🎨 设计系统
 

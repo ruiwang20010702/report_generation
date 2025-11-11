@@ -1,10 +1,14 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { VideoAnalysisForm } from "@/components/VideoAnalysisForm";
 import { LoadingState } from "@/components/LoadingState";
 import { ReportDisplay } from "@/components/ReportDisplay";
 import logo51Talk from "@/assets/51talk-logo.jpg";
 import { videoAnalysisAPI, VideoAnalysisResponse } from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
+import { Button } from "@/components/ui/button";
+import { LogOut } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 
 type AppState = "form" | "loading" | "report";
 
@@ -15,28 +19,32 @@ interface FormData {
   grade: string;
   level: string;
   unit: string;
+  date: string;
+  date2: string;
+  apiKey?: string;
+  useMockData?: boolean;
 }
 
 // Mock data for demonstration
 const MOCK_REPORT_DATA = {
   learningData: {
     handRaising: {
-      trend: "提升",
+      trend: "提升" as const,
       percentage: "↑ 15%",
-      analysis: "本周举手次数相比上周增加了15%，展现出更强的课堂参与意愿"
+      analysis: "本周主动发言次数相比上周增加了15%，展现出更强的课堂参与意愿"
     },
     answerLength: {
-      trend: "提升",
+      trend: "提升" as const,
       percentage: "↑ 23%",
       analysis: "回答平均长度从5个词增加到7个词，语言表达更加完整"
     },
     completeSentences: {
-      trend: "提升",
+      trend: "提升" as const,
       percentage: "↑ 18%",
       analysis: "完整句子使用率从60%提升至78%，语法结构更加规范"
     },
     readingAccuracy: {
-      trend: "持平",
+      trend: "持平" as const,
       percentage: "92%",
       analysis: "保持了较高的阅读准确率，发音清晰准确"
     }
@@ -47,7 +55,7 @@ const MOCK_REPORT_DATA = {
       example: "第二个视频中回答 'What did you do yesterday?' 时，能够流畅地说出完整句子：'I went to the park and played with my friends.'"
     },
     confidence: {
-      analysis: "自信心增强明显，声音洪亮，眼神交流更加自然。举手频率提升，愿意主动参与课堂互动。",
+      analysis: "自信心增强明显，声音洪亮，眼神交流更加自然。主动发言频率提升，愿意主动参与课堂互动。",
       example: "主动要求回答老师提问，并在回答时面带微笑，姿态自信"
     },
     languageApplication: {
@@ -107,6 +115,7 @@ const MOCK_REPORT_DATA = {
     },
     grammar: {
       overview: "您的整体语法很好，但在一些细节上可以做得更完美。",
+      details: "主要问题集中在第三人称单数、动词搭配和介词使用等方面。",
       examples: [
         {
           category: "第三人称单数",
@@ -129,18 +138,22 @@ const MOCK_REPORT_DATA = {
       ],
       suggestions: [
         {
-          point: "在口语练习前，可以进行简短的语法复习，思考句子的构造规则，思考对于英语还原的习惯。"
+          title: "语法复习",
+          description: "在口语练习前，可以进行简短的语法复习，思考句子的构造规则，思考对于英语还原的习惯。"
         },
         {
-          point: "针对性地做一些第三人称单数'喂养基础练习'等基础语法点，并通过句型练习巩固。"
+          title: "针对性练习",
+          description: "针对性地做一些第三人称单数'喂养基础练习'等基础语法点，并通过句型练习巩固。"
         }
       ]
     },
     intonation: {
-      observation: "在7月7日的课程中，由于环境原因和阅读紧张，她的语调起伏较少，听起来略显平淡。",
+      overview: "语调方面还有提升空间",
+      details: "在7月7日的课程中，由于环境原因和阅读紧张，她的语调起伏较少，听起来略显平淡。",
       suggestions: [
         {
-          point: "多听一些自然的英语对话或故事（非正式演讲、生活化的内容），感受和模仿说话者的语调变化，让英语更富有生活情绪。"
+          title: "多听多模仿",
+          description: "多听一些自然的英语对话或故事（非正式演讲、生活化的内容），感受和模仿说话者的语调变化，让英语更富有生活情绪。"
         }
       ]
     }
@@ -151,32 +164,80 @@ const Index = () => {
   const [appState, setAppState] = useState<AppState>("form");
   const [reportData, setReportData] = useState<VideoAnalysisResponse | null>(null);
   const { toast } = useToast();
+  const navigate = useNavigate();
+  const { logout } = useAuth();
 
   const handleFormSubmit = async (data: FormData) => {
     console.log('🚀 Form submitted with data:', data);
     setAppState("loading");
     
     try {
-      console.log('📡 Calling API...');
-      // 调用真实的API
-      const result = await videoAnalysisAPI.analyzeVideos(data);
-      console.log('✅ API response received:', result);
-      setReportData(result);
-      setAppState("report");
-      
-      toast({
-        title: "分析完成！",
-        description: "已成功生成学习报告",
-      });
+      // 如果使用模拟数据
+      if (data.useMockData) {
+        console.log('🎭 Using mock data...');
+        // 模拟API调用延迟
+        await new Promise(resolve => setTimeout(resolve, 8000));
+        
+        const mockResult: VideoAnalysisResponse = {
+          studentName: data.studentName,
+          grade: data.grade,
+          level: data.level,
+          unit: data.unit,
+          ...MOCK_REPORT_DATA
+        };
+        
+        setReportData(mockResult);
+        setAppState("report");
+        
+        toast({
+          title: "分析完成！（模拟数据）",
+          description: "已成功生成学习报告",
+        });
+      } else {
+        // 使用真实 API
+        console.log('📡 Calling real API...');
+        const result = await videoAnalysisAPI.analyzeVideos(data);
+        console.log('✅ API response received:', result);
+        setReportData(result);
+        
+        setAppState("report");
+        
+        toast({
+          title: "分析完成！",
+          description: "已成功生成学习报告",
+        });
+      }
     } catch (error) {
       console.error('❌ Analysis failed:', error);
       
       setAppState("form");
       
+      // 格式化错误消息，处理多行错误
+      let errorMessage = error instanceof Error ? error.message : "未知错误，请稍后重试";
+      
+      // 将换行符替换为空格，使错误消息在 toast 中更易读
+      errorMessage = errorMessage.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
+      
+      // 提取错误标题和描述
+      let errorTitle = "分析失败";
+      let errorDescription = errorMessage;
+      
+      // 如果是阿里云相关的错误，提取更友好的标题
+      if (errorMessage.includes('阿里云')) {
+        if (errorMessage.includes('未配置 API Key')) {
+          errorTitle = "阿里云 API Key 未配置";
+          errorDescription = "请配置环境变量 ALIYUN_ACCESS_KEY_ID 和 ALIYUN_ACCESS_KEY_SECRET。系统已配置为强制使用阿里云转录服务。";
+        } else if (errorMessage.includes('免费额度已用完')) {
+          errorTitle = "阿里云免费额度已用完";
+          errorDescription = "请检查免费额度是否已用完，或等待下月重置。系统已配置为强制使用阿里云转录服务。";
+        }
+      }
+      
       toast({
-        title: "分析失败",
-        description: error instanceof Error ? error.message : "未知错误，请稍后重试",
+        title: errorTitle,
+        description: errorDescription,
         variant: "destructive",
+        duration: 8000, // 显示更长时间以便用户阅读
       });
     }
   };
@@ -186,11 +247,36 @@ const Index = () => {
     setReportData(null);
   };
 
+  const handleBackToLogin = async () => {
+    try {
+      await logout();
+      navigate("/login");
+    } catch (error) {
+      console.error('Logout error:', error);
+      // 即使登出失败，也尝试导航到登录页
+      navigate("/login");
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       {appState === "form" && (
         <div className="min-h-screen flex flex-col items-center justify-center p-4">
-          <div className="w-full max-w-2xl mb-8 text-center">
+          <div className="w-full max-w-2xl mb-8">
+            <div className="flex justify-end mb-4">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleBackToLogin}
+                className="flex items-center gap-2"
+              >
+                <LogOut className="w-4 h-4" />
+                <span className="hidden sm:inline">回到登录页面</span>
+                <span className="sm:hidden">登录</span>
+              </Button>
+            </div>
+            <div className="text-center">
             <img 
               src={logo51Talk} 
               alt="51Talk Logo" 
@@ -202,6 +288,7 @@ const Index = () => {
             <p className="text-lg text-muted-foreground">
               AI驱动的英语学习进步追踪系统
             </p>
+            </div>
           </div>
           <VideoAnalysisForm onSubmit={handleFormSubmit} />
         </div>

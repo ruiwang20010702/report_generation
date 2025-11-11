@@ -1,10 +1,16 @@
 import express, { Express, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 import dotenv from 'dotenv';
-import analysisRouter from './routes/analysis';
 
-// 加载环境变量
+// ⚠️ 必须先加载环境变量，再导入其他模块
+// 因为 tingwuTranscriptionService 等服务在模块加载时就会初始化
 dotenv.config();
+
+import analysisRouter from './routes/analysis.js';
+import authRouter from './routes/auth.js';
+import { testConnection } from './config/database.js';
+import { testEmailService } from './services/emailService.js';
 
 const app: Express = express();
 const PORT = process.env.PORT || 3001;
@@ -14,6 +20,7 @@ app.use(cors({
   origin: true, // 开发环境允许所有来源
   credentials: true
 }));
+app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -25,6 +32,7 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 
 // 路由
 app.use('/api/analysis', analysisRouter);
+app.use('/api/auth', authRouter);
 
 // 根路由
 app.get('/', (req: Request, res: Response) => {
@@ -33,7 +41,11 @@ app.get('/', (req: Request, res: Response) => {
     version: '1.0.0',
     endpoints: {
       analyze: 'POST /api/analysis/analyze',
-      health: 'GET /api/analysis/health'
+      health: 'GET /api/analysis/health',
+      sendOtp: 'POST /api/auth/send-otp',
+      verifyOtp: 'POST /api/auth/verify-otp',
+      me: 'GET /api/auth/me',
+      logout: 'POST /api/auth/logout'
     }
   });
 });
@@ -56,10 +68,23 @@ app.use((req: Request, res: Response) => {
 });
 
 // 启动服务器
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`🚀 Server is running on port ${PORT}`);
   console.log(`📊 API endpoint: http://localhost:${PORT}/api/analysis`);
   console.log(`🔧 Mock mode: ${process.env.USE_MOCK_ANALYSIS === 'true' ? 'ON' : 'OFF'}`);
+  console.log(`🔑 OpenAI API Key: ${process.env.OPENAI_API_KEY ? 'SET (length: ' + process.env.OPENAI_API_KEY.length + ')' : 'NOT SET'}`);
+  console.log(`🔑 通义听悟 AccessKey: ${process.env.ALIYUN_ACCESS_KEY_ID ? 'SET' : 'NOT SET'}`);
+  console.log(`🔑 通义听悟 AppKey: ${process.env.ALIYUN_TINGWU_APP_KEY ? 'SET' : 'NOT SET (可选，某些API版本可能需要)'}`);
+  
+  // 测试数据库连接
+  if (process.env.DB_HOST) {
+    await testConnection();
+  } else {
+    console.log('⚠️  数据库配置未设置，跳过连接测试');
+  }
+  
+  // 测试邮件服务配置
+  await testEmailService();
 });
 
 export default app;

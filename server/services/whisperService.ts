@@ -9,6 +9,19 @@ import ffmpegPath from '@ffmpeg-installer/ffmpeg';
 
 export interface TranscriptionResult {
   text: string;
+  words?: Array<{
+    text: string;
+    start: number;
+    end: number;
+    confidence: number;
+    speaker?: string;
+  }>;
+  utterances?: Array<{
+    text: string;
+    start: number;
+    end: number;
+    speaker: string;
+  }>;
   duration?: number;
   language?: string;
 }
@@ -133,7 +146,7 @@ export class WhisperService {
       const proxyUrl = process.env.HTTPS_PROXY || process.env.HTTP_PROXY;
       const axiosConfig: any = {
         responseType: 'arraybuffer',
-        timeout: 180000, // 3分钟超时（增加到3分钟）
+        timeout: 300000, // 5分钟超时（大视频可能需要更长时间）
         maxContentLength: 100 * 1024 * 1024, // 100MB 最大
         onDownloadProgress: (progressEvent: any) => {
           if (progressEvent.total) {
@@ -158,7 +171,7 @@ export class WhisperService {
       console.error('❌ Download error:', error);
       if (axios.isAxiosError(error)) {
         if (error.code === 'ECONNABORTED') {
-          throw new Error('视频下载超时（超过3分钟）。请检查视频URL是否有效，或尝试更小的视频文件。');
+          throw new Error('视频下载超时（超过5分钟）。请检查视频URL是否有效，或尝试更小的视频文件（建议<50MB）。');
         } else if (error.response) {
           throw new Error(`下载失败: HTTP ${error.response.status} - ${error.response.statusText}`);
         } else if (error.request) {

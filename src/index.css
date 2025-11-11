@@ -8,26 +8,28 @@ All colors MUST be HSL.
 
 @layer base {
   :root {
-    /* 51Talk Brand Colors */
+    /* 51Talk Brand Colors - Pantone Color System */
+    
+    /* 月白 (Moon White) - Background */
     --background: 0 0% 100%;
-    --foreground: 200 10% 35%;
+    --foreground: 200 2% 35%; /* 经典灰 Classic Gray */
 
     --card: 0 0% 100%;
-    --card-foreground: 200 10% 35%;
+    --card-foreground: 200 2% 35%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 200 10% 35%;
+    --popover-foreground: 200 2% 35%;
 
-    /* Primary: 51Talk Yellow #FDD100 */
-    --primary: 48 99% 50%;
-    --primary-foreground: 200 10% 20%;
+    /* 宝贝黄 (Baby Yellow) - Pantone Yellow C - RGB(253, 231, 0) - Primary Color */
+    --primary: 54 100% 50%;
+    --primary-foreground: 200 2% 20%;
 
-    /* Secondary: 51Talk Blue #00B4E6 */
-    --secondary: 195 100% 45%;
+    /* 皓月蓝 (Bright Moon Blue) - Pantone 2995 C - RGB(0, 180, 238) - Secondary Color */
+    --secondary: 195 100% 47%;
     --secondary-foreground: 0 0% 100%;
 
-    --muted: 48 30% 96%;
-    --muted-foreground: 200 8% 46%;
+    --muted: 54 30% 96%;
+    --muted-foreground: 200 2% 46%;
 
     /* Accent: Lighter Blue */
     --accent: 195 100% 92%;
@@ -36,40 +38,40 @@ All colors MUST be HSL.
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 195 20% 90%;
-    --input: 195 20% 90%;
-    --ring: 48 99% 50%;
+    --border: 195 30% 88%;
+    --input: 195 30% 88%;
+    --ring: 54 100% 50%;
 
     --radius: 0.75rem;
 
-    /* Neutral: 51Talk Gray #5B6770 */
-    --neutral: 200 10% 40%;
+    /* 经典灰 (Classic Gray) - Pantone 418 C - RGB(87, 88, 90) - Neutral */
+    --neutral: 200 2% 35%;
     --neutral-foreground: 0 0% 100%;
 
     /* Success for positive trends */
     --success: 142 76% 36%;
     --success-foreground: 0 0% 100%;
 
-    /* Report Background: 宝贝黄浅色背景 (Pantone Yellow C - RGB 253,231,0 -> HSL 55,100%,50%) */
-    --report-background: 55 100% 97%;
+    /* Report Background: 宝贝黄浅色背景 */
+    --report-background: 54 100% 98%;
     
-    /* Gradients */
-    --gradient-primary: linear-gradient(135deg, hsl(48 99% 50%), hsl(48 99% 60%));
-    --gradient-secondary: linear-gradient(135deg, hsl(195 100% 45%), hsl(195 100% 55%));
-    --gradient-hero: linear-gradient(135deg, hsl(48 99% 50% / 0.1), hsl(195 100% 45% / 0.1));
+    /* Gradients - 宝贝黄 gradient for primary, 皓月蓝 gradient for secondary */
+    --gradient-primary: linear-gradient(135deg, hsl(54 100% 50%), hsl(54 100% 60%));
+    --gradient-secondary: linear-gradient(135deg, hsl(195 100% 47%), hsl(195 100% 57%));
+    --gradient-hero: linear-gradient(135deg, hsl(54 100% 50%) 0%, hsl(54 100% 55%) 70%, hsl(195 100% 47%) 100%);
 
     /* Shadows */
-    --shadow-card: 0 2px 8px hsl(200 10% 20% / 0.08);
-    --shadow-elevated: 0 8px 24px hsl(200 10% 20% / 0.12);
+    --shadow-card: 0 2px 8px hsl(200 2% 20% / 0.08);
+    --shadow-elevated: 0 8px 24px hsl(200 2% 20% / 0.12);
 
     --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 200 10% 35%;
-    --sidebar-primary: 48 99% 50%;
-    --sidebar-primary-foreground: 200 10% 20%;
-    --sidebar-accent: 48 30% 96%;
-    --sidebar-accent-foreground: 200 10% 35%;
-    --sidebar-border: 195 20% 90%;
-    --sidebar-ring: 48 99% 50%;
+    --sidebar-foreground: 200 2% 35%;
+    --sidebar-primary: 54 100% 50%;
+    --sidebar-primary-foreground: 200 2% 20%;
+    --sidebar-accent: 54 30% 96%;
+    --sidebar-accent-foreground: 200 2% 35%;
+    --sidebar-border: 195 30% 88%;
+    --sidebar-ring: 54 100% 50%;
   }
 }
 

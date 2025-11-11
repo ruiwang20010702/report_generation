@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Brain, Video, BarChart3, FileText } from "lucide-react";
-import monkeyMascot from "@/assets/monkey-mascot.png";
+import monkeyMascot from "@/assets/mascot-goodjob-new.png";
 
 const ANALYSIS_STEPS = [
   { icon: Video, label: "分析视频内容", duration: 2000 },
@@ -50,6 +50,11 @@ export const LoadingState = () => {
                 src={monkeyMascot} 
                 alt="51Talk Mascot" 
                 className="w-32 h-32 animate-bounce"
+                style={{ 
+                  imageRendering: 'crisp-edges',
+                  WebkitFontSmoothing: 'antialiased',
+                  filter: 'drop-shadow(0 0 0 transparent)'
+                }}
               />
               <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-24 h-3 bg-primary/20 rounded-full blur-sm"></div>
             </div>
