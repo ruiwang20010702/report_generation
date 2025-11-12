@@ -22,17 +22,15 @@ export class ReportRecordService {
       const query = `
         INSERT INTO reports (
           user_id,
-          student_name,
           cost_breakdown,
-          analysis_data,
+          analysis,
           created_at
-        ) VALUES ($1, $2, $3, $4, NOW())
+        ) VALUES ($1, $2, $3, NOW())
         RETURNING id, created_at
       `;
 
       const values = [
         record.userId || null,
-        record.studentName,
         JSON.stringify(record.costBreakdown),
         record.analysisData ? JSON.stringify(record.analysisData) : null
       ];
@@ -63,7 +61,7 @@ export class ReportRecordService {
       const query = `
         SELECT 
           id,
-          student_name,
+          analysis->>'studentName' as student_name,
           cost_breakdown,
           created_at
         FROM reports
@@ -88,16 +86,17 @@ export class ReportRecordService {
       let query = `
         SELECT 
           COUNT(*) as total_reports,
-          SUM((cost_breakdown->>'total')::numeric) as total_cost,
-          AVG((cost_breakdown->>'total')::numeric) as avg_cost,
+          SUM((cost_breakdown->'total'->>'cost')::numeric) as total_cost,
+          AVG((cost_breakdown->'total'->>'cost')::numeric) as avg_cost,
           MIN(created_at) as first_report,
           MAX(created_at) as last_report
         FROM reports
+        WHERE cost_breakdown IS NOT NULL
       `;
 
       const values: any[] = [];
       if (userId) {
-        query += ' WHERE user_id = $1';
+        query += ' AND user_id = $1';
         values.push(userId);
       }
 
@@ -119,7 +118,7 @@ export class ReportRecordService {
           r.id,
           r.user_id,
           u.email as user_email,
-          r.student_name,
+          r.analysis->>'studentName' as student_name,
           r.cost_breakdown,
           r.created_at
         FROM reports r

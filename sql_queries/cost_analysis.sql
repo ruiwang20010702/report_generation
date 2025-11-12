@@ -8,8 +8,8 @@ SELECT
   COUNT(r.id) as 报告数量,
   ROUND(SUM((r.cost_breakdown->'total'->>'cost')::numeric), 4) as 总花费元,
   ROUND(AVG((r.cost_breakdown->'total'->>'cost')::numeric), 4) as 平均花费元,
-  MIN(r.created_at) as 首次使用时间,
-  MAX(r.created_at) as 最近使用时间
+  TO_CHAR(MIN(r.created_at), 'YYYY-MM-DD HH24:MI') as 首次使用时间,
+  TO_CHAR(MAX(r.created_at), 'YYYY-MM-DD HH24:MI') as 最近使用时间
 FROM reports r
 LEFT JOIN users u ON r.user_id = u.id
 WHERE r.cost_breakdown IS NOT NULL
@@ -21,7 +21,7 @@ ORDER BY 总花费元 DESC;
 -- 2. 查看每个用户的每个学生花费明细
 SELECT 
   u.email as 用户邮箱,
-  r.student_name as 学生姓名,
+  r.analysis->>'studentName' as 学生姓名,
   COUNT(r.id) as 报告次数,
   ROUND(SUM((r.cost_breakdown->'total'->>'cost')::numeric), 4) as 该学生总花费元,
   ROUND(AVG((r.cost_breakdown->'total'->>'cost')::numeric), 4) as 平均单次花费元,
@@ -30,7 +30,7 @@ SELECT
 FROM reports r
 LEFT JOIN users u ON r.user_id = u.id
 WHERE r.cost_breakdown IS NOT NULL
-GROUP BY u.email, r.student_name
+GROUP BY u.email, r.analysis->>'studentName'
 ORDER BY u.email, 该学生总花费元 DESC;
 
 -- ============================================
@@ -38,7 +38,7 @@ ORDER BY u.email, 该学生总花费元 DESC;
 -- 3. 查看最近50条报告的详细成本
 SELECT 
   u.email as 用户邮箱,
-  r.student_name as 学生姓名,
+  r.analysis->>'studentName' as 学生姓名,
   TO_CHAR(r.created_at, 'YYYY-MM-DD HH24:MI:SS') as 生成时间,
   ROUND((r.cost_breakdown->'transcription'->>'cost')::numeric, 4) as 转录成本元,
   ROUND((r.cost_breakdown->'transcription'->>'totalMinutes')::numeric, 2) as 转录分钟数,
@@ -60,7 +60,7 @@ SELECT
   ROUND(SUM((r.cost_breakdown->'total'->>'cost')::numeric), 4) as 当日总花费元,
   ROUND(AVG((r.cost_breakdown->'total'->>'cost')::numeric), 4) as 平均单次花费元,
   COUNT(DISTINCT r.user_id) as 使用用户数,
-  COUNT(DISTINCT r.student_name) as 分析学生数
+  COUNT(DISTINCT r.analysis->>'studentName') as 分析学生数
 FROM reports r
 WHERE r.cost_breakdown IS NOT NULL
 GROUP BY TO_CHAR(r.created_at, 'YYYY-MM-DD')
@@ -70,7 +70,7 @@ ORDER BY 日期 DESC;
 
 -- 5. 查找花费最高的前10个学生
 SELECT 
-  r.student_name as 学生姓名,
+  r.analysis->>'studentName' as 学生姓名,
   u.email as 所属用户,
   COUNT(r.id) as 分析次数,
   ROUND(SUM((r.cost_breakdown->'total'->>'cost')::numeric), 4) as 总花费元,
@@ -78,7 +78,7 @@ SELECT
 FROM reports r
 LEFT JOIN users u ON r.user_id = u.id
 WHERE r.cost_breakdown IS NOT NULL
-GROUP BY r.student_name, u.email
+GROUP BY r.analysis->>'studentName', u.email
 ORDER BY 总花费元 DESC
 LIMIT 10;
 
@@ -111,7 +111,7 @@ ORDER BY 总成本元 DESC;
 
 -- 7. 查看特定用户的所有学生花费（替换邮箱后使用）
 -- SELECT 
---   r.student_name as 学生姓名,
+--   r.analysis->>'studentName' as 学生姓名,
 --   COUNT(r.id) as 分析次数,
 --   ROUND(SUM((r.cost_breakdown->'total'->>'cost')::numeric), 4) as 总花费元,
 --   STRING_AGG(
@@ -123,7 +123,7 @@ ORDER BY 总成本元 DESC;
 -- LEFT JOIN users u ON r.user_id = u.id
 -- WHERE u.email = 'your-email@51talk.com'  -- 替换为实际邮箱
 --   AND r.cost_breakdown IS NOT NULL
--- GROUP BY r.student_name
+-- GROUP BY r.analysis->>'studentName'
 -- ORDER BY 总花费元 DESC;
 
 -- ============================================
@@ -131,7 +131,7 @@ ORDER BY 总成本元 DESC;
 -- 8. 全局统计概览
 SELECT 
   COUNT(DISTINCT r.user_id) as 总用户数,
-  COUNT(DISTINCT r.student_name) as 总学生数,
+  COUNT(DISTINCT r.analysis->>'studentName') as 总学生数,
   COUNT(r.id) as 总报告数,
   ROUND(SUM((r.cost_breakdown->'total'->>'cost')::numeric), 4) as 总花费元,
   ROUND(AVG((r.cost_breakdown->'total'->>'cost')::numeric), 4) as 平均单次花费元,
@@ -159,7 +159,7 @@ ORDER BY 周开始日期 DESC;
 -- 10. 查看最近一次生成报告的成本详情
 SELECT 
   u.email as 用户邮箱,
-  r.student_name as 学生姓名,
+  r.analysis->>'studentName' as 学生姓名,
   TO_CHAR(r.created_at, 'YYYY-MM-DD HH24:MI:SS') as 生成时间,
   r.cost_breakdown->'transcription'->>'service' as 转录服务,
   ROUND((r.cost_breakdown->'transcription'->>'totalMinutes')::numeric, 2) as 转录分钟数,

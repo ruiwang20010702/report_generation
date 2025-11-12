@@ -165,7 +165,7 @@ const Index = () => {
   const [reportData, setReportData] = useState<VideoAnalysisResponse | null>(null);
   const { toast } = useToast();
   const navigate = useNavigate();
-  const { logout } = useAuth();
+  const { user, logout } = useAuth();
 
   const handleFormSubmit = async (data: FormData) => {
     console.log('🚀 Form submitted with data:', data);
@@ -196,7 +196,12 @@ const Index = () => {
       } else {
         // 使用真实 API
         console.log('📡 Calling real API...');
-        const result = await videoAnalysisAPI.analyzeVideos(data);
+        // 添加 userId 到请求数据
+        const requestData = {
+          ...data,
+          userId: user?.id
+        };
+        const result = await videoAnalysisAPI.analyzeVideos(requestData);
         console.log('✅ API response received:', result);
         setReportData(result);
         
