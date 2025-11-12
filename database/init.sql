@@ -1,52 +1,77 @@
--- Zeabur PostgreSQL 数据库初始化脚本
--- 在 Zeabur PostgreSQL Console 中执行此脚本
+-- ============================================
+-- 51Talk 英语学习分析系统 - 数据库初始化脚本
+-- ============================================
+-- 说明：在 Zeabur PostgreSQL Web Console 中执行此脚本
+-- 执行顺序：users → otps → reports
+-- ============================================
 
--- 1. 创建用户表
+-- 1. 创建 users 表（用户信息）
+-- ============================================
 CREATE TABLE IF NOT EXISTS users (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  email TEXT NOT NULL UNIQUE,
-  password TEXT,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email VARCHAR(255) UNIQUE NOT NULL,
+  password VARCHAR(255),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+-- 为 email 字段创建索引（加速查询）
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 
--- 2. 创建验证码表
+-- 插入测试数据（可选，生产环境可删除）
+-- INSERT INTO users (email) VALUES ('test@example.com') ON CONFLICT (email) DO NOTHING;
+
+-- ============================================
+-- 2. 创建 otps 表（邮箱验证码）
+-- ============================================
 CREATE TABLE IF NOT EXISTS otps (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  email TEXT NOT NULL,
-  code TEXT NOT NULL,
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email VARCHAR(255) NOT NULL,
+  code VARCHAR(6) NOT NULL,
   expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
   used BOOLEAN DEFAULT FALSE,
-  used_at TIMESTAMP WITH TIME ZONE
+  used_at TIMESTAMP WITH TIME ZONE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+-- 创建索引（加速验证码查询）
 CREATE INDEX IF NOT EXISTS idx_otps_email ON otps(email);
 CREATE INDEX IF NOT EXISTS idx_otps_code ON otps(code);
 CREATE INDEX IF NOT EXISTS idx_otps_expires_at ON otps(expires_at);
 
--- 3. 创建报告表
+-- ============================================
+-- 3. 创建 reports 表（分析报告）
+-- ============================================
 CREATE TABLE IF NOT EXISTS reports (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
-  student_name TEXT NOT NULL,
-  audio_duration INTEGER NOT NULL,
-  transcript TEXT NOT NULL,
-  analysis_data JSONB NOT NULL,
-  file_name TEXT NOT NULL,
-  file_url TEXT
+  video_url TEXT,
+  transcript TEXT,
+  analysis JSONB,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX IF NOT EXISTS idx_reports_created_at ON reports(created_at DESC);
+-- 创建索引（加速报告查询）
 CREATE INDEX IF NOT EXISTS idx_reports_user_id ON reports(user_id);
+CREATE INDEX IF NOT EXISTS idx_reports_created_at ON reports(created_at);
 
+-- ============================================
 -- 验证表创建成功
-SELECT 'users' as table_name, COUNT(*) as row_count FROM users
-UNION ALL
-SELECT 'otps', COUNT(*) FROM otps
-UNION ALL
-SELECT 'reports', COUNT(*) FROM reports;
+-- ============================================
+-- 执行以下查询确认所有表都已创建：
+-- SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name;
+-- 
+-- 预期结果：
+-- - otps
+-- - reports
+-- - users
 
+-- ============================================
+-- 清理过期数据（可选，定期执行）
+-- ============================================
+-- 删除 7 天前的过期验证码：
+-- DELETE FROM otps WHERE expires_at < NOW() - INTERVAL '7 days';
+
+-- 删除 30 天前的旧报告（根据业务需求调整）：
+-- DELETE FROM reports WHERE created_at < NOW() - INTERVAL '30 days';

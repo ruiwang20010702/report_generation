@@ -6,13 +6,14 @@ dotenv.config();
 
 /**
  * 数据库连接配置
- * 优先使用 DATABASE_URL (Zeabur自动注入)
+ * 优先使用 DATABASE_URL 或 POSTGRES_CONNECTION_STRING (Zeabur自动注入)
  * 否则从单独的环境变量读取
  */
-const dbConfig: PoolConfig = process.env.DATABASE_URL 
+const connectionString = process.env.DATABASE_URL || process.env.POSTGRES_CONNECTION_STRING;
+const dbConfig: PoolConfig = connectionString
   ? {
-      // Zeabur 模式：使用 DATABASE_URL
-      connectionString: process.env.DATABASE_URL,
+      // Zeabur 模式：使用连接字符串
+      connectionString: connectionString,
       // 连接池配置
       max: parseInt(process.env.DB_POOL_MAX || '10', 10), // Zeabur环境减少连接数
       idleTimeoutMillis: parseInt(process.env.DB_POOL_IDLE_TIMEOUT || '30000', 10),
