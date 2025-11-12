@@ -8,7 +8,11 @@
     "strict": true,
     "esModuleInterop": true,
     "resolveJsonModule": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "allowSyntheticDefaultImports": true,
+    "forceConsistentCasingInFileNames": true,
+    "types": ["node"]
   },
-  "include": ["server/**/*.ts", "server/**/*.d.ts"]
+  "include": ["server/**/*.ts", "server/**/*.d.ts"],
+  "exclude": ["node_modules"]
 }
