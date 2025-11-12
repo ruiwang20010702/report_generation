@@ -28,11 +28,11 @@ async function main() {
     console.log(`   连接字符串: ${connectionString.substring(0, 30)}...（已隐藏）`);
   } else {
     console.log('   模式: 单独环境变量');
-    console.log(`   Host: ${process.env.DB_HOST || 'localhost'}`);
-    console.log(`   Port: ${process.env.DB_PORT || '5432'}`);
-    console.log(`   Database: ${process.env.DB_NAME || 'postgres'}`);
-    console.log(`   User: ${process.env.DB_USER || 'postgres'}`);
-    console.log(`   Password: ${process.env.DB_PASSWORD ? '***' : '(未设置)'}`);
+  console.log(`   Host: ${process.env.DB_HOST || 'localhost'}`);
+  console.log(`   Port: ${process.env.DB_PORT || '5432'}`);
+  console.log(`   Database: ${process.env.DB_NAME || 'postgres'}`);
+  console.log(`   User: ${process.env.DB_USER || 'postgres'}`);
+  console.log(`   Password: ${process.env.DB_PASSWORD ? '***' : '(未设置)'}`);
     console.log(`   SSL: ${process.env.DB_SSL === 'true' ? '启用' : '禁用'}`);
   }
   console.log('');

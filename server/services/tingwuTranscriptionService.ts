@@ -42,6 +42,14 @@ export interface TranscriptionResult {
   }>;
   duration?: number;
   language?: string;
+  cost?: {
+    durationSeconds: number;  // 视频时长（秒）
+    durationMinutes: number;  // 视频时长（分钟，向上取整）
+    unitPrice: number;        // 单价（元/分钟）
+    totalCost: number;        // 总成本（元）
+    currency: string;         // 货币单位
+    service: string;          // 服务名称
+  };
 }
 
 interface TranscriptionProgress {
@@ -961,18 +969,33 @@ class TingwuTranscriptionService {
       }
     }
 
+    // 计算成本
+    const durationSeconds = duration
+        ? (() => {
+            const v = typeof duration === 'number' ? duration : parseFloat(duration);
+          if (isNaN(v)) return 0;
+            return v > 100000 ? Math.round(v / 1000) : v;
+          })()
+      : 0;
+    
+    const durationMinutes = Math.ceil(durationSeconds / 60);
+    const unitPrice = 0.01; // 通义听悟：¥0.01/分钟
+    const totalCost = durationMinutes * unitPrice;
+
     const result: TranscriptionResult = {
       text: fullText,
       words: words.length > 0 ? words : undefined,
       utterances: utterances.length > 0 ? utterances : undefined,
-      duration: duration
-        ? (() => {
-            const v = typeof duration === 'number' ? duration : parseFloat(duration);
-            if (isNaN(v)) return undefined;
-            return v > 100000 ? Math.round(v / 1000) : v;
-          })()
-        : undefined,
+      duration: durationSeconds || undefined,
       language: requestedLanguage || originalResult?.language || transcriptionResult.language || 'en',
+      cost: durationSeconds > 0 ? {
+        durationSeconds,
+        durationMinutes,
+        unitPrice,
+        totalCost,
+        currency: 'CNY',
+        service: 'tingwu'
+      } : undefined,
     };
     
     console.log('✅ 解析完成，结果摘要:');
@@ -980,6 +1003,9 @@ class TingwuTranscriptionService {
     console.log('  - 词数量:', result.words?.length || 0);
     console.log('  - 语句数量:', result.utterances?.length || 0);
     console.log('  - 时长:', result.duration, '秒');
+    if (result.cost) {
+      console.log(`  - 成本: ¥${result.cost.totalCost.toFixed(2)} (${result.cost.durationMinutes}分钟 × ¥${result.cost.unitPrice}/分钟)`);
+    }
     
     return result;
   }

@@ -24,6 +24,14 @@ export interface TranscriptionResult {
   }>;
   duration?: number;
   language?: string;
+  cost?: {
+    durationSeconds: number;  // 视频时长（秒）
+    durationMinutes: number;  // 视频时长（分钟，向上取整）
+    unitPrice: number;        // 单价（元/分钟）
+    totalCost: number;        // 总成本（元）
+    currency: string;         // 货币单位
+    service: string;          // 服务名称
+  };
 }
 
 export class WhisperService {

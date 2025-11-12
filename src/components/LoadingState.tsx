@@ -5,11 +5,11 @@ import { Brain, Video, BarChart3, FileText } from "lucide-react";
 import monkeyMascot from "@/assets/mascot-goodjob-new.png";
 
 const ANALYSIS_STEPS = [
-  { icon: Video, label: "分析视频内容", duration: 2000 },
-  { icon: Brain, label: "AI深度学习分析", duration: 3000 },
-  { icon: BarChart3, label: "生成数据报告", duration: 2000 },
-  { icon: FileText, label: "准备最终报告", duration: 1000 }
-];
+  { icon: Video, label: "下载并分析视频内容", duration: 15000 }, // 15秒
+  { icon: Brain, label: "AI深度学习分析", duration: 20000 },      // 20秒
+  { icon: BarChart3, label: "生成数据报告", duration: 15000 },    // 15秒
+  { icon: FileText, label: "准备最终报告", duration: 10000 }      // 10秒
+]; // 总时长：60秒
 
 export const LoadingState = () => {
   const [progress, setProgress] = useState(0);
@@ -26,15 +26,17 @@ export const LoadingState = () => {
       accumulatedTime += step.duration;
     });
 
+    // 进度条平滑更新，但永远不会达到100%（最多到95%）
+    // 这样可以避免进度条完成了但分析还在进行的尴尬情况
     const interval = setInterval(() => {
       setProgress((prev) => {
-        if (prev >= 100) {
+        if (prev >= 95) {
           clearInterval(interval);
-          return 100;
+          return 95; // 保持在95%，等待真实API返回后才完成
         }
-        return prev + (100 / totalDuration) * 50;
+        return prev + (95 / totalDuration) * 100; // 每100ms增加一点
       });
-    }, 50);
+    }, 100);
 
     return () => clearInterval(interval);
   }, []);
@@ -63,7 +65,7 @@ export const LoadingState = () => {
             <div className="w-full space-y-4">
               <div className="text-center space-y-2">
                 <h3 className="text-2xl font-bold text-primary">AI正在分析中...</h3>
-                <p className="text-muted-foreground">预计需要 30-60 秒</p>
+                <p className="text-sm text-muted-foreground">预计需要 2-3 分钟，请耐心等待</p>
               </div>
 
               <Progress value={progress} className="h-3 bg-muted" />

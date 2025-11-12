@@ -4,6 +4,7 @@ import { VideoAnalysisRequest, VideoAnalysisResponse } from '../types/index.js';
 import { HttpsProxyAgent } from 'https-proxy-agent';
 import { WhisperService, TranscriptionResult } from './whisperService.js';
 import { tingwuTranscriptionService } from './tingwuTranscriptionService.js';
+import { reportRecordService } from './reportRecordService.js';
 
 /**
  * 📝 报告字数配置
@@ -43,6 +44,28 @@ interface AIProviderConfig {
   displayName: string;    // 显示名称
   emoji: string;          // 图标
   features: string[];     // 特性列表
+}
+
+/**
+ * 💰 AI 模型定价配置（2025年1月）
+ * 单位：元/1K tokens
+ */
+const AI_PRICING: Record<string, { input: number; output: number }> = {
+  'glm-4-plus': { input: 0.05, output: 0.05 },      // 智谱GLM-4-Plus: ¥50/1M tokens
+  'glm-4': { input: 0.1, output: 0.1 },             // 智谱GLM-4: ¥100/1M tokens
+  'deepseek-chat': { input: 0.001, output: 0.002 }, // DeepSeek: ¥1/1M input, ¥2/1M output
+  'qwen-plus': { input: 0.004, output: 0.012 },     // 通义千问Plus: ¥4/1M input, ¥12/1M output
+  'gpt-4o': { input: 2.5, output: 10 },             // GPT-4o: $2.5/1M input, $10/1M output (按¥1=$1计算)
+};
+
+/**
+ * 💰 计算 AI 调用成本
+ */
+function calculateAICost(model: string, promptTokens: number, completionTokens: number): number {
+  const pricing = AI_PRICING[model] || { input: 0.05, output: 0.05 }; // 默认使用GLM-4-Plus定价
+  const inputCost = (promptTokens / 1000) * pricing.input;
+  const outputCost = (completionTokens / 1000) * pricing.output;
+  return inputCost + outputCost;
 }
 
 export class VideoAnalysisService {
@@ -197,12 +220,13 @@ export class VideoAnalysisService {
 
   /**
    * 使用 GLM-4-Plus 分析转录文本
+   * 返回：{ analysis: string, usage: { promptTokens, completionTokens, totalTokens, cost } }
    */
   private async analyzeTranscriptionWithGPT(
     transcription: TranscriptionResult,
     openai: OpenAI,
     videoLabel: string = 'video'
-  ): Promise<string> {
+  ): Promise<{ analysis: string; usage: { promptTokens: number; completionTokens: number; totalTokens: number; cost: number } }> {
     if (!openai) {
       throw new Error('OpenAI client not initialized');
     }
@@ -295,9 +319,29 @@ ${speakerInfo}
       });
 
       const analysisText = response.choices[0]?.message?.content || '{}';
-      console.log(`✅ AI analysis complete for ${videoLabel} (${model})`);
       
-      return analysisText;
+      // 提取 token 使用量
+      const usage = response.usage;
+      const promptTokens = usage?.prompt_tokens || 0;
+      const completionTokens = usage?.completion_tokens || 0;
+      const totalTokens = usage?.total_tokens || 0;
+      
+      // 计算成本
+      const cost = calculateAICost(model, promptTokens, completionTokens);
+      
+      console.log(`✅ AI analysis complete for ${videoLabel} (${model})`);
+      console.log(`   Tokens: ${promptTokens} input + ${completionTokens} output = ${totalTokens} total`);
+      console.log(`   Cost: ¥${cost.toFixed(4)}`);
+      
+      return {
+        analysis: analysisText,
+        usage: {
+          promptTokens,
+          completionTokens,
+          totalTokens,
+          cost
+        }
+      };
     } catch (error) {
       console.error(`❌ Error analyzing ${videoLabel}:`, error);
       throw new Error(`Failed to analyze transcription: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -367,7 +411,7 @@ ${speakerInfo}
     videoUrl: string, 
     openai: OpenAI,
     videoLabel: string = 'video'
-  ): Promise<{ transcription: TranscriptionResult; analysis: string }> {
+  ): Promise<{ transcription: TranscriptionResult; analysis: { analysis: string; usage: { promptTokens: number; completionTokens: number; totalTokens: number; cost: number } } }> {
     if (!openai) {
       throw new Error('OpenAI client not initialized');
     }
@@ -395,8 +439,8 @@ ${speakerInfo}
    * 比较两个视频，生成进步分析
    */
   private async compareVideos(
-    video1Result: { transcription: TranscriptionResult; analysis: string },
-    video2Result: { transcription: TranscriptionResult; analysis: string },
+    video1Result: { transcription: TranscriptionResult; analysis: string; usage?: { promptTokens: number; completionTokens: number; totalTokens: number; cost: number } },
+    video2Result: { transcription: TranscriptionResult; analysis: string; usage?: { promptTokens: number; completionTokens: number; totalTokens: number; cost: number } },
     studentInfo: { studentName: string; grade: string; level: string; unit: string; video1Time?: string; video2Time?: string },
     openai: OpenAI
   ): Promise<VideoAnalysisResponse> {
@@ -726,9 +770,88 @@ ${JSON.stringify(video2Analysis, null, 2)}
 
       const analysisData = JSON.parse(content);
       
+      // 提取对比报告的 token 使用量
+      const comparisonUsage = response.usage;
+      const comparisonPromptTokens = comparisonUsage?.prompt_tokens || 0;
+      const comparisonCompletionTokens = comparisonUsage?.completion_tokens || 0;
+      const comparisonTotalTokens = comparisonUsage?.total_tokens || 0;
+      
+      // 计算对比报告成本（使用已声明的 model 变量）
+      const comparisonCost = calculateAICost(model, comparisonPromptTokens, comparisonCompletionTokens);
+      
+      console.log(`💰 对比报告 Token 使用量: ${comparisonPromptTokens} input + ${comparisonCompletionTokens} output = ${comparisonTotalTokens} total`);
+      console.log(`💰 对比报告成本: ¥${comparisonCost.toFixed(4)}`);
+      
+      // 汇总所有成本
+      const video1Usage = video1Result.usage || { promptTokens: 0, completionTokens: 0, totalTokens: 0, cost: 0 };
+      const video2Usage = video2Result.usage || { promptTokens: 0, completionTokens: 0, totalTokens: 0, cost: 0 };
+      
+      const totalAITokens = video1Usage.totalTokens + video2Usage.totalTokens + comparisonTotalTokens;
+      const totalAICost = video1Usage.cost + video2Usage.cost + comparisonCost;
+      
+      // 转录成本
+      const video1TranscriptionCost = video1Result.transcription.cost?.totalCost || 0;
+      const video2TranscriptionCost = video2Result.transcription.cost?.totalCost || 0;
+      const totalTranscriptionCost = video1TranscriptionCost + video2TranscriptionCost;
+      const totalTranscriptionMinutes = (video1Result.transcription.cost?.durationMinutes || 0) + (video2Result.transcription.cost?.durationMinutes || 0);
+      
+      // 总成本
+      const totalCost = totalTranscriptionCost + totalAICost;
+      
+      console.log(`\n💰 ===== 成本汇总 =====`);
+      console.log(`   转录成本: ¥${totalTranscriptionCost.toFixed(2)} (${totalTranscriptionMinutes}分钟)`);
+      console.log(`   AI分析成本: ¥${totalAICost.toFixed(4)} (${totalAITokens} tokens)`);
+      console.log(`   总成本: ¥${totalCost.toFixed(4)}`);
+      console.log(`======================\n`);
+      
+      // 构建成本详情
+      const costBreakdown: import('../types/index.js').CostBreakdown = {
+        transcription: {
+          service: 'tingwu',
+          video1Duration: video1Result.transcription.duration || 0,
+          video2Duration: video2Result.transcription.duration || 0,
+          totalMinutes: totalTranscriptionMinutes,
+          unitPrice: 0.01,
+          cost: totalTranscriptionCost,
+          currency: 'CNY'
+        },
+        aiAnalysis: {
+          provider: this.getProviderInfo(openai).replace(/[^\w\s-]/g, '').trim(), // 移除emoji
+          model: model,
+          video1Analysis: {
+            promptTokens: video1Usage.promptTokens,
+            completionTokens: video1Usage.completionTokens,
+            totalTokens: video1Usage.totalTokens,
+            cost: video1Usage.cost
+          },
+          video2Analysis: {
+            promptTokens: video2Usage.promptTokens,
+            completionTokens: video2Usage.completionTokens,
+            totalTokens: video2Usage.totalTokens,
+            cost: video2Usage.cost
+          },
+          comparison: {
+            promptTokens: comparisonPromptTokens,
+            completionTokens: comparisonCompletionTokens,
+            totalTokens: comparisonTotalTokens,
+            cost: comparisonCost
+          },
+          totalTokens: totalAITokens,
+          totalCost: totalAICost,
+          currency: 'CNY'
+        },
+        total: {
+          cost: totalCost,
+          currency: 'CNY',
+          breakdown: `转录: ¥${totalTranscriptionCost.toFixed(2)} + AI分析: ¥${totalAICost.toFixed(4)}`
+        },
+        timestamp: new Date().toISOString()
+      };
+      
       return {
         ...studentInfo,
-        ...analysisData
+        ...analysisData,
+        costBreakdown
       };
     } catch (error) {
       console.error('Error comparing videos:', error);
@@ -824,7 +947,11 @@ ${JSON.stringify(video2Analysis, null, 2)}
             videoStatus.video1.analyzing = false;
             videoStatus.video1.completed = true;
             
-            return { transcription: transcription1, analysis: analysis1Text };
+            return { 
+              transcription: transcription1, 
+              analysis: analysis1Text.analysis,
+              usage: analysis1Text.usage
+            };
           })(),
           (async () => {
             console.log('📥 [视频2] 开始转录...');
@@ -852,7 +979,11 @@ ${JSON.stringify(video2Analysis, null, 2)}
             videoStatus.video2.analyzing = false;
             videoStatus.video2.completed = true;
             
-            return { transcription: transcription2, analysis: analysis2Text };
+            return { 
+              transcription: transcription2, 
+              analysis: analysis2Text.analysis,
+              usage: analysis2Text.usage
+            };
           })()
         ]);
         
@@ -891,6 +1022,19 @@ ${JSON.stringify(video2Analysis, null, 2)}
       const reportTime = ((Date.now() - reportStartTime) / 1000).toFixed(1);
       console.log(`✅ 对比报告生成完成！耗时: ${reportTime}秒`);
       console.log('✅ 整体分析完成 for:', request.studentName);
+      
+      // 记录报告到数据库（异步，不阻塞返回）
+      if (report.costBreakdown) {
+        reportRecordService.recordReport({
+          userId: request.userId,
+          studentName: request.studentName,
+          costBreakdown: report.costBreakdown,
+          analysisData: report // 保存完整的报告数据
+        }).catch(err => {
+          console.error('⚠️ 报告记录保存失败（不影响主流程）:', err.message);
+        });
+      }
+      
       return report;
     } catch (error) {
       console.error('❌ Error in analyzeVideos:', error);

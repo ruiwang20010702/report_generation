@@ -12,6 +12,7 @@ dotenv.config();
 
 import analysisRouter from './routes/analysis.js';
 import authRouter from './routes/auth.js';
+import adminRouter from './routes/admin.js';
 import { testConnection } from './config/database.js';
 import { testEmailService } from './services/emailService.js';
 
@@ -75,6 +76,7 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 // 路由
 app.use('/api/analysis', analysisRouter);
 app.use('/api/auth', authRouter);
+app.use('/api/admin', adminRouter);
 
 // 静态托管前端构建产物
 app.use(express.static(DIST_PATH));
