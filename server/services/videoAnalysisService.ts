@@ -47,11 +47,12 @@ interface AIProviderConfig {
 }
 
 /**
- * 💰 AI 模型定价配置（2025年1月）
+ * 💰 AI 模型定价配置（2025年4月更新）
  * 单位：元/1K tokens
+ * 注意：智谱GLM-4-Plus在2025年4月24日大幅降价，从¥50/1M降至¥5/1M tokens
  */
 const AI_PRICING: Record<string, { input: number; output: number }> = {
-  'glm-4-plus': { input: 0.05, output: 0.05 },      // 智谱GLM-4-Plus: ¥50/1M tokens
+  'glm-4-plus': { input: 0.005, output: 0.005 },   // 智谱GLM-4-Plus: ¥5/1M tokens (2025年4月降价后)
   'glm-4': { input: 0.1, output: 0.1 },             // 智谱GLM-4: ¥100/1M tokens
   'deepseek-chat': { input: 0.001, output: 0.002 }, // DeepSeek: ¥1/1M input, ¥2/1M output
   'qwen-plus': { input: 0.004, output: 0.012 },     // 通义千问Plus: ¥4/1M input, ¥12/1M output
@@ -62,7 +63,7 @@ const AI_PRICING: Record<string, { input: number; output: number }> = {
  * 💰 计算 AI 调用成本
  */
 function calculateAICost(model: string, promptTokens: number, completionTokens: number): number {
-  const pricing = AI_PRICING[model] || { input: 0.05, output: 0.05 }; // 默认使用GLM-4-Plus定价
+  const pricing = AI_PRICING[model] || { input: 0.005, output: 0.005 }; // 默认使用GLM-4-Plus定价（2025年4月降价后）
   const inputCost = (promptTokens / 1000) * pricing.input;
   const outputCost = (completionTokens / 1000) * pricing.output;
   return inputCost + outputCost;

@@ -89,11 +89,11 @@ export async function testConnection(): Promise<boolean> {
       console.log('🔗 使用单独环境变量模式');
       
       clientConfig = {
-        host: process.env.DB_HOST || 'localhost',
-        port: parseInt(process.env.DB_PORT || '5432', 10),
-        database: process.env.DB_NAME || 'postgres',
-        user: process.env.DB_USER || 'postgres',
-        password: String(process.env.DB_PASSWORD || ''),
+      host: process.env.DB_HOST || 'localhost',
+      port: parseInt(process.env.DB_PORT || '5432', 10),
+      database: process.env.DB_NAME || 'postgres',
+      user: process.env.DB_USER || 'postgres',
+      password: String(process.env.DB_PASSWORD || ''),
         connectionTimeoutMillis: 30000,
         // 使用统一的 SSL 配置函数
         ssl: getSSLConfig(),
