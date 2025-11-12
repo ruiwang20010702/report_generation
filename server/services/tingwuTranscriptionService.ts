@@ -766,11 +766,20 @@ class TingwuTranscriptionService {
     // 方式0: 通义听悟格式 - Paragraphs数组（包含Words）
     if (transcriptionResult.Paragraphs && Array.isArray(transcriptionResult.Paragraphs)) {
       console.log('📝 找到Paragraphs数组（通义听悟格式），长度:', transcriptionResult.Paragraphs.length);
+      
+      // 统计信息
+      const speakerStats: { [key: string]: { paragraphs: number; words: number } } = {};
+      
       transcriptionResult.Paragraphs.forEach((paragraph: any, pIdx: number) => {
         const speakerId = paragraph.SpeakerId || paragraph.speakerId || 'Unknown';
         const paragraphWords = paragraph.Words || paragraph.words || [];
         
-        console.log(`  - 段落 ${pIdx + 1}: Speaker ${speakerId}, ${paragraphWords.length} 个词`);
+        // 统计每个speaker的段落数和词数
+        if (!speakerStats[speakerId]) {
+          speakerStats[speakerId] = { paragraphs: 0, words: 0 };
+        }
+        speakerStats[speakerId].paragraphs += 1;
+        speakerStats[speakerId].words += paragraphWords.length;
         
         // 从Words数组中提取文本
         const paragraphText = paragraphWords
@@ -806,6 +815,13 @@ class TingwuTranscriptionService {
             }
           });
         }
+      });
+      
+      // 输出统计信息
+      const speakerCount = Object.keys(speakerStats).length;
+      console.log(`📊 统计信息: 共 ${speakerCount} 个 Speaker`);
+      Object.entries(speakerStats).forEach(([speakerId, stats]) => {
+        console.log(`  - Speaker ${speakerId}: ${stats.paragraphs} 段, ${stats.words} 个词`);
       });
     }
     

@@ -437,11 +437,11 @@ export const ReportDisplay = ({ data, onBack }: ReportDisplayProps) => {
                   <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center shadow-sm flex-shrink-0">
                     <Music className="w-7 h-7 text-primary" />
                   </div>
-                  <h3 className="text-2xl font-bold text-primary flex-shrink-0">2. 语调与节奏</h3>
+                  <h3 className="text-2xl font-bold flex-shrink-0" style={{ color: '#FFA500' }}>2. 语调与节奏</h3>
                 </div>
 
                 <div className="p-5 rounded-2xl bg-gradient-to-r from-primary/15 to-primary/25 border-l-4 border-primary shadow-sm">
-                  <p className="font-bold mb-2 text-lg" style={{ color: '#D4AF37' }}>{data.improvementAreas.intonation.overview}</p>
+                  <p className="font-bold mb-2 text-lg" style={{ color: '#FFA500' }}>{data.improvementAreas.intonation.overview}</p>
                   <p className="text-base text-muted-foreground leading-relaxed">{data.improvementAreas.intonation.details}</p>
                 </div>
 

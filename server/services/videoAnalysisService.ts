@@ -26,7 +26,7 @@ const REPORT_WORD_COUNT = {
   },
   // 改进领域
   improvementAreas: {
-    overview: 50,          // 概述部分
+    overview: 25,          // 概述部分
     details: 150,           // 详细分析部分
     suggestion: 100,        // 建议描述
   },
@@ -254,7 +254,7 @@ ${speakerInfo}
 请从以下方面进行详细分析（重点关注学生的表现）：
 
 **1. 量化指标分析**
-- 主动回答次数：学生主动回答问题或发言的次数（不包括简单的"Yes/No"或跟读）
+- 主动回答次数：学生主动回答问题或发言的次数（包括简单的"Yes/No"或跟读）
 - 平均回答长度：学生每次回答的平均词数
 - 完整句输出次数：学生说出完整句子（有主谓宾结构）的次数
 - 语言准确率：根据转录文本推测学生的发音、语法准确程度（百分比）
@@ -267,18 +267,18 @@ ${speakerInfo}
 - 自信心和互动：学生的表达是否自信，是否主动参与，声音是否清晰
 
 **3. 典型对话案例**
-- 请提取2-3段最能体现学生能力的对话片段（包含老师问题+学生回答）
+- 请提取4段最能体现学生能力的对话片段（包含老师问题+学生回答）
 
 请以JSON格式返回分析结果（保持现有字段名，在内容中融入上述分析）：
 {
   "wordCount": 学生发言的总词数（数字）,
   "sentenceCount": 学生发言的句子数（数字）,
-  "fluency": "口语流利度的详细分析（融入量化数据和具体案例），包括：1) 流利度评分或描述；2) 语速和停顿情况；3) 连贯性分析；4) 具体进步表现（如果有）。至少80词。",
-  "vocabulary": "词汇运用能力的详细分析（融入统计数据），包括：1) 词汇量评估；2) 词汇分类统计（基础词/进阶词）；3) 词汇运用灵活性；4) 新词汇掌握情况。至少60词。",
-  "grammar": "语法和句型的详细分析（融入句型统计），包括：1) 语法准确率；2) 句型复杂度统计；3) 常见语法问题；4) 句子组织能力。至少60词。",
-  "participation": "参与度和互动性的详细分析（融入量化指标），包括：1) 主动回答次数（具体数字）；2) 平均回答长度（词数）；3) 完整句输出次数；4) 语言准确率（百分比）；5) 参与度评估（学生发言占比）。至少80词。",
-  "strengths": ["优点1（具体且有数据支持）", "优点2", "优点3"],
-  "weaknesses": ["待改进1（具体且有案例）", "待改进2"],
+  "fluency": "口语流利度的详细分析（融入量化数据和具体案例），包括：1) 流利度评分或描述；2) 语速和停顿情况；3) 连贯性分析；4) 具体进步表现（如果有）。至少10词。",
+  "vocabulary": "词汇运用能力的详细分析（融入统计数据），包括：1) 词汇量评估；2) 词汇分类统计（基础词/进阶词）；3) 词汇运用灵活性；4) 新词汇掌握情况。至少100词。",
+  "grammar": "语法和句型的详细分析（融入句型统计），包括：1) 语法准确率；2) 句型复杂度统计；3) 常见语法问题；4) 句子组织能力。至少100词。",
+  "participation": "参与度和互动性的详细分析（融入量化指标），包括：1) 主动回答次数（具体数字）；2) 平均回答长度（词数）；3) 完整句输出次数；4) 语言准确率（百分比）；5) 参与度评估（学生发言占比）。至少100词。",
+  "strengths": ["优点1（具体且有数据支持）", "优点2（具体且有数据支持）", "优点3（具体且有数据支持）"],
+  "weaknesses": ["待改进1（具体且有案例）", "待改进2（具体且有案例）"],
   "dialogueExamples": [
     {
       "teacher": "老师的问题或引导",
@@ -407,7 +407,7 @@ ${speakerInfo}
     try {
       // 验证转录文本
       if (!video1Result.transcription.text || video1Result.transcription.text.trim().length === 0) {
-        throw new Error('第一个视频的转录文本为空，无法进行比较分析');
+        throw new Error('第一个视频的转录文本为空，无法进行比较分析。请检查：1) 视频是否包含语音内容 2) 视频链接是否有效');
       }
       if (!video2Result.transcription.text || video2Result.transcription.text.trim().length === 0) {
         throw new Error('第二个视频的转录文本为空，无法进行比较分析。请检查：1) 视频是否包含语音内容 2) 视频链接是否有效');
@@ -588,7 +588,7 @@ ${JSON.stringify(video2Analysis, null, 2)}
   "progressDimensions": {
     "fluency": {
       "analysis": "口语流利度的深度分析，包括：1) 具体数据对比；2) 语速、停顿、连贯性变化；3) 专业解读。至少${REPORT_WORD_COUNT.progressDimensions.fluency}词。",
-      "example": "两次课堂的原文对话对比案例，必须严格按照以下格式排版（每个部分单独成段，使用换行符分隔）：\n\n💡 示例：\n\n【早期课堂】老师：'You can say how are you.' 学生：'How are you?'\n\n【最近课堂】老师：'Are you ready with our lesson for today?' 学生：'Yes, I'm ready.'\n\n【对比分析】小明在最近课堂中表现出更少的犹豫，显示出语速和流利度的提高。\n\n请只提供1组最具代表性的对比案例，必须包含【早期课堂】【最近课堂】【对比分析】三个部分，且每部分单独成段。"
+      "example": "两次课堂的原文对话对比案例，不要直接使用示例，而是根据实际情况进行修改，必须严格按照以下格式排版（每个部分单独成段，使用换行符分隔）：\n\n💡 示例：\n\n【早期课堂】老师：'You can say how are you.' 学生：'How are you?'\n\n【最近课堂】老师：'Are you ready with our lesson for today?' 学生：'Yes, I'm ready.'\n\n【对比分析】小明在最近课堂中表现出更少的犹豫，显示出语速和流利度的提高。\n\n请只提供1组最具代表性的对比案例，必须包含【早期课堂】【最近课堂】【对比分析】三个部分，且每部分单独成段。"
     },
     "confidence": {
       "analysis": "自信心与互动的深度分析（融入量化数据），至少${REPORT_WORD_COUNT.progressDimensions.confidence}词。",
@@ -609,22 +609,22 @@ ${JSON.stringify(video2Analysis, null, 2)}
       "details": "详细的发音问题深度分析。这部分要在overview的基础上进一步展开，包含：1) 具体分析两次课堂中发音问题的类型、频率和严重程度；2) 对比早期课堂和最近课堂的发音表现差异；3) 分析发音问题对整体表达流利度的影响；4) 提供具体的观察细节和案例背景。字数要求：至少${REPORT_WORD_COUNT.improvementAreas.details}词，内容要比overview更加深入和具体。",
       "examples": [
         {
-          "word": "具体单词1（如：nine）",
-          "incorrect": "学生实际发出的错误发音（用IPA音标表示，如：/naɪn/ 错发成 /nɪn/ 或 /naɪŋ/）",
-          "correct": "该单词的标准正确发音（用IPA音标表示，如：/naɪn/）",
+          "word": "从学生实际对话中找出的第1个发音错误的单词（必须是转录文本中真实出现的单词）",
+          "incorrect": "学生实际发出的错误发音（用IPA音标表示）",
+          "correct": "该单词的标准正确发音（用IPA音标表示）",
           "type": "问题类型（如：元音不准确、重音问题、辅音发音等）"
         },
         {
-          "word": "具体单词2（如：bag）",
-          "incorrect": "学生实际发出的错误发音（用IPA音标表示，如：/bæɡ/ 错发成 /bɛɡ/ 或 /bɑːɡ/）",
-          "correct": "该单词的标准正确发音（用IPA音标表示，如：/bæɡ/）",
-          "type": "问题类型"
+          "word": "从学生实际对话中找出的第2个发音错误的单词（必须是转录文本中真实出现的单词）",
+          "incorrect": "学生实际发出的错误发音（用IPA音标表示）",
+          "correct": "该单词的标准正确发音（用IPA音标表示）",
+          "type": "问题类型（如：元音不准确、重音问题、辅音发音等）"
         },
         {
-          "word": "具体单词3（如：fine）",
-          "incorrect": "学生实际发出的错误发音（用IPA音标表示，如：/faɪn/ 错发成 /fɪn/ 或 /fiːn/）",
-          "correct": "该单词的标准正确发音（用IPA音标表示，如：/faɪn/）",
-          "type": "问题类型"
+          "word": "从学生实际对话中找出的第3个发音错误的单词（必须是转录文本中真实出现的单词）",
+          "incorrect": "学生实际发出的错误发音（用IPA音标表示）",
+          "correct": "该单词的标准正确发音（用IPA音标表示）",
+          "type": "问题类型（如：元音不准确、重音问题、辅音发音等）"
         }
       ],
       "suggestions": [
@@ -633,7 +633,7 @@ ${JSON.stringify(video2Analysis, null, 2)}
           "description": "详细的练习建议和方法（至少${REPORT_WORD_COUNT.improvementAreas.suggestion}词）"
         },
         {
-          "title": "第二个建议标题",
+          "title": "第二个建议标题（基于阈值触发或通用建议，需要与第一个建议标题不同）",
           "description": "第二个练习建议和方法（至少${REPORT_WORD_COUNT.improvementAreas.suggestion}词）"
         }
       ]
@@ -644,19 +644,19 @@ ${JSON.stringify(video2Analysis, null, 2)}
       "examples": [
         {
           "category": "错误类别1（如：第三人称单数）",
-          "incorrect": "错误句子（最好来自实际对话）",
+          "incorrect": "错误句子（最好是转录文本中真实出现的句子）",
           "correct": "正确句子",
           "explanation": "错误解释和语法规则"
         },
         {
           "category": "错误类别2（如：时态使用、动词搭配）",
-          "incorrect": "错误句子",
+          "incorrect": "错误句子（最好是转录文本中真实出现的句子） ",
           "correct": "正确句子",
           "explanation": "错误解释和语法规则"
         },
         {
           "category": "错误类别3（如：介词使用、冠词使用）",
-          "incorrect": "错误句子",
+          "incorrect": "错误句子（最好是转录文本中真实出现的句子）",
           "correct": "正确句子",
           "explanation": "错误解释和语法规则"
         }
@@ -667,7 +667,7 @@ ${JSON.stringify(video2Analysis, null, 2)}
           "description": "详细的练习建议和方法（至少${REPORT_WORD_COUNT.improvementAreas.suggestion}词）"
         },
         {
-          "title": "第二个建议标题",
+          "title": "第二个建议标题（基于阈值触发或通用建议，需要与第一个建议标题不同）",
           "description": "第二个练习建议和方法（至少${REPORT_WORD_COUNT.improvementAreas.suggestion}词）"
         }
       ]
@@ -681,7 +681,7 @@ ${JSON.stringify(video2Analysis, null, 2)}
           "description": "详细的练习建议和方法（至少${REPORT_WORD_COUNT.improvementAreas.suggestion}词）"
         },
         {
-          "title": "第二个建议标题",
+          "title": "第二个建议标题（基于阈值触发或通用建议，需要与第一个建议标题不同）",
           "description": "第二个练习建议和方法（至少${REPORT_WORD_COUNT.improvementAreas.suggestion}词）"
         }
       ]
@@ -696,7 +696,7 @@ ${JSON.stringify(video2Analysis, null, 2)}
 4. 基于阈值触发规则，在suggestions中智能添加相应建议
 5. 确保返回有效的JSON格式，不要包含注释
 6. 所有文字描述要详实、具体、有数据支撑
-7. **发音示例（pronunciation.examples）中，incorrect 和 correct 字段必须是不同的音标！** incorrect 应该是学生实际发出的错误发音，correct 是该单词的标准正确发音。例如：如果学生把 "nine" /naɪn/ 错读成 /nɪn/，那么 incorrect 应该填 "/nɪn/"，correct 应该填 "/naɪn/"。请基于实际听到的发音错误填写，如果无法确定具体错误，请提供常见的错误发音模式。`;
+7. 发音示例（pronunciation.examples）中的单词必须从学生的实际转录对话中找出！** 不要使用示例单词（如 nine、bag、fine 等），而是要分析学生在两次课堂中实际说过的单词，找出其中发音有问题的 3 个真实单词。incorrect 应该是学生实际发出的错误发音（用IPA音标表示），correct 是该单词的标准正确发音（用IPA音标表示）。两个音标必须不同！如果转录文本中无法明确判断发音错误，可以基于常见的中国学生发音问题进行推测，但单词本身必须是学生实际说过的。`;
 
       const model = this.getModelName(openai);
       const provider = this.getProviderInfo(openai);
