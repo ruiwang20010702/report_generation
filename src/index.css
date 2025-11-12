@@ -84,3 +84,33 @@ All colors MUST be HSL.
     @apply bg-background text-foreground;
   }
 }
+
+/* 导出长图时强制使用桌面布局，防止响应式断点导致排版变化 */
+body.report-exporting {
+  width: 100%;
+  overflow: visible;
+}
+
+body.report-exporting #report-content {
+  max-width: none !important;
+  width: var(--report-export-width, 1080px) !important;
+  padding: 2rem !important;
+}
+
+body.report-exporting .md\:p-8 {
+  padding: 2rem !important;
+}
+
+body.report-exporting .md\:grid-cols-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+}
+
+body.report-exporting .md\:grid-cols-3,
+body.report-exporting .lg\:grid-cols-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+}
+
+body.report-exporting .md\:text-4xl {
+  font-size: 2.25rem !important;
+  line-height: 2.5rem !important;
+}

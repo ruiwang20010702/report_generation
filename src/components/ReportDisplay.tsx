@@ -109,18 +109,40 @@ export const ReportDisplay = ({ data, onBack }: ReportDisplayProps) => {
       description: "请稍候，正在将报告转换为图片",
     });
 
+    let reportElement: HTMLElement | null = null;
+    let buttonsElement: HTMLElement | null = null;
+    let originalBodyHadClass = false;
+    let originalWidthStyle = '';
+    let originalMaxWidthStyle = '';
+    let originalExportWidthVar = '';
+    let computedWidth = 0;
+    let computedHeight = 0;
+
     try {
       // 获取要截图的元素
-      const reportElement = document.getElementById('report-content');
+      reportElement = document.getElementById('report-content');
       if (!reportElement) {
         throw new Error('找不到报告内容');
       }
 
+      originalBodyHadClass = document.body.classList.contains('report-exporting');
+      originalWidthStyle = reportElement.style.width;
+      originalMaxWidthStyle = reportElement.style.maxWidth;
+      originalExportWidthVar = reportElement.style.getPropertyValue('--report-export-width');
+      computedWidth = Math.ceil(reportElement.getBoundingClientRect().width);
+      computedHeight = Math.ceil(reportElement.scrollHeight);
+
       // 临时隐藏按钮区域
-      const buttonsElement = document.getElementById('action-buttons');
+      buttonsElement = document.getElementById('action-buttons');
       if (buttonsElement) {
         buttonsElement.style.display = 'none';
       }
+
+      // 锁定宽度并应用导出样式，防止响应式断点发生变化
+      reportElement.style.width = `${computedWidth}px`;
+      reportElement.style.maxWidth = `${computedWidth}px`;
+      reportElement.style.setProperty('--report-export-width', `${computedWidth}px`);
+      document.body.classList.add('report-exporting');
 
       // 使用 html2canvas 生成高质量截图
       const canvas = await html2canvas(reportElement, {
@@ -129,15 +151,20 @@ export const ReportDisplay = ({ data, onBack }: ReportDisplayProps) => {
         allowTaint: true,
         backgroundColor: '#f5f5f5',
         logging: false,
-        windowWidth: reportElement.scrollWidth,
-        windowHeight: reportElement.scrollHeight,
+        width: computedWidth,
+        height: computedHeight,
+        windowWidth: computedWidth,
+        windowHeight: computedHeight,
         onclone: (clonedDoc) => {
           // 确保克隆的文档中所有元素都渲染完成
           const clonedElement = clonedDoc.getElementById('report-content');
           if (clonedElement) {
             // 强制所有 flex 容器使用固定布局
-            clonedElement.style.width = reportElement.scrollWidth + 'px';
+            clonedElement.style.width = `${computedWidth}px`;
+            clonedElement.style.maxWidth = `${computedWidth}px`;
+            clonedElement.style.setProperty('--report-export-width', `${computedWidth}px`);
           }
+          clonedDoc.body.classList.add('report-exporting');
         },
       });
 
@@ -147,27 +174,31 @@ export const ReportDisplay = ({ data, onBack }: ReportDisplayProps) => {
       }
 
       // 将 canvas 转换为图片并下载
-      canvas.toBlob((blob) => {
-        if (!blob) {
-          throw new Error('生成图片失败');
-        }
+      const blob = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob((generatedBlob) => {
+          if (generatedBlob) {
+            resolve(generatedBlob);
+          } else {
+            reject(new Error('生成图片失败'));
+          }
+        }, 'image/png');
+      });
 
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        const fileName = `51Talk学习报告_${data.studentName}_${new Date().toLocaleDateString('zh-CN').replace(/\//g, '-')}.png`;
-        
-        link.href = url;
-        link.download = fileName;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      const fileName = `51Talk学习报告_${data.studentName}_${new Date().toLocaleDateString('zh-CN').replace(/\//g, '-')}.png`;
+      
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
 
-        toast({
-          title: "下载成功！",
-          description: `报告已保存为：${fileName}`,
-        });
-      }, 'image/png');
+      toast({
+        title: "下载成功！",
+        description: `报告已保存为：${fileName}`,
+      });
 
     } catch (error) {
       console.error('生成图片失败:', error);
@@ -177,13 +208,28 @@ export const ReportDisplay = ({ data, onBack }: ReportDisplayProps) => {
         variant: "destructive",
       });
     } finally {
+      if (reportElement) {
+        reportElement.style.width = originalWidthStyle;
+        reportElement.style.maxWidth = originalMaxWidthStyle;
+        if (originalExportWidthVar) {
+          reportElement.style.setProperty('--report-export-width', originalExportWidthVar);
+        } else {
+          reportElement.style.removeProperty('--report-export-width');
+        }
+      }
+      if (!originalBodyHadClass) {
+        document.body.classList.remove('report-exporting');
+      }
+      if (buttonsElement) {
+        buttonsElement.style.display = '';
+      }
       setIsDownloading(false);
     }
   };
 
   return (
     <div className="min-h-screen bg-[hsl(var(--report-background))] p-4 md:p-8">
-      <div id="report-content" className="max-w-5xl mx-auto space-y-6 bg-white rounded-3xl shadow-elevated p-6 md:p-8 border-4 border-primary/50">
+    <div id="report-content" className="max-w-[1380px] mx-auto space-y-6 bg-white rounded-3xl shadow-elevated p-6 md:p-8 border-4 border-primary/50">
         {/* Header with Logo and Mascot */}
         <Card className="shadow-elevated border-none overflow-hidden relative rounded-3xl">
           <div className="bg-gradient-hero p-6 relative">
