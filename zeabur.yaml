@@ -27,11 +27,16 @@ services:
       initialDelaySeconds: 30
       periodSeconds: 10
     
+    # 依赖数据库服务 - 这会让 Zeabur 自动注入 DATABASE_URL
+    depends_on:
+      - database
+    
     # 环境变量（这里只定义key，值在Zeabur控制台设置）
     env:
       NODE_ENV: production
       USE_MOCK_ANALYSIS: false
       # PORT 由 Zeabur 自动注入，不需要手动设置
+      # DATABASE_URL 由 Zeabur 自动注入（因为有 depends_on）
       # 其他敏感变量在控制台设置
 
   # PostgreSQL 数据库
