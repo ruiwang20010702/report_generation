@@ -25,11 +25,19 @@ interface EnvCheck {
 }
 
 const envChecks: EnvCheck[] = [
-  // 数据库配置
+  // 数据库配置（Zeabur 模式：连接字符串）
+  {
+    name: 'POSTGRES_CONNECTION_STRING',
+    value: process.env.POSTGRES_CONNECTION_STRING || process.env.DATABASE_URL,
+    required: false,
+    description: 'PostgreSQL 连接字符串（Zeabur 自动注入，优先使用）',
+    masked: true,
+  },
+  // 数据库配置（传统模式：单独环境变量）
   {
     name: 'DB_HOST',
     value: process.env.DB_HOST,
-    required: true,
+    required: false, // 如果有连接字符串则不必需
     description: '数据库主机地址（如：your-database.rds.aliyuncs.com）',
   },
   {
@@ -41,19 +49,19 @@ const envChecks: EnvCheck[] = [
   {
     name: 'DB_NAME',
     value: process.env.DB_NAME,
-    required: true,
+    required: false,
     description: '数据库名称',
   },
   {
     name: 'DB_USER',
     value: process.env.DB_USER,
-    required: true,
+    required: false,
     description: '数据库用户名',
   },
   {
     name: 'DB_PASSWORD',
     value: process.env.DB_PASSWORD,
-    required: true,
+    required: false,
     description: '数据库密码',
     masked: true,
   },
@@ -154,8 +162,21 @@ function main() {
 
   console.log('\n' + '='.repeat(50) + '\n');
 
+  // 特殊检查：数据库配置（连接字符串或单独变量至少有一种）
+  const hasConnectionString = process.env.POSTGRES_CONNECTION_STRING || process.env.DATABASE_URL;
+  const hasSeparateConfig = process.env.DB_HOST && process.env.DB_NAME && process.env.DB_USER && process.env.DB_PASSWORD;
+  const hasDatabaseConfig = hasConnectionString || hasSeparateConfig;
+  
+  if (!hasDatabaseConfig) {
+    console.log('⚠️  数据库配置不完整！');
+    console.log('   请配置以下任一方式：');
+    console.log('   方式1（Zeabur）：POSTGRES_CONNECTION_STRING 或 DATABASE_URL');
+    console.log('   方式2（传统）：DB_HOST + DB_NAME + DB_USER + DB_PASSWORD\n');
+    allRequired = false;
+  }
+  
   // 总结
-  if (allRequired) {
+  if (allRequired && hasDatabaseConfig) {
     console.log('✅ 所有必需的环境变量已配置！\n');
     console.log('💡 下一步：');
     console.log('   1. 在数据库中创建表：npm run setup:db');

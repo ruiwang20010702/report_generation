@@ -47,12 +47,22 @@ async function main() {
   
   // 显示配置信息（隐藏密码）
   console.log('📋 数据库配置:');
-  console.log(`   Host: ${process.env.DB_HOST || 'localhost'}`);
-  console.log(`   Port: ${process.env.DB_PORT || '5432'}`);
-  console.log(`   Database: ${process.env.DB_NAME || 'postgres'}`);
-  console.log(`   User: ${process.env.DB_USER || 'postgres'}`);
-  console.log(`   Password: ${process.env.DB_PASSWORD ? '***' : '(未设置)'}`);
-  console.log(`   SSL: ${process.env.DB_SSL === 'true' ? '启用' : '禁用'}\n`);
+  
+  // 检查是否使用连接字符串（Zeabur 模式）
+  const connectionString = process.env.DATABASE_URL || process.env.POSTGRES_CONNECTION_STRING;
+  if (connectionString) {
+    console.log('   模式: Zeabur 连接字符串');
+    console.log(`   连接字符串: ${connectionString.substring(0, 30)}...（已隐藏）`);
+  } else {
+    console.log('   模式: 单独环境变量');
+    console.log(`   Host: ${process.env.DB_HOST || 'localhost'}`);
+    console.log(`   Port: ${process.env.DB_PORT || '5432'}`);
+    console.log(`   Database: ${process.env.DB_NAME || 'postgres'}`);
+    console.log(`   User: ${process.env.DB_USER || 'postgres'}`);
+    console.log(`   Password: ${process.env.DB_PASSWORD ? '***' : '(未设置)'}`);
+    console.log(`   SSL: ${process.env.DB_SSL === 'true' ? '启用' : '禁用'}`);
+  }
+  console.log('');
 
   // 测试连接
   console.log('🔍 测试数据库连接...\n');
