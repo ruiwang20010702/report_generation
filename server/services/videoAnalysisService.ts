@@ -764,10 +764,22 @@ ${JSON.stringify(video2Analysis, null, 2)}
       console.log('\n=== 🚀 超级并行分析：下载、转录、分析全部并行 ===');
       const overallStartTime = Date.now();
       
-      // 添加进度监控
+      // 视频处理状态跟踪
+      const videoStatus = {
+        video1: { transcribing: false, analyzing: false, completed: false },
+        video2: { transcribing: false, analyzing: false, completed: false }
+      };
+      
+      // 添加进度监控 - 显示每个视频的详细状态
       const progressInterval = setInterval(() => {
         const elapsed = ((Date.now() - overallStartTime) / 1000).toFixed(0);
-        console.log(`⏳ 视频分析进行中... 已耗时: ${elapsed}秒`);
+        const v1Status = videoStatus.video1.completed ? '✅ 已完成' : 
+                        videoStatus.video1.analyzing ? '🤖 分析中' :
+                        videoStatus.video1.transcribing ? '📝 转录中' : '⏳ 等待中';
+        const v2Status = videoStatus.video2.completed ? '✅ 已完成' : 
+                        videoStatus.video2.analyzing ? '🤖 分析中' :
+                        videoStatus.video2.transcribing ? '📝 转录中' : '⏳ 等待中';
+        console.log(`⏳ 视频分析进行中... 已耗时: ${elapsed}秒 | 视频1: ${v1Status} | 视频2: ${v2Status}`);
       }, 15000); // 每15秒打印一次进度
       
       let video1Result, video2Result;
@@ -787,48 +799,58 @@ ${JSON.stringify(video2Analysis, null, 2)}
 
         const [result1, result2] = await Promise.all([
           (async () => {
-            console.log('📥 转录 Video 1...');
+            console.log('📥 [视频1] 开始转录...');
+            videoStatus.video1.transcribing = true;
             const transcription1 = await this.transcribeVideoSmart(
               request.video1,
               'Video 1',
               transcriptionLanguage,
               requestedSpeakerCount
             );
-            console.log('✅ Video 1 转录完成');
+            console.log('✅ [视频1] 转录完成');
             
             // 验证转录结果
             if (!transcription1.text || transcription1.text.trim().length === 0) {
               throw new Error('第一个视频转录失败：未提取到任何文本内容。可能原因：1) 视频中没有语音 2) 视频链接无效 3) 转录服务异常');
             }
-            console.log(`📝 Video 1 转录文本长度: ${transcription1.text.length} 字符`);
+            console.log(`📝 [视频1] 转录文本长度: ${transcription1.text.length} 字符`);
             
             // 转录完成后立即开始分析（不等待 Video 2）
-            console.log('🤖 开始分析 Video 1...');
+            videoStatus.video1.transcribing = false;
+            videoStatus.video1.analyzing = true;
+            console.log('🤖 [视频1] 开始分析...');
             const analysis1Text = await this.analyzeTranscriptionWithGPT(transcription1, openai, 'Video 1');
-            console.log('✅ Video 1 分析完成');
+            console.log('✅ [视频1] 分析完成');
+            videoStatus.video1.analyzing = false;
+            videoStatus.video1.completed = true;
             
             return { transcription: transcription1, analysis: analysis1Text };
           })(),
           (async () => {
-            console.log('📥 转录 Video 2...');
+            console.log('📥 [视频2] 开始转录...');
+            videoStatus.video2.transcribing = true;
             const transcription2 = await this.transcribeVideoSmart(
               request.video2,
               'Video 2',
               transcriptionLanguage,
               requestedSpeakerCount
             );
-            console.log('✅ Video 2 转录完成');
+            console.log('✅ [视频2] 转录完成');
             
             // 验证转录结果
             if (!transcription2.text || transcription2.text.trim().length === 0) {
               throw new Error('第二个视频转录失败：未提取到任何文本内容。可能原因：1) 视频中没有语音 2) 视频链接无效 3) 转录服务异常');
             }
-            console.log(`📝 Video 2 转录文本长度: ${transcription2.text.length} 字符`);
+            console.log(`📝 [视频2] 转录文本长度: ${transcription2.text.length} 字符`);
             
             // 转录完成后立即开始分析（不等待 Video 1）
-            console.log('🤖 开始分析 Video 2...');
+            videoStatus.video2.transcribing = false;
+            videoStatus.video2.analyzing = true;
+            console.log('🤖 [视频2] 开始分析...');
             const analysis2Text = await this.analyzeTranscriptionWithGPT(transcription2, openai, 'Video 2');
-            console.log('✅ Video 2 分析完成');
+            console.log('✅ [视频2] 分析完成');
+            videoStatus.video2.analyzing = false;
+            videoStatus.video2.completed = true;
             
             return { transcription: transcription2, analysis: analysis2Text };
           })()

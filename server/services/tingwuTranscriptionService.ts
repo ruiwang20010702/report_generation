@@ -470,17 +470,6 @@ class TingwuTranscriptionService {
       if (status === 'COMPLETED' || status === 'SUCCESS') {
         console.log('✅ 转写任务完成！');
         
-        // 调试：打印完整的结果结构
-        console.log('🔍 转写任务完成，完整结果结构:');
-        console.log(JSON.stringify(result, null, 2));
-        console.log('🔍 结果对象的所有键:', Object.keys(result || {}));
-        if (result?.result) {
-          console.log('🔍 result.result的所有键:', Object.keys(result.result || {}));
-        }
-        if (result?.Result) {
-          console.log('🔍 result.Result的所有键:', Object.keys(result.Result || {}));
-        }
-        
         if (onProgress) {
           onProgress({
             status: 'completed',
@@ -612,15 +601,12 @@ class TingwuTranscriptionService {
 
       // 从URL下载转写结果JSON（外层结果）
       console.log('📥 正在下载转写结果...');
-      console.log('📥 URL:', transcriptionUrl);
       const response = await fetch(transcriptionUrl);
       if (!response.ok) {
         throw new Error(`下载转写结果失败: ${response.status} ${response.statusText}`);
       }
       const outerTranscriptionJson = await response.json();
-      console.log('📥 下载的转写结果JSON结构:');
-      console.log(JSON.stringify(outerTranscriptionJson, null, 2));
-      console.log('📥 JSON对象的所有键:', Object.keys(outerTranscriptionJson || {}));
+      console.log('✅ 转写结果下载完成');
       
       // 解析真正的转写负载（可能在 Transcription 字段中，且可能是 URL/JSON字符串/对象）
       let transcriptionResult: any = outerTranscriptionJson;
