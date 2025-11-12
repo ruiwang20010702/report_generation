@@ -113,7 +113,7 @@ app.listen(PORT, async () => {
   console.log(`🔑 通义听悟 AppKey: ${process.env.ALIYUN_TINGWU_APP_KEY ? 'SET' : 'NOT SET (可选，某些API版本可能需要)'}`);
   
   // 测试数据库连接
-  if (process.env.DATABASE_URL || process.env.DB_HOST) {
+  if (process.env.DATABASE_URL || process.env.POSTGRES_CONNECTION_STRING || process.env.DB_HOST) {
     await testConnection();
   } else {
     console.log('⚠️  数据库配置未设置，跳过连接测试');
