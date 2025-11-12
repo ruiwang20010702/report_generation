@@ -10,6 +10,26 @@ dotenv.config();
  * 否则从单独的环境变量读取
  */
 const connectionString = process.env.DATABASE_URL || process.env.POSTGRES_CONNECTION_STRING;
+
+// SSL 配置函数：统一处理 SSL 设置
+function getSSLConfig() {
+  // 如果明确设置了 DB_SSL=false，则禁用 SSL（Zeabur 场景）
+  if (process.env.DB_SSL === 'false') {
+    console.log('🔓 SSL: 已禁用 (DB_SSL=false)');
+    return false;
+  }
+  // 如果明确设置了 DB_SSL=true，则启用 SSL
+  if (process.env.DB_SSL === 'true') {
+    console.log('🔒 SSL: 已启用 (DB_SSL=true)');
+    return {
+      rejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED === 'true',
+    };
+  }
+  // 默认：禁用 SSL（Zeabur PostgreSQL 不支持 SSL）
+  console.log('🔓 SSL: 默认禁用 (Zeabur 兼容模式)');
+  return false;
+}
+
 const dbConfig: PoolConfig = connectionString
   ? {
       // Zeabur 模式：使用连接字符串
@@ -18,10 +38,8 @@ const dbConfig: PoolConfig = connectionString
       max: parseInt(process.env.DB_POOL_MAX || '10', 10), // Zeabur环境减少连接数
       idleTimeoutMillis: parseInt(process.env.DB_POOL_IDLE_TIMEOUT || '30000', 10),
       connectionTimeoutMillis: parseInt(process.env.DB_POOL_CONNECTION_TIMEOUT || '10000', 10),
-      // Zeabur 通常需要 SSL
-      ssl: process.env.NODE_ENV === 'production' ? {
-        rejectUnauthorized: false, // Zeabur证书兼容性
-      } : false,
+      // SSL 配置（Zeabur PostgreSQL 不支持 SSL）
+      ssl: getSSLConfig(),
     }
   : {
       // 传统模式：单独的环境变量（阿里云等）
@@ -35,9 +53,7 @@ const dbConfig: PoolConfig = connectionString
       idleTimeoutMillis: parseInt(process.env.DB_POOL_IDLE_TIMEOUT || '30000', 10),
       connectionTimeoutMillis: parseInt(process.env.DB_POOL_CONNECTION_TIMEOUT || '10000', 10),
       // SSL 配置
-      ssl: process.env.DB_SSL === 'true' ? {
-        rejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED === 'true',
-      } : false,
+      ssl: getSSLConfig(),
     };
 
 /**
@@ -65,19 +81,12 @@ export async function testConnection(): Promise<boolean> {
       clientConfig = {
         connectionString: connectionString,
         connectionTimeoutMillis: 30000,
-        ssl: process.env.NODE_ENV === 'production' ? {
-          rejectUnauthorized: false,
-        } : false,
+        // 使用统一的 SSL 配置函数
+        ssl: getSSLConfig(),
       };
     } else {
       // 传统模式：单独的环境变量
       console.log('🔗 使用单独环境变量模式');
-      let sslConfig: any = false;
-      if (process.env.DB_SSL === 'true') {
-        sslConfig = {
-          rejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED === 'true',
-        };
-      }
       
       clientConfig = {
         host: process.env.DB_HOST || 'localhost',
@@ -86,7 +95,8 @@ export async function testConnection(): Promise<boolean> {
         user: process.env.DB_USER || 'postgres',
         password: String(process.env.DB_PASSWORD || ''),
         connectionTimeoutMillis: 30000,
-        ssl: sslConfig,
+        // 使用统一的 SSL 配置函数
+        ssl: getSSLConfig(),
       };
     }
     
