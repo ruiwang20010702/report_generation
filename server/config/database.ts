@@ -54,23 +54,43 @@ export async function testConnection(): Promise<boolean> {
     // 使用直接连接而不是连接池，避免连接池初始化问题
     const { Client } = await import('pg');
     
-    // 构建 SSL 配置
-    let sslConfig: any = false;
-    if (process.env.DB_SSL === 'true') {
-      sslConfig = {
-        rejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED === 'true',
+    // 优先使用连接字符串（Zeabur 模式）
+    const connectionString = process.env.DATABASE_URL || process.env.POSTGRES_CONNECTION_STRING;
+    
+    let clientConfig: any;
+    
+    if (connectionString) {
+      // Zeabur 模式：使用连接字符串
+      console.log('🔗 使用连接字符串模式 (Zeabur)');
+      clientConfig = {
+        connectionString: connectionString,
+        connectionTimeoutMillis: 30000,
+        ssl: process.env.NODE_ENV === 'production' ? {
+          rejectUnauthorized: false,
+        } : false,
+      };
+    } else {
+      // 传统模式：单独的环境变量
+      console.log('🔗 使用单独环境变量模式');
+      let sslConfig: any = false;
+      if (process.env.DB_SSL === 'true') {
+        sslConfig = {
+          rejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED === 'true',
+        };
+      }
+      
+      clientConfig = {
+        host: process.env.DB_HOST || 'localhost',
+        port: parseInt(process.env.DB_PORT || '5432', 10),
+        database: process.env.DB_NAME || 'postgres',
+        user: process.env.DB_USER || 'postgres',
+        password: String(process.env.DB_PASSWORD || ''),
+        connectionTimeoutMillis: 30000,
+        ssl: sslConfig,
       };
     }
     
-    const client = new Client({
-      host: process.env.DB_HOST || 'localhost',
-      port: parseInt(process.env.DB_PORT || '5432', 10),
-      database: process.env.DB_NAME || 'postgres',
-      user: process.env.DB_USER || 'postgres',
-      password: String(process.env.DB_PASSWORD || ''),
-      connectionTimeoutMillis: parseInt(process.env.DB_POOL_CONNECTION_TIMEOUT || '30000', 10), // 增加到30秒
-      ssl: sslConfig,
-    });
+    const client = new Client(clientConfig);
     
     console.log('🔗 正在连接数据库...');
     await client.connect();
