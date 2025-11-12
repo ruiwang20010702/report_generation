@@ -6,24 +6,38 @@ dotenv.config();
 
 /**
  * 数据库连接配置
- * 从环境变量读取 PostgreSQL 连接信息
+ * 优先使用 DATABASE_URL (Zeabur自动注入)
+ * 否则从单独的环境变量读取
  */
-const dbConfig: PoolConfig = {
-  host: process.env.DB_HOST || 'localhost',
-  port: parseInt(process.env.DB_PORT || '5432', 10),
-  database: process.env.DB_NAME || 'postgres',
-  user: process.env.DB_USER || 'postgres',
-  password: String(process.env.DB_PASSWORD || ''),
-  // 连接池配置
-  max: parseInt(process.env.DB_POOL_MAX || '20', 10), // 最大连接数
-  idleTimeoutMillis: parseInt(process.env.DB_POOL_IDLE_TIMEOUT || '30000', 10), // 空闲超时
-  connectionTimeoutMillis: parseInt(process.env.DB_POOL_CONNECTION_TIMEOUT || '10000', 10), // 连接超时（增加到10秒，适合外网连接）
-  // SSL 配置（生产环境推荐启用）
-  // 对于阿里云 RDS，通常需要设置 rejectUnauthorized: false
-  ssl: process.env.DB_SSL === 'true' ? {
-    rejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED === 'true',
-  } : false,
-};
+const dbConfig: PoolConfig = process.env.DATABASE_URL 
+  ? {
+      // Zeabur 模式：使用 DATABASE_URL
+      connectionString: process.env.DATABASE_URL,
+      // 连接池配置
+      max: parseInt(process.env.DB_POOL_MAX || '10', 10), // Zeabur环境减少连接数
+      idleTimeoutMillis: parseInt(process.env.DB_POOL_IDLE_TIMEOUT || '30000', 10),
+      connectionTimeoutMillis: parseInt(process.env.DB_POOL_CONNECTION_TIMEOUT || '10000', 10),
+      // Zeabur 通常需要 SSL
+      ssl: process.env.NODE_ENV === 'production' ? {
+        rejectUnauthorized: false, // Zeabur证书兼容性
+      } : false,
+    }
+  : {
+      // 传统模式：单独的环境变量（阿里云等）
+      host: process.env.DB_HOST || 'localhost',
+      port: parseInt(process.env.DB_PORT || '5432', 10),
+      database: process.env.DB_NAME || 'postgres',
+      user: process.env.DB_USER || 'postgres',
+      password: String(process.env.DB_PASSWORD || ''),
+      // 连接池配置
+      max: parseInt(process.env.DB_POOL_MAX || '20', 10),
+      idleTimeoutMillis: parseInt(process.env.DB_POOL_IDLE_TIMEOUT || '30000', 10),
+      connectionTimeoutMillis: parseInt(process.env.DB_POOL_CONNECTION_TIMEOUT || '10000', 10),
+      // SSL 配置
+      ssl: process.env.DB_SSL === 'true' ? {
+        rejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED === 'true',
+      } : false,
+    };
 
 /**
  * 创建数据库连接池

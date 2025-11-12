@@ -1,0 +1,51 @@
+name: english-learning-assistant
+
+# Zeabur 项目配置
+# 文档：https://zeabur.com/docs
+
+services:
+  # 主应用服务（前后端一体）
+  app:
+    type: nodejs
+    buildCommand: npm run build
+    startCommand: npm start
+    
+    # 资源配置
+    resources:
+      cpu: 2      # 2核CPU
+      memory: 4096 # 4GB内存
+    
+    # 自动扩展配置
+    scaling:
+      minReplicas: 1  # 最少1个实例（省钱）
+      maxReplicas: 3  # 最多3个实例（控制成本）
+      targetCPU: 70   # CPU达到70%时扩容
+    
+    # 健康检查
+    healthCheck:
+      path: /api/analysis/health
+      initialDelaySeconds: 30
+      periodSeconds: 10
+    
+    # 环境变量（这里只定义key，值在Zeabur控制台设置）
+    env:
+      NODE_ENV: production
+      USE_MOCK_ANALYSIS: false
+      # PORT 由 Zeabur 自动注入，不需要手动设置
+      # 其他敏感变量在控制台设置
+
+  # PostgreSQL 数据库
+  database:
+    type: postgresql
+    version: "15"  # PostgreSQL 15
+    
+    # 资源配置
+    resources:
+      memory: 512  # 512MB内存（初期够用）
+      storage: 5   # 5GB存储
+    
+    # 自动备份
+    backup:
+      enabled: true
+      schedule: "0 2 * * *"  # 每天凌晨2点备份
+      retention: 7           # 保留7天

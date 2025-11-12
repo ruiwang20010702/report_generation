@@ -1,5 +1,5 @@
 // 自定义认证服务（使用阿里云 RDS PostgreSQL + 自建认证）
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+const API_URL = import.meta.env.VITE_API_URL || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3001');
 
 export interface AuthResponse {
   success: boolean;

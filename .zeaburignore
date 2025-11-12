@@ -1,0 +1,25 @@
+# Exclude heavy or irrelevant files to speed up Zeabur uploads
+
+# Dependencies and build outputs
+node_modules/
+build/
+dist/
+
+# Logs and temporary files
+runtime-logs/
+*.log
+*.tmp
+.DS_Store
+
+# Other large or non-deployment directories
+docs/
+new_ui_3/
+.git/
+
+# CI/CD and local tool artifacts
+.vercel/
+.zeabur/cache/
+
+# Ensure source and configs stay included (do NOT ignore)
+# Keep: server/, src/, public/, api/, index.html, package.json,
+# tsconfig*, vite.config.ts, .env.example, .env.zeabur.sample

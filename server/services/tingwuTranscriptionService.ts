@@ -55,7 +55,8 @@ class TingwuTranscriptionService {
     accessKeySecret: string;
     appKey?: string;
   } | null = null;
-  private client: Tingwu20230930 | null = null;
+  // 使用 SDK 的默认导出创建客户端实例，但类型定义以 any 处理，避免 TS2709 "Cannot use namespace as a type" 错误
+  private client: any | null = null;
   private readonly API_ENDPOINT = 'tingwu.cn-shanghai.aliyuncs.com';
   private readonly REGION = 'cn-shanghai';
   

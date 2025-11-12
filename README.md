@@ -457,18 +457,77 @@ MIT License
 
 ---
 
+## 🚀 生产环境部署
+
+### Zeabur 部署（推荐）
+
+**适合场景**：快速上线、中小规模应用（<100并发）
+
+**优势**：
+- ✅ 10分钟快速部署
+- ✅ 前后端+数据库一体化
+- ✅ 按需付费，成本可控（$15-30/月）
+- ✅ 自动扩容和负载均衡
+
+**快速开始**：
+```bash
+# 1. 阅读快速指南（5分钟）
+cat QUICKSTART_ZEABUR.md
+
+# 2. 准备密钥
+# - 智谱 GLM API Key
+# - 阿里云 Access Key
+# - JWT Secret
+
+# 3. 部署到 Zeabur（10分钟）
+# 访问 https://zeabur.com
+# 按照 QUICKSTART_ZEABUR.md 操作
+```
+
+**文档**：
+- 📖 [快速开始（10分钟）](./QUICKSTART_ZEABUR.md)
+- 📚 [完整部署指南](./ZEABUR_DEPLOYMENT.md)
+- ✅ [部署检查清单](./DEPLOYMENT_CHECKLIST.md)
+- 📝 [部署总结](./DEPLOYMENT_SUMMARY.md)
+
+**成本预估**：¥108-216/月
+
+---
+
+### 阿里云部署（企业级）
+
+**适合场景**：>100并发、需要数据合规
+
+**优势**：
+- ✅ 全链路国内，延迟极低
+- ✅ 支持500+并发
+- ✅ 企业级稳定性
+- ✅ 数据存储在中国
+
+**成本预估**：¥475-850/月
+
+详细方案请参考本文档前面的架构分析。
+
+---
+
 ## 原始项目信息
 
 **Lovable Project URL**: https://lovable.dev/projects/cc81f235-0532-434b-9cb6-baa44f839cc4
 
 ## How can I deploy this project?
 
+### Option 1: Zeabur (Recommended for Production)
+Follow the guide in [QUICKSTART_ZEABUR.md](./QUICKSTART_ZEABUR.md) for a complete deployment with database.
+
+### Option 2: Lovable
 Simply open [Lovable](https://lovable.dev/projects/cc81f235-0532-434b-9cb6-baa44f839cc4) and click on Share -> Publish.
 
-## Can I connect a custom domain to my Lovable project?
+## Can I connect a custom domain to my project?
 
 Yes, you can!
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+**For Zeabur**: Navigate to your service → Domains → Add Custom Domain.
+
+**For Lovable**: Navigate to Project > Settings > Domains and click Connect Domain.
 
 Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
