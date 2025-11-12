@@ -3,6 +3,16 @@ import { sendOtp, verifyOtp, getCurrentUser, loginWithPassword, setPassword } fr
 
 const router = Router();
 
+// 允许的邮箱域名
+const ALLOWED_EMAIL_DOMAIN = '@51talk.com';
+
+/**
+ * 验证邮箱域名是否为 @51talk.com
+ */
+function validateEmailDomain(email: string): boolean {
+  return email.toLowerCase().endsWith(ALLOWED_EMAIL_DOMAIN);
+}
+
 /**
  * 发送邮箱验证码
  * POST /api/auth/send-otp
@@ -15,6 +25,13 @@ router.post('/send-otp', async (req: Request, res: Response) => {
       return res.status(400).json({
         success: false,
         error: '请输入有效的邮箱地址',
+      });
+    }
+
+    if (!validateEmailDomain(email)) {
+      return res.status(400).json({
+        success: false,
+        error: '只允许使用 @51talk.com 邮箱登录验证',
       });
     }
 
@@ -98,6 +115,13 @@ router.post('/login', async (req: Request, res: Response) => {
       });
     }
 
+    if (!validateEmailDomain(email)) {
+      return res.status(400).json({
+        success: false,
+        error: '只允许使用 @51talk.com 邮箱注册和登录',
+      });
+    }
+
     if (!password || password.length < 6) {
       return res.status(400).json({
         success: false,
@@ -144,6 +168,13 @@ router.post('/set-password', async (req: Request, res: Response) => {
       return res.status(400).json({
         success: false,
         error: '请输入有效的邮箱地址',
+      });
+    }
+
+    if (!validateEmailDomain(email)) {
+      return res.status(400).json({
+        success: false,
+        error: '只允许使用 @51talk.com 邮箱注册和登录',
       });
     }
 

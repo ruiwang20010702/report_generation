@@ -7,6 +7,14 @@ import { sendVerificationEmail } from './emailService.js';
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
 const OTP_EXPIRY = 10 * 60 * 1000; // 10分钟（毫秒）
 const OTP_LENGTH = 6;
+const ALLOWED_EMAIL_DOMAIN = '@51talk.com'; // 允许的邮箱域名
+
+/**
+ * 验证邮箱域名是否为 @51talk.com
+ */
+function validateEmailDomain(email: string): boolean {
+  return email.toLowerCase().endsWith(ALLOWED_EMAIL_DOMAIN);
+}
 
 /**
  * 生成6位数字验证码
@@ -21,6 +29,11 @@ function generateOtp(): string {
  * 目前返回验证码用于测试，生产环境应通过邮件发送
  */
 export async function sendOtp(email: string): Promise<{ code: string }> {
+  // 验证邮箱域名
+  if (!validateEmailDomain(email)) {
+    throw new Error('只允许使用 @51talk.com 邮箱注册和登录');
+  }
+
   // 清理过期的验证码（可选，也可以定期清理）
   try {
     await query(
@@ -76,6 +89,11 @@ export async function sendOtp(email: string): Promise<{ code: string }> {
  * 验证邮箱验证码
  */
 export async function verifyOtp(email: string, otp: string): Promise<{ token: string; user: { id: string; email: string } }> {
+  // 验证邮箱域名
+  if (!validateEmailDomain(email)) {
+    throw new Error('只允许使用 @51talk.com 邮箱注册和登录');
+  }
+
   // 从数据库查找有效的验证码
   const result = await query(
     `SELECT id, code, expires_at, used 
@@ -147,6 +165,11 @@ export async function verifyOtp(email: string, otp: string): Promise<{ token: st
  * 使用邮箱和密码登录
  */
 export async function loginWithPassword(email: string, password: string): Promise<{ token: string; user: { id: string; email: string } }> {
+  // 验证邮箱域名
+  if (!validateEmailDomain(email)) {
+    throw new Error('只允许使用 @51talk.com 邮箱注册和登录');
+  }
+
   // 查找用户
   const result = await query(
     'SELECT id, email, password FROM users WHERE email = $1',
@@ -195,6 +218,11 @@ export async function loginWithPassword(email: string, password: string): Promis
  * 设置用户密码（用于首次设置或修改密码）
  */
 export async function setPassword(email: string, password: string): Promise<void> {
+  // 验证邮箱域名
+  if (!validateEmailDomain(email)) {
+    throw new Error('只允许使用 @51talk.com 邮箱注册和登录');
+  }
+
   // 查找用户
   const result = await query(
     'SELECT id FROM users WHERE email = $1',

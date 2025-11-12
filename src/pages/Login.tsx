@@ -11,6 +11,15 @@ import highfiveMascot from "@/assets/mascot-highfive.png";
 
 type LoginMode = "password" | "otp";
 
+const ALLOWED_EMAIL_DOMAIN = '@51talk.com';
+
+/**
+ * 验证邮箱域名是否为 @51talk.com
+ */
+const validateEmailDomain = (email: string): boolean => {
+  return email.toLowerCase().endsWith(ALLOWED_EMAIL_DOMAIN);
+};
+
 const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -36,6 +45,15 @@ const Login = () => {
       toast({
         title: "错误",
         description: "请输入有效的邮箱地址",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!validateEmailDomain(email)) {
+      toast({
+        title: "错误",
+        description: "只允许使用 @51talk.com 邮箱登录验证",
         variant: "destructive",
       });
       return;
@@ -69,6 +87,15 @@ const Login = () => {
       toast({
         title: "错误",
         description: "请输入有效的邮箱地址",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!validateEmailDomain(email)) {
+      toast({
+        title: "错误",
+        description: "只允许使用 @51talk.com 邮箱注册和登录",
         variant: "destructive",
       });
       return;
@@ -124,6 +151,15 @@ const Login = () => {
 
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!validateEmailDomain(email)) {
+      toast({
+        title: "错误",
+        description: "只允许使用 @51talk.com 邮箱登录验证",
+        variant: "destructive",
+      });
+      return;
+    }
 
     if (!otp || otp.length !== 6) {
       toast({
