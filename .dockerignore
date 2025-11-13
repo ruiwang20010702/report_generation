@@ -1,7 +1,8 @@
 # 依赖
 node_modules
 npm-debug.log
-package-lock.json
+# 保留 package-lock.json 用于 Docker 构建
+# package-lock.json
 yarn.lock
 pnpm-lock.yaml
 bun.lockb
