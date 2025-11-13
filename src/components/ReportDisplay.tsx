@@ -14,6 +14,7 @@ import { useState } from "react";
 
 interface ReportData {
   studentName: string;
+  studentId?: string;
   grade: string;
   level: string;
   unit: string;
@@ -245,6 +246,12 @@ export const ReportDisplay = ({ data, onBack }: ReportDisplayProps) => {
                     <span className="font-semibold">学生：</span>
                     <span className="ml-2">{data.studentName}</span>
                   </div>
+                  {data.studentId && (
+                    <div>
+                      <span className="font-semibold">学生ID：</span>
+                      <span className="ml-2">{data.studentId}</span>
+                    </div>
+                  )}
                   <div>
                     <span className="font-semibold">年级：</span>
                     <span className="ml-2">{data.grade}</span>

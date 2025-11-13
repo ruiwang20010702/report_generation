@@ -14,6 +14,7 @@ interface FormData {
   video1: string;
   video2: string;
   studentName: string;
+  studentId?: string;
   grade: string;
   level: string;
   unit: string;
@@ -39,6 +40,7 @@ export const VideoAnalysisForm = ({ onSubmit }: VideoAnalysisFormProps) => {
     video1: "",
     video2: "",
     studentName: "",
+    studentId: "",
     grade: "",
     level: "",
     unit: "",
@@ -74,6 +76,7 @@ export const VideoAnalysisForm = ({ onSubmit }: VideoAnalysisFormProps) => {
       video1: "https://example.com/demo-video-1.mp4",
       video2: "https://example.com/demo-video-2.mp4",
       studentName: "张小明",
+      studentId: "STU001",
       grade: "小学三年级",
       level: "Level 3",
       unit: "5",
@@ -218,20 +221,37 @@ export const VideoAnalysisForm = ({ onSubmit }: VideoAnalysisFormProps) => {
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Student Info */}
           <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="studentName" className="flex items-center gap-2 text-base font-semibold">
-                <User className="w-5 h-5 text-secondary" />
-                学生姓名
-              </Label>
-              <Input
-                id="studentName"
-                type="text"
-                placeholder="请输入学生姓名"
-                value={formData.studentName}
-                onChange={(e) => updateFormField({ studentName: e.target.value })}
-                className={`h-12 ${errors.studentName ? 'border-destructive' : ''}`}
-              />
-              {errors.studentName && <p className="text-sm text-destructive">{errors.studentName}</p>}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="studentName" className="flex items-center gap-2 text-base font-semibold">
+                  <User className="w-5 h-5 text-secondary" />
+                  学生姓名
+                </Label>
+                <Input
+                  id="studentName"
+                  type="text"
+                  placeholder="请输入学生姓名"
+                  value={formData.studentName}
+                  onChange={(e) => updateFormField({ studentName: e.target.value })}
+                  className={`h-12 ${errors.studentName ? 'border-destructive' : ''}`}
+                />
+                {errors.studentName && <p className="text-sm text-destructive">{errors.studentName}</p>}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="studentId" className="flex items-center gap-2 text-base font-semibold">
+                  <User className="w-5 h-5 text-secondary" />
+                  学生ID <span className="text-xs text-muted-foreground font-normal">(可选)</span>
+                </Label>
+                <Input
+                  id="studentId"
+                  type="text"
+                  placeholder="请输入学生ID"
+                  value={formData.studentId}
+                  onChange={(e) => updateFormField({ studentId: e.target.value })}
+                  className="h-12"
+                />
+              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

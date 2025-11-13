@@ -4,6 +4,7 @@ export interface VideoAnalysisRequest {
   video1Time?: string; // 第一个视频的上课时间
   video2Time?: string; // 第二个视频的上课时间
   studentName: string;
+  studentId?: string; // 学生ID（可选）
   grade: string;
   level: string;
   unit: string;
@@ -95,6 +96,7 @@ export interface CostBreakdown {
 
 export interface VideoAnalysisResponse {
   studentName: string;
+  studentId?: string;
   grade: string;
   level: string;
   unit: string;

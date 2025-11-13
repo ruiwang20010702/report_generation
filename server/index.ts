@@ -15,6 +15,7 @@ import authRouter from './routes/auth.js';
 import adminRouter from './routes/admin.js';
 import { testConnection } from './config/database.js';
 import { testEmailService } from './services/emailService.js';
+import { errorHandler, AppError, ErrorType } from './utils/errors.js';
 
 const app: Express = express();
 const PORT = process.env.PORT || 3001;
@@ -67,9 +68,45 @@ app.use('/api/analysis/analyze', analysisLimiter);
 app.use('/api/auth/verify-otp', authLimiter);
 app.use('/api/auth/login', authLimiter);
 
-// 请求日志
+// 请求日志中间件 - 结构化日志
 app.use((req: Request, res: Response, next: NextFunction) => {
-  console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
+  const startTime = Date.now();
+  
+  // 记录请求开始
+  const logEntry = {
+    timestamp: new Date().toISOString(),
+    level: 'info',
+    type: 'http_request',
+    method: req.method,
+    path: req.path,
+    ip: req.ip || req.socket.remoteAddress,
+    userAgent: req.get('user-agent'),
+  };
+  
+  // 在开发环境输出详细日志，生产环境使用JSON格式
+  if (process.env.NODE_ENV === 'development') {
+    console.log(`[${logEntry.timestamp}] ${logEntry.method} ${logEntry.path} - ${logEntry.ip}`);
+  } else {
+    console.log(JSON.stringify(logEntry));
+  }
+  
+  // 记录响应时间
+  res.on('finish', () => {
+    const duration = Date.now() - startTime;
+    const responseLog = {
+      ...logEntry,
+      type: 'http_response',
+      statusCode: res.statusCode,
+      duration: `${duration}ms`,
+    };
+    
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[${responseLog.timestamp}] ${responseLog.method} ${responseLog.path} ${responseLog.statusCode} - ${responseLog.duration}`);
+    } else {
+      console.log(JSON.stringify(responseLog));
+    }
+  });
+  
   next();
 });
 
@@ -83,26 +120,22 @@ app.use(express.static(DIST_PATH));
 
 // SPA 回退：非 /api 路由均回退到前端 index.html
 app.get('*', (req: Request, res: Response, next: NextFunction) => {
-  if (req.path.startsWith('/api')) return next();
+  if (req.path.startsWith('/api')) {
+    // API路由不存在，抛出404错误
+    return next(new AppError(
+      ErrorType.NOT_FOUND,
+      `API endpoint not found: ${req.method} ${req.path}`,
+      {
+        userMessage: '请求的接口不存在',
+        context: { path: req.path, method: req.method },
+      }
+    ));
+  }
   return res.sendFile(path.join(DIST_PATH, 'index.html'));
 });
 
-// 错误处理
-app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
-  console.error('Unhandled error:', err);
-  res.status(500).json({
-    error: 'Internal server error',
-    message: err.message
-  });
-});
-
-// 404处理
-app.use((req: Request, res: Response) => {
-  res.status(404).json({
-    error: 'Not found',
-    path: req.path
-  });
-});
+// 错误处理 - 使用统一的错误处理系统（必须在所有路由之后）
+app.use(errorHandler);
 
 // 启动服务器
 app.listen(PORT, async () => {

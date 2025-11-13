@@ -9,6 +9,7 @@ import type { CostBreakdown } from '../types/index.js';
 export interface ReportRecord {
   userId?: string;
   studentName: string;
+  studentId?: string;
   costBreakdown: CostBreakdown;
   analysisData?: any; // 完整的分析报告数据（可选）
 }
@@ -22,15 +23,17 @@ export class ReportRecordService {
       const query = `
         INSERT INTO reports (
           user_id,
+          student_id,
           cost_breakdown,
           analysis,
           created_at
-        ) VALUES ($1, $2, $3, NOW())
+        ) VALUES ($1, $2, $3, $4, NOW())
         RETURNING id, created_at
       `;
 
       const values = [
         record.userId || null,
+        record.studentId || null,
         JSON.stringify(record.costBreakdown),
         record.analysisData ? JSON.stringify(record.analysisData) : null
       ];
@@ -42,6 +45,7 @@ export class ReportRecordService {
       console.log(`✅ 报告记录已保存到数据库`);
       console.log(`   报告ID: ${reportId}`);
       console.log(`   学生姓名: ${record.studentName}`);
+      if (record.studentId) console.log(`   学生ID: ${record.studentId}`);
       console.log(`   生成时间: ${createdAt}`);
       console.log(`   总成本: ¥${record.costBreakdown.total.cost.toFixed(4)}`);
 
@@ -61,6 +65,7 @@ export class ReportRecordService {
       const query = `
         SELECT 
           id,
+          student_id,
           analysis->>'studentName' as student_name,
           cost_breakdown,
           created_at
@@ -117,6 +122,7 @@ export class ReportRecordService {
         SELECT 
           r.id,
           r.user_id,
+          r.student_id,
           u.email as user_email,
           r.analysis->>'studentName' as student_name,
           r.cost_breakdown,

@@ -5,6 +5,7 @@ import { HttpsProxyAgent } from 'https-proxy-agent';
 import { WhisperService, TranscriptionResult } from './whisperService.js';
 import { tingwuTranscriptionService } from './tingwuTranscriptionService.js';
 import { reportRecordService } from './reportRecordService.js';
+import { AppError, ErrorType } from '../utils/errors.js';
 
 /**
  * 📝 报告字数配置
@@ -96,7 +97,18 @@ export class VideoAnalysisService {
       }
     } catch (error) {
       console.error('❌ AI 服务初始化失败:', error instanceof Error ? error.message : error);
-      throw error; // 重新抛出错误，让调用方知道配置有问题
+      // 转换为AppError
+      if (error instanceof AppError) {
+        throw error;
+      }
+      throw new AppError(
+        ErrorType.API_KEY_ERROR,
+        error instanceof Error ? error.message : 'AI服务初始化失败',
+        {
+          originalError: error instanceof Error ? error : undefined,
+          userMessage: 'AI服务配置错误，请检查API密钥设置',
+        }
+      );
     }
   }
 
@@ -119,10 +131,15 @@ export class VideoAnalysisService {
     }
 
     // ❌ GLM 不可用时抛出错误，不再降级
-    throw new Error(
-      '❌ GLM API Key 未配置！\n' +
-      '请设置环境变量 GLM_API_KEY 以使用智谱 GLM 模型。\n' +
-      '系统已配置为强制使用 GLM 模型，不再支持降级到其他模型。'
+    throw new AppError(
+      ErrorType.API_KEY_ERROR,
+      'GLM API Key 未配置',
+      {
+        userMessage: 'GLM API Key 未配置，请设置环境变量 GLM_API_KEY 以使用智谱 GLM 模型。系统已配置为强制使用 GLM 模型。',
+        context: {
+          hint: '请设置环境变量 GLM_API_KEY 以使用智谱 GLM 模型',
+        },
+      }
     );
   }
 
@@ -229,7 +246,14 @@ export class VideoAnalysisService {
     videoLabel: string = 'video'
   ): Promise<{ analysis: string; usage: { promptTokens: number; completionTokens: number; totalTokens: number; cost: number } }> {
     if (!openai) {
-      throw new Error('OpenAI client not initialized');
+      throw new AppError(
+        ErrorType.AI_ANALYSIS_ERROR,
+        'OpenAI client not initialized',
+        {
+          userMessage: 'AI分析服务未初始化，请检查配置',
+          context: { videoLabel },
+        }
+      );
     }
     
     try {
@@ -345,7 +369,23 @@ ${speakerInfo}
       };
     } catch (error) {
       console.error(`❌ Error analyzing ${videoLabel}:`, error);
-      throw new Error(`Failed to analyze transcription: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      
+      // 如果已经是AppError，直接抛出（不修改context，因为它是只读的）
+      if (error instanceof AppError) {
+        throw error;
+      }
+      
+      // 转换为AppError
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      throw new AppError(
+        ErrorType.AI_ANALYSIS_ERROR,
+        `Failed to analyze transcription: ${errorMessage}`,
+        {
+          originalError: error instanceof Error ? error : undefined,
+          userMessage: 'AI分析失败，请稍后重试。如果问题持续，请检查视频内容和API配置。',
+          context: { videoLabel },
+        }
+      );
     }
   }
 
@@ -364,11 +404,23 @@ ${speakerInfo}
       const reason = !tingwuTranscriptionService.hasRemainingQuota()
         ? '免费额度已用完（每天2小时，请等待第二天重置）' 
         : '未配置 AccessKey（需要 ALIYUN_ACCESS_KEY_ID 和 ALIYUN_ACCESS_KEY_SECRET）';
-      throw new Error(
-        `[${videoLabel}] 通义听悟服务不可用：${reason}\n` +
-        `请配置环境变量：\n` +
-        `- ALIYUN_ACCESS_KEY_ID=your_access_key_id\n` +
-        `- ALIYUN_ACCESS_KEY_SECRET=your_access_key_secret`
+      
+      const errorType = !tingwuTranscriptionService.hasRemainingQuota()
+        ? ErrorType.QUOTA_EXCEEDED
+        : ErrorType.SERVICE_UNAVAILABLE;
+      
+      throw new AppError(
+        errorType,
+        `通义听悟服务不可用：${reason}`,
+        {
+          userMessage: `转录服务不可用：${reason}`,
+          context: {
+            videoLabel,
+            hint: reason.includes('额度') 
+              ? '请等待明天额度重置（每天120分钟免费额度）'
+              : '请配置环境变量 ALIYUN_ACCESS_KEY_ID 和 ALIYUN_ACCESS_KEY_SECRET',
+          },
+        }
       );
     }
 
@@ -397,9 +449,39 @@ ${speakerInfo}
           return result;
         } catch (error: any) {
       console.error(`❌ [${videoLabel}] 通义听悟转录失败:`, error.message);
-      throw new Error(
-        `[${videoLabel}] 通义听悟转录失败：${error.message}\n` +
-        `请检查：1. AccessKey 是否正确配置 2. 网络连接是否正常 3. 视频 URL 是否可访问 4. 免费额度是否充足`
+      
+      // 如果已经是AppError，直接抛出（不修改context，因为它是只读的）
+      if (error instanceof AppError) {
+        throw error;
+      }
+      
+      // 根据错误消息推断错误类型
+      const errorMessage = error?.message || 'Unknown error';
+      let errorType = ErrorType.TRANSCRIPTION_ERROR;
+      let userMessage = '视频转录失败，请检查视频链接和内容';
+      
+      if (errorMessage.includes('额度') || errorMessage.includes('quota')) {
+        errorType = ErrorType.QUOTA_EXCEEDED;
+        userMessage = '转录服务免费额度已用完，请等待明天重置或升级套餐';
+      } else if (errorMessage.includes('URL') || errorMessage.includes('链接') || errorMessage.includes('link')) {
+        errorType = ErrorType.VIDEO_PROCESSING_ERROR;
+        userMessage = '视频链接无法访问，请确保链接有效且可公开访问';
+      } else if (errorMessage.includes('AccessKey') || errorMessage.includes('API key')) {
+        errorType = ErrorType.API_KEY_ERROR;
+        userMessage = '转录服务配置错误，请检查AccessKey设置';
+      }
+      
+      throw new AppError(
+        errorType,
+        `通义听悟转录失败：${errorMessage}`,
+        {
+          originalError: error instanceof Error ? error : undefined,
+          userMessage,
+          context: {
+            videoLabel,
+            hint: '请检查：1. AccessKey是否正确配置 2. 网络连接是否正常 3. 视频URL是否可访问 4. 免费额度是否充足',
+          },
+        }
       );
     }
   }
@@ -414,7 +496,14 @@ ${speakerInfo}
     videoLabel: string = 'video'
   ): Promise<{ transcription: TranscriptionResult; analysis: { analysis: string; usage: { promptTokens: number; completionTokens: number; totalTokens: number; cost: number } } }> {
     if (!openai) {
-      throw new Error('OpenAI client not initialized');
+      throw new AppError(
+        ErrorType.AI_ANALYSIS_ERROR,
+        'OpenAI client not initialized',
+        {
+          userMessage: 'AI分析服务未初始化，请检查配置',
+          context: { videoLabel },
+        }
+      );
     }
     
     try {
@@ -432,7 +521,21 @@ ${speakerInfo}
       };
     } catch (error) {
       console.error(`❌ Error analyzing ${videoLabel}:`, error);
-      throw new Error(`Failed to analyze video content: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      
+      // 如果已经是AppError，直接抛出（不修改context，因为它是只读的）
+      if (error instanceof AppError) {
+        throw error;
+      }
+      
+      throw new AppError(
+        ErrorType.AI_ANALYSIS_ERROR,
+        `Failed to analyze video content: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        {
+          originalError: error instanceof Error ? error : undefined,
+          userMessage: '视频分析失败，请稍后重试',
+          context: { videoLabel },
+        }
+      );
     }
   }
 
@@ -442,20 +545,41 @@ ${speakerInfo}
   private async compareVideos(
     video1Result: { transcription: TranscriptionResult; analysis: string; usage?: { promptTokens: number; completionTokens: number; totalTokens: number; cost: number } },
     video2Result: { transcription: TranscriptionResult; analysis: string; usage?: { promptTokens: number; completionTokens: number; totalTokens: number; cost: number } },
-    studentInfo: { studentName: string; grade: string; level: string; unit: string; video1Time?: string; video2Time?: string },
+    studentInfo: { studentName: string; studentId?: string; grade: string; level: string; unit: string; video1Time?: string; video2Time?: string },
     openai: OpenAI
   ): Promise<VideoAnalysisResponse> {
     if (!openai) {
-      throw new Error('OpenAI client not initialized');
+      throw new AppError(
+        ErrorType.AI_ANALYSIS_ERROR,
+        'OpenAI client not initialized',
+        {
+          userMessage: 'AI分析服务未初始化，请检查配置',
+          context: { studentName: studentInfo.studentName },
+        }
+      );
     }
     
     try {
       // 验证转录文本
       if (!video1Result.transcription.text || video1Result.transcription.text.trim().length === 0) {
-        throw new Error('第一个视频的转录文本为空，无法进行比较分析。请检查：1) 视频是否包含语音内容 2) 视频链接是否有效');
+        throw new AppError(
+          ErrorType.TRANSCRIPTION_ERROR,
+          '第一个视频的转录文本为空',
+          {
+            userMessage: '第一个视频的转录文本为空，无法进行比较分析。请检查：1) 视频是否包含语音内容 2) 视频链接是否有效',
+            context: { studentName: studentInfo.studentName, videoNumber: 1 },
+          }
+        );
       }
       if (!video2Result.transcription.text || video2Result.transcription.text.trim().length === 0) {
-        throw new Error('第二个视频的转录文本为空，无法进行比较分析。请检查：1) 视频是否包含语音内容 2) 视频链接是否有效');
+        throw new AppError(
+          ErrorType.TRANSCRIPTION_ERROR,
+          '第二个视频的转录文本为空',
+          {
+            userMessage: '第二个视频的转录文本为空，无法进行比较分析。请检查：1) 视频是否包含语音内容 2) 视频链接是否有效',
+            context: { studentName: studentInfo.studentName, videoNumber: 2 },
+          }
+        );
       }
 
       const video1Analysis = JSON.parse(video1Result.analysis);
@@ -463,10 +587,24 @@ ${speakerInfo}
       
       // 验证分析结果是否有效
       if (!video1Analysis || typeof video1Analysis !== 'object') {
-        throw new Error('第一个视频的分析结果无效');
+        throw new AppError(
+          ErrorType.AI_ANALYSIS_ERROR,
+          '第一个视频的分析结果无效',
+          {
+            userMessage: '第一个视频的分析结果格式错误，请重试',
+            context: { studentName: studentInfo.studentName, videoNumber: 1 },
+          }
+        );
       }
       if (!video2Analysis || typeof video2Analysis !== 'object') {
-        throw new Error('第二个视频的分析结果无效');
+        throw new AppError(
+          ErrorType.AI_ANALYSIS_ERROR,
+          '第二个视频的分析结果无效',
+          {
+            userMessage: '第二个视频的分析结果格式错误，请重试',
+            context: { studentName: studentInfo.studentName, videoNumber: 2 },
+          }
+        );
       }
 
       // 构建说话人对话信息
@@ -655,21 +793,21 @@ ${JSON.stringify(video2Analysis, null, 2)}
       "examples": [
         {
           "word": "从学生实际对话中找出的第1个发音错误的单词（必须是转录文本中真实出现的单词）",
-          "incorrect": "学生实际发出的错误发音（用IPA音标表示），请确保是错误的音标，而不是正确的音标",
-          "correct": "该单词的标准正确发音（用IPA音标表示），请确保是正确的音标，而不是错误的音标",
-          "type": "问题类型（如：元音不准确、重音问题、辅音发音等）"
+          "incorrect": "学生实际发出的错误发音的IPA音标（⚠️ 必须是错误的、不标准的音标，例如如果学生把big读成/bɪg/是错误的，那么这里应该填写/bɪg/；如果学生把/θ/读成/s/，那么这里应该填写含有/s/的错误音标）",
+          "correct": "该单词的标准正确发音的IPA音标（⚠️ 必须是正确的、标准的音标，必须与incorrect字段不同！例如big的正确发音是/bɪɡ/，如果学生读错了，那么correct应该是/bɪɡ/，而incorrect应该是学生实际读出的错误音标）",
+          "type": "问题类型（如：元音不准确、重音问题、辅音发音、/θ/和/s/混淆、/v/和/w/混淆等具体的发音错误类型）"
         },
         {
           "word": "从学生实际对话中找出的第2个发音错误的单词（必须是转录文本中真实出现的单词）",
-          "incorrect": "学生实际发出的错误发音（用IPA音标表示），请确保是错误的音标，而不是正确的音标",
-          "correct": "该单词的标准正确发音（用IPA音标表示），请确保是正确的音标，而不是错误的音标",
-          "type": "问题类型（如：元音不准确、重音问题、辅音发音等）"
+          "incorrect": "学生实际发出的错误发音的IPA音标（⚠️ 必须是错误的、不标准的音标，必须与correct字段的值不同）",
+          "correct": "该单词的标准正确发音的IPA音标（⚠️ 必须是正确的、标准的音标，必须与incorrect字段的值不同）",
+          "type": "问题类型（如：元音不准确、重音问题、辅音发音、/θ/和/s/混淆、/v/和/w/混淆等具体的发音错误类型）"
         },
         {
           "word": "从学生实际对话中找出的第3个发音错误的单词（必须是转录文本中真实出现的单词）",
-          "incorrect": "学生实际发出的错误发音（用IPA音标表示），请确保是错误的音标，而不是正确的音标",
-          "correct": "该单词的标准正确发音（用IPA音标表示），请确保是正确的音标，而不是错误的音标",
-          "type": "问题类型（如：元音不准确、重音问题、辅音发音等）"
+          "incorrect": "学生实际发出的错误发音的IPA音标（⚠️ 必须是错误的、不标准的音标，必须与correct字段的值不同）",
+          "correct": "该单词的标准正确发音的IPA音标（⚠️ 必须是正确的、标准的音标，必须与incorrect字段的值不同）",
+          "type": "问题类型（如：元音不准确、重音问题、辅音发音、/θ/和/s/混淆、/v/和/w/混淆等具体的发音错误类型）"
         }
       ],
       "suggestions": [
@@ -741,7 +879,14 @@ ${JSON.stringify(video2Analysis, null, 2)}
 4. 基于阈值触发规则，在suggestions中智能添加相应建议
 5. 确保返回有效的JSON格式，不要包含注释
 6. 所有文字描述要详实、具体、有数据支撑
-7. 发音示例（pronunciation.examples）中的单词必须从学生的实际转录对话中找出！** 不要使用示例单词（如 nine、bag、fine 等），而是要分析学生在两次课堂中实际说过的单词，找出其中发音有问题的 3 个真实单词。incorrect 应该是学生实际发出的错误发音（用IPA音标表示），correct 是该单词的标准正确发音（用IPA音标表示）。两个音标必须不同！如果转录文本中无法明确判断发音错误，可以基于常见的中国学生发音问题进行推测，但单词本身必须是学生实际说过的。`;
+7. ⚠️⚠️⚠️ 【关键】发音示例（pronunciation.examples）的音标要求：
+   - 单词：必须从学生实际转录对话中找出（不要使用示例单词如 nine、bag、fine 等）
+   - incorrect字段：必须填写学生实际发出的【错误】音标（例如：如果学生把/bɪɡ/读成/bɪg/，这里应该填/bɪg/；如果学生把think读成sink，这里应该填/sɪŋk/）
+   - correct字段：必须填写该单词的【标准正确】音标（例如：big的标准音标是/bɪɡ/，think的标准音标是/θɪŋk/）
+   - ❌ 严重错误：incorrect和correct的音标相同（这意味着没有发音错误，不符合逻辑）
+   - ✅ 正确示例：incorrect="/bɪg/", correct="/bɪɡ/"（尾音/g/和/ɡ/不同）
+   - ✅ 正确示例：incorrect="/sɪŋk/", correct="/θɪŋk/"（首音/s/和/θ/不同）
+   - 如果转录文本无法明确判断具体发音错误，可基于常见中国学生发音问题（如th→s，v→w，/ɪ/→/i/等）进行合理推测，但音标必须体现出错误和正确的区别！`;
 
       const model = this.getModelName(openai);
       const provider = this.getProviderInfo(openai);
@@ -766,7 +911,14 @@ ${JSON.stringify(video2Analysis, null, 2)}
 
       const content = response.choices[0]?.message?.content;
       if (!content) {
-        throw new Error('No response from OpenAI');
+        throw new AppError(
+          ErrorType.AI_ANALYSIS_ERROR,
+          'No response from AI service',
+          {
+            userMessage: 'AI服务未返回有效响应，请稍后重试',
+            context: { studentName: studentInfo.studentName },
+          }
+        );
       }
 
       const analysisData = JSON.parse(content);
@@ -856,7 +1008,21 @@ ${JSON.stringify(video2Analysis, null, 2)}
       };
     } catch (error) {
       console.error('Error comparing videos:', error);
-      throw new Error('Failed to generate comparison report');
+      
+      // 如果已经是AppError，直接抛出（不修改context，因为它是只读的）
+      if (error instanceof AppError) {
+        throw error;
+      }
+      
+      throw new AppError(
+        ErrorType.AI_ANALYSIS_ERROR,
+        `Failed to generate comparison report: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        {
+          originalError: error instanceof Error ? error : undefined,
+          userMessage: '生成对比报告失败，请稍后重试',
+          context: { studentName: studentInfo.studentName },
+        }
+      );
     }
   }
 
@@ -875,7 +1041,14 @@ ${JSON.stringify(video2Analysis, null, 2)}
     // 获取 AI 客户端（GLM）
     const openai = this.getOpenAIClient(request.apiKey);
     if (!openai) {
-      throw new Error('No GLM API key available. Please provide a GLM API key or use mock data.');
+      throw new AppError(
+        ErrorType.API_KEY_ERROR,
+        'No GLM API key available',
+        {
+          userMessage: '未提供GLM API密钥。请提供GLM API密钥或使用模拟数据模式。',
+          context: { studentName: request.studentName },
+        }
+      );
     }
 
     // 否则使用真实的OpenAI API
@@ -935,7 +1108,14 @@ ${JSON.stringify(video2Analysis, null, 2)}
             
             // 验证转录结果
             if (!transcription1.text || transcription1.text.trim().length === 0) {
-              throw new Error('第一个视频转录失败：未提取到任何文本内容。可能原因：1) 视频中没有语音 2) 视频链接无效 3) 转录服务异常');
+              throw new AppError(
+                ErrorType.TRANSCRIPTION_ERROR,
+                '第一个视频转录失败：未提取到任何文本内容',
+                {
+                  userMessage: '第一个视频转录失败：未提取到任何文本内容。可能原因：1) 视频中没有语音 2) 视频链接无效 3) 转录服务异常',
+                  context: { studentName: request.studentName, videoNumber: 1 },
+                }
+              );
             }
             console.log(`📝 [视频1] 转录文本长度: ${transcription1.text.length} 字符`);
             
@@ -967,7 +1147,14 @@ ${JSON.stringify(video2Analysis, null, 2)}
             
             // 验证转录结果
             if (!transcription2.text || transcription2.text.trim().length === 0) {
-              throw new Error('第二个视频转录失败：未提取到任何文本内容。可能原因：1) 视频中没有语音 2) 视频链接无效 3) 转录服务异常');
+              throw new AppError(
+                ErrorType.TRANSCRIPTION_ERROR,
+                '第二个视频转录失败：未提取到任何文本内容',
+                {
+                  userMessage: '第二个视频转录失败：未提取到任何文本内容。可能原因：1) 视频中没有语音 2) 视频链接无效 3) 转录服务异常',
+                  context: { studentName: request.studentName, videoNumber: 2 },
+                }
+              );
             }
             console.log(`📝 [视频2] 转录文本长度: ${transcription2.text.length} 字符`);
             
@@ -1011,6 +1198,7 @@ ${JSON.stringify(video2Analysis, null, 2)}
         video2Result,
         {
           studentName: request.studentName,
+          studentId: request.studentId,
           grade: request.grade,
           level: request.level,
           unit: request.unit,
@@ -1029,6 +1217,7 @@ ${JSON.stringify(video2Analysis, null, 2)}
         reportRecordService.recordReport({
           userId: request.userId,
           studentName: request.studentName,
+          studentId: request.studentId,
           costBreakdown: report.costBreakdown,
           analysisData: report // 保存完整的报告数据
         }).catch(err => {
@@ -1040,18 +1229,39 @@ ${JSON.stringify(video2Analysis, null, 2)}
     } catch (error) {
       console.error('❌ Error in analyzeVideos:', error);
       
-      // 提供更详细的错误信息
-      if (error instanceof Error) {
-        if (error.message.includes('transcribe')) {
-          throw new Error('视频转录失败：' + error.message + '\n请确保视频链接可访问，且包含音频内容。');
-        } else if (error.message.includes('API key')) {
-          throw new Error('API Key 无效：' + error.message);
-        } else if (error.message.includes('download')) {
-          throw new Error('视频下载失败：' + error.message + '\n请检查视频链接是否正确。');
-        }
+      // 如果已经是AppError，直接抛出（不修改context，因为它是只读的）
+      if (error instanceof AppError) {
+        throw error;
       }
       
-      throw error;
+      // 根据错误消息推断错误类型
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      let errorType = ErrorType.INTERNAL_ERROR;
+      let userMessage = '视频分析失败，请稍后重试';
+      
+      if (errorMessage.includes('transcribe') || errorMessage.includes('转录')) {
+        errorType = ErrorType.TRANSCRIPTION_ERROR;
+        userMessage = '视频转录失败，请确保视频链接可访问，且包含音频内容';
+      } else if (errorMessage.includes('API key') || errorMessage.includes('API Key')) {
+        errorType = ErrorType.API_KEY_ERROR;
+        userMessage = 'API密钥无效或未配置，请检查配置';
+      } else if (errorMessage.includes('download') || errorMessage.includes('下载')) {
+        errorType = ErrorType.VIDEO_PROCESSING_ERROR;
+        userMessage = '视频下载失败，请检查视频链接是否正确';
+      } else if (errorMessage.includes('timeout') || errorMessage.includes('超时')) {
+        errorType = ErrorType.TIMEOUT_ERROR;
+        userMessage = '请求超时，请尝试使用较短的视频（建议3-5分钟）';
+      }
+      
+      throw new AppError(
+        errorType,
+        errorMessage,
+        {
+          originalError: error instanceof Error ? error : undefined,
+          userMessage,
+          context: { studentName: request.studentName },
+        }
+      );
     }
   }
 
@@ -1065,6 +1275,7 @@ ${JSON.stringify(video2Analysis, null, 2)}
     // 返回模拟数据
     return {
       studentName: request.studentName,
+      studentId: request.studentId,
       grade: request.grade,
       level: request.level,
       unit: request.unit,
