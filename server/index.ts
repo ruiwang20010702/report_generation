@@ -36,7 +36,7 @@ app.use(express.urlencoded({ extended: true }));
 // 全局限流：防止滥用
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15分钟
-  max: 100, // 每个IP最多100个请求
+  max: 200, // 每个IP最多200个请求（已放宽：原100）
   message: '请求过于频繁，请稍后再试',
   standardHeaders: true,
   legacyHeaders: false,
@@ -45,8 +45,8 @@ const globalLimiter = rateLimit({
 // 分析接口专用限流：控制并发和成本
 const analysisLimiter = rateLimit({
   windowMs: 10 * 60 * 1000, // 10分钟窗口
-  max: 2, // 每10分钟最多2个分析请求
-  message: '视频分析请求过于频繁，请等待10分钟后再试。每10分钟限制2次分析。',
+  max: 15, // 每10分钟最多15个分析请求（已大幅放宽：原5次）
+  message: '视频分析请求过于频繁，请等待10分钟后再试。每10分钟限制15次分析。',
   standardHeaders: true,
   legacyHeaders: false,
   skipSuccessfulRequests: false, // 即使成功也计数
@@ -126,4 +126,3 @@ app.listen(PORT, async () => {
 });
 
 export default app;
-
