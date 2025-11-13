@@ -23,6 +23,9 @@ import { testEmailService } from './services/emailService.js';
 import { testAlertSystem } from './services/alertService.js';
 import { errorHandler, AppError, ErrorType } from './utils/errors.js';
 import { setupGracefulShutdown } from './utils/gracefulShutdown.js';
+import { enableAllSecurityMiddleware } from './middleware/security.js';
+import { enableStructuredLogging, logger } from './middleware/logging.js';
+import { metricsMiddleware, enablePerformanceMonitoring, createMetricsEndpoint } from './middleware/metrics.js';
 
 const app: Express = express();
 const PORT = process.env.PORT || 3001;
@@ -38,9 +41,20 @@ if (sentryEnabled) {
   app.use(sentryTracingHandler);
 }
 
+// 结构化日志中间件（必须在其他中间件之前，以便追踪所有请求）
+app.use(enableStructuredLogging());
+
+// 性能指标收集中间件
+app.use(metricsMiddleware);
+
+// 安全中间件
+app.use(enableAllSecurityMiddleware());
+
 // 中间件
 app.use(cors({
-  origin: true, // 开发环境允许所有来源
+  origin: process.env.NODE_ENV === 'production' 
+    ? process.env.ALLOWED_ORIGINS?.split(',') || false 
+    : true, // 生产环境限制CORS，开发环境允许所有来源
   credentials: true
 }));
 app.use(cookieParser());
@@ -81,53 +95,14 @@ app.use('/api/analysis/analyze', analysisLimiter);
 app.use('/api/auth/verify-otp', authLimiter);
 app.use('/api/auth/login', authLimiter);
 
-// 请求日志中间件 - 结构化日志
-app.use((req: Request, res: Response, next: NextFunction) => {
-  const startTime = Date.now();
-  
-  // 记录请求开始
-  const logEntry = {
-    timestamp: new Date().toISOString(),
-    level: 'info',
-    type: 'http_request',
-    method: req.method,
-    path: req.path,
-    ip: req.ip || req.socket.remoteAddress,
-    userAgent: req.get('user-agent'),
-  };
-  
-  // 在开发环境输出详细日志，生产环境使用JSON格式
-  if (process.env.NODE_ENV === 'development') {
-    console.log(`[${logEntry.timestamp}] ${logEntry.method} ${logEntry.path} - ${logEntry.ip}`);
-  } else {
-    console.log(JSON.stringify(logEntry));
-  }
-  
-  // 记录响应时间
-  res.on('finish', () => {
-    const duration = Date.now() - startTime;
-    const responseLog = {
-      ...logEntry,
-      type: 'http_response',
-      statusCode: res.statusCode,
-      duration: `${duration}ms`,
-    };
-    
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`[${responseLog.timestamp}] ${responseLog.method} ${responseLog.path} ${responseLog.statusCode} - ${responseLog.duration}`);
-    } else {
-      console.log(JSON.stringify(responseLog));
-    }
-  });
-  
-  next();
-});
-
 // 路由
 app.use('/api/analysis', analysisRouter);
 app.use('/api/auth', authRouter);
 app.use('/api/admin', adminRouter);
 app.use('/api', healthRouter); // 健康检查路由（/api/health/*）
+
+// 性能指标端点
+app.get('/api/metrics', createMetricsEndpoint());
 
 // 测试告警端点（仅开发环境）
 if (process.env.NODE_ENV === 'development') {
@@ -187,11 +162,18 @@ const server = app.listen(PORT, async () => {
   console.log(`🔑 通义听悟 AccessKey: ${process.env.ALIYUN_ACCESS_KEY_ID ? 'SET' : 'NOT SET'}`);
   console.log(`🔑 通义听悟 AppKey: ${process.env.ALIYUN_TINGWU_APP_KEY ? 'SET' : 'NOT SET (可选，某些API版本可能需要)'}`);
   
+  logger.info('config', 'Service configuration', {
+    openaiConfigured: !!process.env.OPENAI_API_KEY,
+    aliyunConfigured: !!process.env.ALIYUN_ACCESS_KEY_ID,
+    tingwuConfigured: !!process.env.ALIYUN_TINGWU_APP_KEY,
+    sentryEnabled,
+  });
+  
   // 测试数据库连接
   if (process.env.DATABASE_URL || process.env.POSTGRES_CONNECTION_STRING || process.env.DB_HOST) {
     await testConnection();
   } else {
-    console.log('⚠️  数据库配置未设置，跳过连接测试');
+    logger.warn('database', 'Database configuration not set, skipping connection test');
   }
   
   // 测试邮件服务配置
@@ -200,10 +182,13 @@ const server = app.listen(PORT, async () => {
   // 显示告警系统配置状态
   const alertEmail = process.env.ALERT_EMAIL;
   if (alertEmail) {
-    console.log(`🚨 告警系统已启用，接收邮箱: ${alertEmail}`);
+    logger.info('alert', `Alert system enabled`, { alertEmail });
   } else {
-    console.log('ℹ️  告警系统未配置 (设置 ALERT_EMAIL 以启用)');
+    logger.info('alert', 'Alert system not configured (set ALERT_EMAIL to enable)');
   }
+  
+  // 启动性能监控（每15分钟报告一次）
+  enablePerformanceMonitoring(15);
 });
 
 // 设置优雅关闭
