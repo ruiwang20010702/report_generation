@@ -26,13 +26,23 @@ tests/
 npm install
 ```
 
-2. 配置测试环境变量：
+2. 配置数据库（重要！）：
 ```bash
-cp .env.example .env.test
-# 编辑 .env.test 文件，设置测试环境变量
+# 确保数据库已初始化并执行了所有迁移脚本
+# 详见 database/README.md
+
+# 快速检查数据库表是否存在
+psql -c "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public';"
 ```
 
-3. 启动测试服务器：
+3. 配置测试环境变量：
+```bash
+cp .env.example .env
+# 编辑 .env 文件，设置数据库连接信息
+# 测试将使用相同的数据库配置
+```
+
+4. 启动测试服务器（可选，仅 API 测试需要）：
 ```bash
 # 在一个终端中启动服务器
 npm run dev
@@ -217,6 +227,36 @@ it('long running test', async () => {
 2. ✅ `DATABASE_URL` 环境变量正确配置
 3. ✅ 数据库用户有足够的权限
 4. ✅ 数据库表已创建（运行迁移脚本）
+
+检查数据库连接：
+```bash
+# 测试数据库连接
+psql $DATABASE_URL -c "SELECT NOW();"
+```
+
+### Q2.1: 测试失败 "table 'analysis_reports' does not exist"？
+
+**原因**：这是旧的表名，新版本使用 `reports` 表。
+
+**解决方案**：
+1. 确保已执行数据库初始化脚本：
+   ```bash
+   psql $DATABASE_URL -f database/init.sql
+   ```
+
+2. 执行所有迁移脚本：
+   ```bash
+   psql $DATABASE_URL -f database/add_student_id.sql
+   psql $DATABASE_URL -f database/update_reports_table.sql
+   psql $DATABASE_URL -f database/add_cost_tracking.sql
+   ```
+
+3. 验证表结构：
+   ```bash
+   psql $DATABASE_URL -c "SELECT column_name FROM information_schema.columns WHERE table_name = 'reports';"
+   ```
+
+详细的数据库配置指南请参考：`database/README.md`
 
 ### Q3: 端口冲突？
 

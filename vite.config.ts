@@ -12,6 +12,13 @@ export default defineConfig(({ mode }) => ({
       '/api': {
         target: 'http://localhost:3001',
         changeOrigin: true,
+        // Vite代理默认没有超时限制，但我们可以通过configure设置
+        configure: (proxy: any) => {
+          proxy.on('proxyReq', (proxyReq: any, req: any) => {
+            // 设置请求超时为10分钟
+            req.setTimeout(600000);
+          });
+        },
       },
     },
   },

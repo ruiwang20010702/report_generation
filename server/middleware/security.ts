@@ -370,14 +370,15 @@ export function slowlorisProtection(timeoutSeconds: number = 30) {
 
 /**
  * 组合安全中间件 - 一键启用所有安全措施
+ * @param slowlorisTimeoutSeconds - 慢速请求超时时间（秒），默认600秒（10分钟）以支持长时间运行的任务
  */
-export function enableAllSecurityMiddleware() {
+export function enableAllSecurityMiddleware(slowlorisTimeoutSeconds: number = 600) {
   return [
     securityHeaders,
     sanitizePathParams,
     sanitizeRequestBody,
     detectSqlInjection,
-    slowlorisProtection(30),
+    slowlorisProtection(slowlorisTimeoutSeconds),
   ];
 }
 

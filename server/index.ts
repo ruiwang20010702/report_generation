@@ -191,6 +191,19 @@ const server = app.listen(PORT, async () => {
   enablePerformanceMonitoring(15);
 });
 
+// 设置服务器超时时间为10分钟（视频分析需要较长时间）
+// 注意：这需要与前端的axios timeout保持一致
+server.timeout = 600000; // 10分钟 = 600,000毫秒
+server.keepAliveTimeout = 610000; // 稍长于timeout，确保连接保持
+server.headersTimeout = 615000; // 稍长于keepAliveTimeout
+
+// 验证超时配置
+logger.info('config', 'Server timeout configuration', {
+  timeout: `${server.timeout}ms (${server.timeout / 1000}s)`,
+  keepAliveTimeout: `${server.keepAliveTimeout}ms (${server.keepAliveTimeout / 1000}s)`,
+  headersTimeout: `${server.headersTimeout}ms (${server.headersTimeout / 1000}s)`,
+});
+
 // 设置优雅关闭
 setupGracefulShutdown(server);
 

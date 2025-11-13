@@ -74,21 +74,27 @@ const MOCK_REPORT_DATA = {
       examples: [
         {
           word: "awfully",
-          incorrect: "/ˈɔː.fəli/ (a-fol-y)",
-          correct: "/ˈɔː.f**l*i/",
+          incorrect: "/ˈɔː.fəli/",
+          correct: "/ˈɔː.fli/",
           type: "元音不准确"
         },
         {
           word: "ballet",
-          incorrect: "/bæˈleɪ/ (ba-late)",
+          incorrect: "/bæˈleɪ/",
           correct: "/ˈbæl.eɪ/",
           type: "重音问题"
         },
         {
-          word: "evening",
-          incorrect: "/ˈiːˈvænɪŋ/ (even-ing)",
-          correct: "",
-          type: "已改善"
+          word: "think",
+          incorrect: "/sɪŋk/",
+          correct: "/θɪŋk/",
+          type: "th音问题"
+        },
+        {
+          word: "van",
+          incorrect: "/wæn/",
+          correct: "/væn/",
+          type: "v音问题"
         }
       ],
       persistentIssues: {

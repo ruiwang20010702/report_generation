@@ -1,11 +1,15 @@
 import nodemailer from 'nodemailer';
 
-// 邮件配置
-const SMTP_HOST = process.env.SMTP_HOST || 'smtp.gmail.com';
-const SMTP_PORT = parseInt(process.env.SMTP_PORT || '587');
-const SMTP_USER = process.env.SMTP_USER || '';
-const SMTP_PASS = process.env.SMTP_PASS || '';
-const SMTP_FROM = process.env.SMTP_FROM || SMTP_USER || 'noreply@example.com';
+// 邮件配置 - 使用函数获取，确保在运行时读取环境变量
+function getEmailConfig() {
+  return {
+    SMTP_HOST: process.env.SMTP_HOST || 'smtp.gmail.com',
+    SMTP_PORT: parseInt(process.env.SMTP_PORT || '587'),
+    SMTP_USER: process.env.SMTP_USER || '',
+    SMTP_PASS: process.env.SMTP_PASS || '',
+    SMTP_FROM: process.env.SMTP_FROM || process.env.SMTP_USER || 'noreply@example.com',
+  };
+}
 
 // 创建邮件传输器
 let transporter: nodemailer.Transporter | null = null;
@@ -18,10 +22,18 @@ function getTransporter(): nodemailer.Transporter {
     return transporter;
   }
 
+  const config = getEmailConfig();
+  
   // 如果没有配置 SMTP，使用控制台模式（仅用于开发）
-  if (!SMTP_USER || !SMTP_PASS) {
+  if (!config.SMTP_USER || !config.SMTP_PASS) {
     console.warn('⚠️  邮件服务未配置，验证码将仅打印到控制台');
     console.warn('   请设置环境变量: SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS');
+    console.warn('   当前配置:', {
+      SMTP_HOST: config.SMTP_HOST,
+      SMTP_PORT: config.SMTP_PORT,
+      SMTP_USER: config.SMTP_USER ? '已设置' : '未设置',
+      SMTP_PASS: config.SMTP_PASS ? '已设置' : '未设置',
+    });
     
     // 创建一个假的传输器，实际不会发送邮件
     transporter = nodemailer.createTransport({
@@ -30,13 +42,19 @@ function getTransporter(): nodemailer.Transporter {
     return transporter;
   }
 
+  console.log('✅ 正在初始化邮件服务:', {
+    host: config.SMTP_HOST,
+    port: config.SMTP_PORT,
+    user: config.SMTP_USER,
+  });
+
   transporter = nodemailer.createTransport({
-    host: SMTP_HOST,
-    port: SMTP_PORT,
-    secure: SMTP_PORT === 465, // true for 465, false for other ports
+    host: config.SMTP_HOST,
+    port: config.SMTP_PORT,
+    secure: config.SMTP_PORT === 465, // true for 465, false for other ports
     auth: {
-      user: SMTP_USER,
-      pass: SMTP_PASS,
+      user: config.SMTP_USER,
+      pass: config.SMTP_PASS,
     },
     connectionTimeout: 10000, // 10秒连接超时
     greetingTimeout: 10000, // 10秒问候超时
@@ -54,9 +72,10 @@ export async function sendVerificationEmail(
   code: string
 ): Promise<void> {
   const transporter = getTransporter();
+  const config = getEmailConfig();
 
   const mailOptions = {
-    from: `"51Talk Video Analysis" <${SMTP_FROM}>`,
+    from: `"51Talk Video Analysis" <${config.SMTP_FROM}>`,
     to,
     subject: '您的登录验证码',
     html: `
@@ -78,7 +97,7 @@ export async function sendVerificationEmail(
 
   try {
     // 如果没有配置 SMTP，只打印到控制台
-    if (!SMTP_USER || !SMTP_PASS) {
+    if (!config.SMTP_USER || !config.SMTP_PASS) {
       console.log(`\n📧 验证码邮件（未配置邮件服务，仅打印到控制台）:`);
       console.log(`   收件人: ${to}`);
       console.log(`   验证码: ${code}`);
@@ -100,13 +119,56 @@ export async function sendVerificationEmail(
 }
 
 /**
+ * 通用邮件发送函数
+ */
+export async function sendEmail(options: {
+  to: string;
+  subject: string;
+  html: string;
+  text?: string;
+}): Promise<void> {
+  const transporter = getTransporter();
+  const config = getEmailConfig();
+
+  const mailOptions = {
+    from: `"51Talk Video Analysis" <${config.SMTP_FROM}>`,
+    to: options.to,
+    subject: options.subject,
+    html: options.html,
+    text: options.text || options.html.replace(/<[^>]*>/g, ''), // 简单的 HTML 转文本
+  };
+
+  try {
+    // 如果没有配置 SMTP，只打印到控制台
+    if (!config.SMTP_USER || !config.SMTP_PASS) {
+      console.log(`\n📧 邮件（未配置邮件服务，仅打印到控制台）:`);
+      console.log(`   收件人: ${options.to}`);
+      console.log(`   主题: ${options.subject}`);
+      console.log(`   内容: ${mailOptions.text.substring(0, 100)}...\n`);
+      return;
+    }
+
+    const info = await transporter.sendMail(mailOptions);
+    console.log(`✅ 邮件已发送: ${options.to} (Message ID: ${info.messageId})`);
+  } catch (error: any) {
+    console.error('❌ 发送邮件失败:', error);
+    // 如果邮件发送失败，仍然打印到控制台以便调试
+    console.log(`\n📧 邮件（发送失败，打印到控制台）:`);
+    console.log(`   收件人: ${options.to}`);
+    console.log(`   主题: ${options.subject}\n`);
+    throw new Error('邮件发送失败，请检查邮件服务配置');
+  }
+}
+
+/**
  * 测试邮件服务配置
  */
 export async function testEmailService(): Promise<boolean> {
   try {
+    const config = getEmailConfig();
     const transporter = getTransporter();
     
-    if (!SMTP_USER || !SMTP_PASS) {
+    if (!config.SMTP_USER || !config.SMTP_PASS) {
       console.log('⚠️  邮件服务未配置，跳过测试');
       return false;
     }

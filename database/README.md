@@ -1,184 +1,215 @@
-# 数据库设置指南
+# 数据库迁移指南
 
 ## 📋 概述
 
-本项目使用 PostgreSQL 数据库存储用户信息和验证码。需要先创建数据库表结构，然后配置环境变量。
+本目录包含所有数据库初始化和迁移脚本。请按照以下顺序执行脚本以确保数据库结构正确。
 
 ## 🚀 快速开始
 
-### 1. 创建数据库表
+### 新数据库初始化
 
-在阿里云 RDS PostgreSQL 数据库中执行以下 SQL 脚本（按顺序执行）：
+如果你是第一次设置数据库，请执行以下步骤：
 
-```bash
-# 1. 创建用户表
-psql -h your-database-host -U your-user -d your-database -f database/create_users_table.sql
+1. **在 Zeabur PostgreSQL Web Console 中执行初始化脚本**
+   ```bash
+   # 执行主初始化脚本（创建所有基础表）
+   psql -f database/init.sql
+   ```
 
-# 2. 创建 OTP 表
-psql -h your-database-host -U your-user -d your-database -f database/create_otps_table.sql
+2. **执行迁移脚本（按顺序）**
+   ```bash
+   # 添加学生ID字段
+   psql -f database/add_student_id.sql
+   
+   # 更新报告表结构
+   psql -f database/update_reports_table.sql
+   
+   # 添加成本追踪
+   psql -f database/add_cost_tracking.sql
+   
+   # 优化索引
+   psql -f database/optimize_indexes.sql
+   ```
 
-# 3. 创建报告表（如果还没有）
-psql -h your-database-host -U your-user -d your-database -f database/create_reports_table.sql
-```
+### 在 Zeabur Web Console 中执行
 
-或者直接在数据库管理界面（如 pgAdmin、DBeaver）中执行 SQL 脚本。
+如果无法使用 `psql` 命令行，可以在 Zeabur 的 PostgreSQL Web Console 中直接复制粘贴 SQL 脚本内容执行。
 
-### 2. 配置环境变量
+## 📁 脚本说明
 
-在项目根目录创建 `.env` 文件，添加以下配置：
+### 基础表创建
 
-```env
-# ========================================
-# 数据库配置（PostgreSQL）
-# ========================================
-DB_HOST=your-database-host.rds.aliyuncs.com
-DB_PORT=5432
-DB_NAME=your_database_name
-DB_USER=your_database_user
-DB_PASSWORD=your_database_password
+| 文件 | 说明 | 何时使用 |
+|------|------|----------|
+| `init.sql` | **主初始化脚本**，创建 users、otps、reports 三个核心表 | 新数据库首次初始化 |
+| `create_users_table.sql` | 单独创建 users 表 | 仅需要用户表时 |
+| `create_otps_table.sql` | 单独创建 otps 表 | 仅需要验证码表时 |
+| `create_reports_table.sql` | 单独创建 reports 表 | 仅需要报告表时 |
 
-# 数据库连接池配置（可选）
-DB_POOL_MAX=20
-DB_POOL_IDLE_TIMEOUT=30000
-DB_POOL_CONNECTION_TIMEOUT=2000
+### 迁移脚本（Migration）
 
-# SSL 配置（生产环境推荐启用）
-DB_SSL=true
-DB_SSL_REJECT_UNAUTHORIZED=false
-
-# ========================================
-# JWT 配置
-# ========================================
-JWT_SECRET=your-super-secret-jwt-key-change-in-production
-
-# ========================================
-# 其他配置...
-# ========================================
-```
-
-### 3. 测试连接
-
-启动服务器后，会自动测试数据库连接。如果连接成功，会看到：
-
-```
-✅ 数据库连接成功: 2024-01-01 12:00:00+00
-```
-
-如果连接失败，会看到错误信息，请检查：
-- 数据库连接信息是否正确
-- 数据库是否允许远程连接
-- 防火墙规则是否允许访问
-- SSL 配置是否正确
-
-## 📊 数据库表结构
-
-### users 表
-
-存储用户信息。
-
-| 字段 | 类型 | 说明 |
+| 文件 | 说明 | 依赖 |
 |------|------|------|
-| id | UUID | 用户唯一标识符（主键） |
-| email | TEXT | 用户邮箱（唯一） |
+| `add_student_id.sql` | 为 reports 表添加 student_id 字段 | 需要先有 reports 表 |
+| `update_reports_table.sql` | 添加 student_name 和 analysis_data 字段 | 需要先有 reports 表 |
+| `add_cost_tracking.sql` | 添加 cost_breakdown 字段用于成本追踪 | 需要先有 reports 表 |
+| `add_password_to_users.sql` | 为 users 表添加 password 字段 | 需要先有 users 表 |
+
+### 优化脚本
+
+| 文件 | 说明 | 何时使用 |
+|------|------|----------|
+| `optimize_indexes.sql` | 优化数据库索引，提升查询性能 | 数据量较大时或性能优化时 |
+
+## ✅ 验证数据库结构
+
+执行以下 SQL 验证表结构是否正确：
+
+```sql
+-- 查看所有表
+SELECT table_name 
+FROM information_schema.tables 
+WHERE table_schema = 'public' 
+ORDER BY table_name;
+
+-- 查看 reports 表结构
+SELECT column_name, data_type, is_nullable 
+FROM information_schema.columns 
+WHERE table_name = 'reports' 
+ORDER BY ordinal_position;
+
+-- 查看 reports 表的索引
+SELECT indexname, indexdef 
+FROM pg_indexes 
+WHERE tablename = 'reports';
+```
+
+### 预期的 reports 表结构
+
+| 字段名 | 类型 | 说明 |
+|--------|------|------|
+| id | UUID | 主键 |
+| user_id | UUID | 用户ID（外键） |
+| video_url | TEXT | 视频URL |
+| transcript | TEXT | 转录文本 |
+| analysis | JSONB | 分析结果 |
+| student_id | TEXT | 学生ID |
+| student_name | TEXT | 学生姓名 |
+| analysis_data | JSONB | 完整分析数据 |
+| cost_breakdown | JSONB | 成本详情 |
 | created_at | TIMESTAMP | 创建时间 |
 | updated_at | TIMESTAMP | 更新时间 |
 
-### otps 表
+### 预期的索引
 
-存储邮箱验证码。
+- `idx_reports_user_id` - 用户ID索引
+- `idx_reports_created_at` - 创建时间索引
+- `idx_reports_student_id` - 学生ID索引
+- `idx_reports_student_name` - 学生姓名索引
+- `idx_reports_cost_breakdown` - 成本数据索引（GIN）
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| id | UUID | 验证码唯一标识符（主键） |
-| email | TEXT | 用户邮箱 |
-| code | TEXT | 验证码（6位数字） |
-| expires_at | TIMESTAMP | 过期时间 |
-| created_at | TIMESTAMP | 创建时间 |
-| used | BOOLEAN | 是否已使用 |
-| used_at | TIMESTAMP | 使用时间 |
+## 🔧 常见问题
 
-### reports 表
+### 1. 测试失败："table 'analysis_reports' does not exist"
 
-存储分析报告（如果已创建）。
-
-## 🔧 维护任务
-
-### 清理过期验证码
-
-可以定期执行清理函数（可选）：
-
-```sql
-SELECT cleanup_expired_otps();
-```
-
-或者手动清理：
-
-```sql
-DELETE FROM otps WHERE expires_at < NOW() - INTERVAL '1 day';
-```
-
-### 查看数据库统计
-
-```sql
--- 查看用户数量
-SELECT COUNT(*) FROM users;
-
--- 查看未使用的验证码数量
-SELECT COUNT(*) FROM otps WHERE used = FALSE AND expires_at > NOW();
-
--- 查看最近的验证码
-SELECT email, created_at, expires_at, used 
-FROM otps 
-ORDER BY created_at DESC 
-LIMIT 10;
-```
-
-## ⚠️ 注意事项
-
-1. **生产环境**：
-   - 必须启用 SSL 连接（`DB_SSL=true`）
-   - 使用强密码的 JWT_SECRET
-   - 定期清理过期验证码
-   - 监控数据库连接池状态
-
-2. **安全建议**：
-   - 不要在代码中硬编码数据库密码
-   - 使用环境变量管理敏感信息
-   - 定期更新数据库密码
-   - 限制数据库访问 IP
-
-3. **性能优化**：
-   - 根据实际负载调整连接池大小
-   - 定期分析慢查询
-   - 监控数据库性能指标
-
-## 🐛 故障排除
-
-### 问题：数据库连接失败
+**原因**：你的数据库使用的是 `reports` 表名，而不是 `analysis_reports`。
 
 **解决方案**：
-1. 检查环境变量是否正确设置
-2. 确认数据库服务是否运行
-3. 检查网络连接和防火墙规则
-4. 验证数据库用户权限
+- 数据库表名是 `reports`（正确）
+- 测试文件已更新为使用 `reports` 表名
+- 确保执行了所有迁移脚本
 
-### 问题：表不存在错误
+### 2. 字段不存在错误
+
+**原因**：未执行迁移脚本。
+
+**解决方案**：按顺序执行所有迁移脚本：
+```bash
+psql -f database/add_student_id.sql
+psql -f database/update_reports_table.sql
+psql -f database/add_cost_tracking.sql
+```
+
+### 3. 索引不存在
+
+**原因**：未执行索引优化脚本。
 
 **解决方案**：
-1. 确认已执行所有 SQL 脚本
-2. 检查数据库名称是否正确
-3. 验证用户是否有创建表的权限
+```bash
+psql -f database/optimize_indexes.sql
+```
 
-### 问题：连接池耗尽
+## 🔄 迁移清单
 
-**解决方案**：
-1. 增加 `DB_POOL_MAX` 值
-2. 检查是否有连接泄漏
-3. 优化查询性能，减少连接持有时间
+在新环境部署时，请按照以下清单执行：
 
-## 📚 相关文档
+- [ ] 1. 执行 `init.sql` 创建基础表
+- [ ] 2. 验证三个表（users、otps、reports）已创建
+- [ ] 3. 执行 `add_student_id.sql` 添加学生ID
+- [ ] 4. 执行 `update_reports_table.sql` 添加学生姓名和分析数据
+- [ ] 5. 执行 `add_cost_tracking.sql` 添加成本追踪
+- [ ] 6. 执行 `optimize_indexes.sql` 优化索引
+- [ ] 7. 验证所有字段和索引都已创建
+- [ ] 8. 运行测试：`npm test`
 
-- [PostgreSQL 官方文档](https://www.postgresql.org/docs/)
-- [pg 库文档](https://node-postgres.com/)
-- [阿里云 RDS PostgreSQL 文档](https://help.aliyun.com/product/26090.html)
+## 📝 数据库连接配置
 
+确保你的 `.env` 文件包含正确的数据库连接信息：
+
+```env
+# Zeabur 模式（推荐）
+DATABASE_URL=postgresql://username:password@host:port/database
+DB_SSL=false
+
+# 或者传统模式
+DB_HOST=your-host
+DB_PORT=5432
+DB_NAME=your-database
+DB_USER=your-username
+DB_PASSWORD=your-password
+```
+
+## 🧪 运行数据库测试
+
+执行集成测试验证数据库配置：
+
+```bash
+# 运行所有测试
+npm test
+
+# 只运行数据库测试
+npm test -- tests/integration/database.test.ts
+```
+
+## 📊 成本追踪查询
+
+查看成本统计：
+
+```sql
+-- 总成本统计
+SELECT 
+  COUNT(*) as report_count,
+  SUM((cost_breakdown->'total'->>'cost')::numeric) as total_cost_cny
+FROM reports
+WHERE cost_breakdown IS NOT NULL;
+
+-- 按日期统计
+SELECT 
+  DATE(created_at) as date,
+  COUNT(*) as report_count,
+  SUM((cost_breakdown->'total'->>'cost')::numeric) as daily_cost
+FROM reports
+WHERE cost_breakdown IS NOT NULL
+GROUP BY DATE(created_at)
+ORDER BY date DESC;
+```
+
+## 🛟 需要帮助？
+
+如果遇到问题：
+
+1. 检查所有迁移脚本是否都已执行
+2. 验证数据库表结构是否正确
+3. 确认环境变量配置正确
+4. 查看测试输出的错误信息
+5. 参考 `tests/README.md` 了解测试配置

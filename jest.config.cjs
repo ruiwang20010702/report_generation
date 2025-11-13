@@ -3,24 +3,21 @@
  * 用于运行集成测试
  */
 
-export default {
-  preset: 'ts-jest/presets/default-esm',
+module.exports = {
+  preset: 'ts-jest',
   testEnvironment: 'node',
-  extensionsToTreatAsEsm: ['.ts'],
-  moduleNameMapper: {
-    '^(\\.{1,2}/.*)\\.js$': '$1',
-  },
-  transform: {
-    '^.+\\.tsx?$': [
-      'ts-jest',
-      {
-        useESM: true,
-      },
-    ],
-  },
+  roots: ['<rootDir>'],
   testMatch: [
     '**/tests/**/*.test.ts',
   ],
+  transform: {
+    '^.+\\.tsx?$': ['ts-jest', {
+      tsconfig: {
+        esModuleInterop: true,
+        allowSyntheticDefaultImports: true,
+      }
+    }],
+  },
   collectCoverageFrom: [
     'server/**/*.ts',
     '!server/**/*.d.ts',

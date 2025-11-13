@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
-import { getPool, testConnection } from '../../server/config/database.js';
+import { pool, testConnection } from '../../server/config/database';
 
 describe('Database Connection', () => {
   beforeAll(async () => {
@@ -13,12 +13,10 @@ describe('Database Connection', () => {
   
   afterAll(async () => {
     // 清理连接池
-    const pool = getPool();
     await pool.end();
   });
   
   it('should connect to the database', async () => {
-    const pool = getPool();
     const client = await pool.connect();
     
     try {
@@ -31,15 +29,14 @@ describe('Database Connection', () => {
   });
   
   it('should have correct table structure', async () => {
-    const pool = getPool();
     const client = await pool.connect();
     
     try {
-      // 检查 analysis_reports 表是否存在
+      // 检查 reports 表是否存在
       const result = await client.query(`
         SELECT EXISTS (
           SELECT FROM information_schema.tables 
-          WHERE table_name = 'analysis_reports'
+          WHERE table_name = 'reports'
         );
       `);
       
@@ -49,13 +46,13 @@ describe('Database Connection', () => {
       const columns = await client.query(`
         SELECT column_name, data_type 
         FROM information_schema.columns 
-        WHERE table_name = 'analysis_reports'
+        WHERE table_name = 'reports'
         ORDER BY ordinal_position;
       `);
       
       const columnNames = columns.rows.map(row => row.column_name);
       expect(columnNames).toContain('id');
-      expect(columnNames).toContain('student_id');
+      expect(columnNames).toContain('user_id');
       expect(columnNames).toContain('video_url');
       expect(columnNames).toContain('transcript');
       expect(columnNames).toContain('analysis');
@@ -66,54 +63,51 @@ describe('Database Connection', () => {
   });
   
   it('should have correct indexes', async () => {
-    const pool = getPool();
     const client = await pool.connect();
     
     try {
       const result = await client.query(`
         SELECT indexname 
         FROM pg_indexes 
-        WHERE tablename = 'analysis_reports';
+        WHERE tablename = 'reports';
       `);
       
       const indexNames = result.rows.map(row => row.indexname);
       
       // 检查关键索引是否存在
-      expect(indexNames).toContain('idx_student_id');
-      expect(indexNames).toContain('idx_created_at');
-      expect(indexNames).toContain('idx_student_created');
+      expect(indexNames).toContain('idx_reports_user_id');
+      expect(indexNames).toContain('idx_reports_created_at');
     } finally {
       client.release();
     }
   });
   
   it('should insert and retrieve a record', async () => {
-    const pool = getPool();
     const client = await pool.connect();
     
     try {
-      // 插入测试记录
+      // 插入测试记录（不需要 user_id，因为它可以为 NULL）
       const insertResult = await client.query(`
-        INSERT INTO analysis_reports 
-        (student_id, video_url, transcript, analysis)
-        VALUES ($1, $2, $3, $4)
+        INSERT INTO reports 
+        (video_url, transcript, analysis)
+        VALUES ($1, $2, $3)
         RETURNING id;
-      `, ['TEST001', 'https://example.com/test.mp4', 'Test transcript', { test: true }]);
+      `, ['https://example.com/test.mp4', 'Test transcript', { test: true }]);
       
       expect(insertResult.rows).toHaveLength(1);
       const insertedId = insertResult.rows[0].id;
       
       // 检索记录
       const selectResult = await client.query(`
-        SELECT * FROM analysis_reports WHERE id = $1;
+        SELECT * FROM reports WHERE id = $1;
       `, [insertedId]);
       
       expect(selectResult.rows).toHaveLength(1);
-      expect(selectResult.rows[0].student_id).toBe('TEST001');
       expect(selectResult.rows[0].video_url).toBe('https://example.com/test.mp4');
+      expect(selectResult.rows[0].transcript).toBe('Test transcript');
       
       // 清理测试数据
-      await client.query(`DELETE FROM analysis_reports WHERE id = $1;`, [insertedId]);
+      await client.query(`DELETE FROM reports WHERE id = $1;`, [insertedId]);
     } finally {
       client.release();
     }

@@ -101,7 +101,11 @@ describe('Error Handling', () => {
     const data = await response.json();
     
     expect(data).toHaveProperty('error');
-    expect(typeof data.error).toBe('string');
+    expect(typeof data.error).toBe('object');
+    expect(data.error).toHaveProperty('type');
+    expect(data.error).toHaveProperty('message');
+    expect(data.error).toHaveProperty('requestId');
+    expect(data.error).toHaveProperty('timestamp');
   });
 });
 

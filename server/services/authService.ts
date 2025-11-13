@@ -4,10 +4,16 @@ import bcrypt from 'bcrypt';
 import { query } from '../config/database.js';
 import { sendVerificationEmail } from './emailService.js';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
 const OTP_EXPIRY = 10 * 60 * 1000; // 10分钟（毫秒）
 const OTP_LENGTH = 6;
 const ALLOWED_EMAIL_DOMAIN = '@51talk.com'; // 允许的邮箱域名
+
+/**
+ * 获取 JWT Secret（运行时读取环境变量）
+ */
+function getJwtSecret(): string {
+  return process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+}
 
 /**
  * 验证邮箱域名是否为 @51talk.com
@@ -146,7 +152,7 @@ export async function verifyOtp(email: string, otp: string): Promise<{ token: st
       userId: user.id,
       email: user.email,
     },
-    JWT_SECRET,
+    getJwtSecret(),
     {
       expiresIn: '7d', // 7天
     }
@@ -199,7 +205,7 @@ export async function loginWithPassword(email: string, password: string): Promis
       userId: user.id,
       email: user.email,
     },
-    JWT_SECRET,
+    getJwtSecret(),
     {
       expiresIn: '7d', // 7天
     }
@@ -249,7 +255,7 @@ export async function setPassword(email: string, password: string): Promise<void
  */
 export async function getCurrentUser(token: string): Promise<{ user: { id: string; email: string } }> {
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as { userId: string; email: string };
+    const decoded = jwt.verify(token, getJwtSecret()) as { userId: string; email: string };
     
     // 从数据库查找用户
     const result = await query(

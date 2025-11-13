@@ -38,15 +38,8 @@ export function initSentry() {
       // 错误采样（发送所有错误）
       sampleRate: 1.0,
       
-      // 集成配置
-      integrations: [
-        // HTTP 请求追踪
-        new Sentry.Integrations.Http({ tracing: true }),
-        // Express 集成
-        new Sentry.Integrations.Express({
-          app: undefined, // 在 server/index.ts 中设置
-        }),
-      ],
+      // 集成配置（新版本 Sentry 会自动包含必要的集成）
+      integrations: [],
       
       // 忽略的错误类型
       ignoreErrors: [
@@ -79,7 +72,7 @@ export function initSentry() {
           }
           
           // 移除查询参数中的敏感信息
-          if (event.request.query_string) {
+          if (event.request.query_string && typeof event.request.query_string === 'string') {
             const sanitized = event.request.query_string
               .replace(/apiKey=[^&]+/gi, 'apiKey=REDACTED')
               .replace(/api_key=[^&]+/gi, 'api_key=REDACTED')
@@ -142,31 +135,41 @@ export function clearUser() {
  * Express 错误处理中间件
  * 必须在所有路由之后、错误处理器之前添加
  */
-export const sentryErrorHandler = Sentry.Handlers.errorHandler({
-  shouldHandleError(error) {
-    // 捕获所有 5xx 错误
-    if (error && 'statusCode' in error) {
-      const statusCode = (error as any).statusCode;
-      return statusCode >= 500;
+export function sentryErrorHandler(error: any, req: any, res: any, next: any) {
+  // 捕获所有 5xx 错误
+  if (error && 'statusCode' in error) {
+    const statusCode = error.statusCode;
+    if (statusCode >= 500) {
+      Sentry.captureException(error);
     }
-    return true;
-  },
-});
+  } else {
+    Sentry.captureException(error);
+  }
+  next(error);
+}
 
 /**
  * Express 请求处理中间件
  * 必须在所有路由之前添加
  */
-export const sentryRequestHandler = Sentry.Handlers.requestHandler({
-  ip: true,
-  user: true,
-});
+export function sentryRequestHandler(req: any, res: any, next: any) {
+  // 设置请求上下文
+  Sentry.setContext('request', {
+    method: req.method,
+    url: req.url,
+    headers: req.headers,
+  });
+  next();
+}
 
 /**
  * Express 追踪中间件
  * 用于性能监控
  */
-export const sentryTracingHandler = Sentry.Handlers.tracingHandler();
+export function sentryTracingHandler(req: any, res: any, next: any) {
+  // 新版本 Sentry 会自动处理追踪
+  next();
+}
 
 export { Sentry };
 

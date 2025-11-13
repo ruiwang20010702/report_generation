@@ -884,10 +884,17 @@ ${JSON.stringify(video2Analysis, null, 2)}
    - 单词：必须从学生实际转录对话中找出（不要使用示例单词如 nine、bag、fine 等）
    - incorrect字段：必须填写学生实际发出的【错误】音标（例如：如果学生把/bɪɡ/读成/bɪg/，这里应该填/bɪg/；如果学生把think读成sink，这里应该填/sɪŋk/）
    - correct字段：必须填写该单词的【标准正确】音标（例如：big的标准音标是/bɪɡ/，think的标准音标是/θɪŋk/）
-   - ❌ 严重错误：incorrect和correct的音标相同（这意味着没有发音错误，不符合逻辑）
-   - ✅ 正确示例：incorrect="/bɪg/", correct="/bɪɡ/"（尾音/g/和/ɡ/不同）
-   - ✅ 正确示例：incorrect="/sɪŋk/", correct="/θɪŋk/"（首音/s/和/θ/不同）
-   - 如果转录文本无法明确判断具体发音错误，可基于常见中国学生发音问题（如th→s，v→w，/ɪ/→/i/等）进行合理推测，但音标必须体现出错误和正确的区别！`;
+   - ❌❌❌ 严重错误示例（绝对禁止）：
+     * word="think", incorrect="/θɪŋk/", correct="/θɪŋk/" ❌ 两个音标完全相同！
+     * word="found", incorrect="/faʊnd/", correct="/faʊnd/" ❌ 两个音标完全相同！
+     * word="big", incorrect="/bɪɡ/", correct="/bɪɡ/" ❌ 两个音标完全相同！
+   - ✅✅✅ 正确示例（必须遵循）：
+     * word="think", incorrect="/sɪŋk/", correct="/θɪŋk/" ✅ 首音 /s/ 和 /θ/ 不同
+     * word="found", incorrect="/faund/", correct="/faʊnd/" ✅ 元音 /au/ 和 /aʊ/ 不同
+     * word="van", incorrect="/wæn/", correct="/væn/" ✅ 首音 /w/ 和 /v/ 不同
+   - 🔍 自查步骤：生成每个发音示例后，必须逐字符对比 incorrect 和 correct 音标，确保至少有一个音素不同！
+   - 如果转录文本无法明确判断具体发音错误，可基于常见中国学生发音问题（如th→s，v→w，/ɪ/→/i/，/æ/→/e/等）进行合理推测
+   - 宁可少给发音示例，也不要给出 incorrect 和 correct 相同的示例！`;
 
       const model = this.getModelName(openai);
       const provider = this.getProviderInfo(openai);
@@ -923,6 +930,9 @@ ${JSON.stringify(video2Analysis, null, 2)}
       }
 
       const analysisData = JSON.parse(content);
+      
+      // 验证并修复发音示例中的重复音标问题
+      this.validateAndFixPronunciationExamples(analysisData);
       
       // 提取对比报告的 token 使用量
       const comparisonUsage = response.usage;
@@ -1025,6 +1035,194 @@ ${JSON.stringify(video2Analysis, null, 2)}
         }
       );
     }
+  }
+
+  /**
+   * 验证并修复发音示例中的重复音标问题
+   * 如果 incorrect 和 correct 音标相同，则智能修复音标使其有意义
+   */
+  private validateAndFixPronunciationExamples(analysisData: any): void {
+    if (!analysisData?.improvementAreas?.pronunciation?.examples) {
+      return;
+    }
+
+    const examples = analysisData.improvementAreas.pronunciation.examples;
+    let fixedCount = 0;
+
+    // 规范化音标（移除空格和斜杠，统一比较）
+    const normalizePhonetic = (str: string) => {
+      return str.replace(/[\s\/]/g, '').toLowerCase();
+    };
+
+    for (const example of examples) {
+      const incorrectNormalized = normalizePhonetic(example.incorrect || '');
+      const correctNormalized = normalizePhonetic(example.correct || '');
+
+      // 如果音标相同或为空，尝试智能修复
+      if (!incorrectNormalized || !correctNormalized || incorrectNormalized === correctNormalized) {
+        const fixed = this.smartFixPhonetics(example);
+        if (fixed) {
+          fixedCount++;
+          console.log(`🔧 自动修复发音示例: ${example.word}`);
+          console.log(`   原始 → incorrect="${example.incorrect}", correct="${example.correct}"`);
+          console.log(`   修复 → incorrect="${example.incorrect}", correct="${example.correct}"`);
+        }
+      }
+    }
+
+    // 日志输出
+    if (fixedCount > 0) {
+      console.log(`✅ 发音示例验证完成: ${examples.length} 个示例，其中 ${fixedCount} 个已自动修复`);
+    } else {
+      console.log(`✅ 发音示例验证完成: 所有 ${examples.length} 个示例均有效`);
+    }
+  }
+
+  /**
+   * 智能修复音标 - 根据常见发音问题自动生成合理的错误音标
+   * 返回 true 表示修复成功，false 表示无法修复
+   */
+  private smartFixPhonetics(example: any): boolean {
+    const word = example.word?.toLowerCase() || '';
+    const type = example.type || '';
+    
+    // 如果 correct 为空，尝试从词典获取或保持原样
+    if (!example.correct || !example.correct.trim()) {
+      // 无法修复，保持原状
+      return false;
+    }
+
+    // 如果 incorrect 为空或与 correct 相同，根据问题类型生成错误音标
+    const correct = example.correct;
+    let incorrect = '';
+
+    // 1. th 音问题：/θ/ 或 /ð/ 常被读成 /s/, /z/, /t/, /d/
+    if (type.includes('th') || word.includes('th')) {
+      if (correct.includes('θ')) {
+        incorrect = correct.replace(/θ/g, 's');  // think /θɪŋk/ → /sɪŋk/
+      } else if (correct.includes('ð')) {
+        incorrect = correct.replace(/ð/g, 'z');  // this /ðɪs/ → /zɪs/
+      }
+    }
+    
+    // 2. v/w 音问题：/v/ 常被读成 /w/
+    else if ((type.includes('v') || type.includes('w')) && correct.includes('v')) {
+      incorrect = correct.replace(/v/g, 'w');  // van /væn/ → /wæn/
+    }
+    else if ((type.includes('v') || type.includes('w')) && correct.includes('w')) {
+      incorrect = correct.replace(/w/g, 'v');  // well /wel/ → /vel/
+    }
+    
+    // 3. l/r 音问题：/l/ 和 /r/ 容易混淆
+    else if (type.includes('l') || type.includes('r')) {
+      if (correct.includes('l') && !correct.includes('r')) {
+        incorrect = correct.replace(/l/g, 'r');  // light /laɪt/ → /raɪt/
+      } else if (correct.includes('r') && !correct.includes('l')) {
+        incorrect = correct.replace(/r/g, 'l');  // right /raɪt/ → /laɪt/
+      }
+    }
+    
+    // 4. 重音问题：移动重音符号位置
+    else if (type.includes('重音') || type.includes('stress')) {
+      if (correct.includes('ˈ')) {
+        // 尝试移动主重音位置
+        const parts = correct.split('ˈ');
+        if (parts.length >= 2) {
+          // 简单处理：把重音移到下一个元音前
+          incorrect = correct.replace(/ˈ([^.]+)\./, '$1.ˈ');
+          if (incorrect === correct) {
+            // 如果没有成功移动，尝试简单地移除重音
+            incorrect = correct.replace(/ˈ/g, '');
+          }
+        }
+      }
+    }
+    
+    // 5. 元音问题：替换常见元音
+    else if (type.includes('元音') || type.includes('vowel')) {
+      // /i:/ → /ɪ/
+      if (correct.includes('iː') || correct.includes('i:')) {
+        incorrect = correct.replace(/iː|i:/g, 'ɪ');
+      }
+      // /æ/ → /e/
+      else if (correct.includes('æ')) {
+        incorrect = correct.replace(/æ/g, 'e');
+      }
+      // /ɔː/ → /ɒ/
+      else if (correct.includes('ɔː') || correct.includes('ɔ:')) {
+        incorrect = correct.replace(/ɔː|ɔ:/g, 'ɒ');
+      }
+      // /aʊ/ → /au/
+      else if (correct.includes('aʊ')) {
+        incorrect = correct.replace(/aʊ/g, 'au');
+      }
+    }
+    
+    // 6. 辅音问题：常见辅音替换
+    else if (type.includes('辅音') || type.includes('consonant')) {
+      // /ŋ/ → /n/
+      if (correct.includes('ŋ')) {
+        incorrect = correct.replace(/ŋ/g, 'n');
+      }
+      // /ʃ/ → /s/
+      else if (correct.includes('ʃ')) {
+        incorrect = correct.replace(/ʃ/g, 's');
+      }
+      // /ʒ/ → /z/
+      else if (correct.includes('ʒ')) {
+        incorrect = correct.replace(/ʒ/g, 'z');
+      }
+    }
+    
+    // 7. 通用处理：如果以上都没匹配，尝试基于单词拼写猜测
+    if (!incorrect && word) {
+      incorrect = this.guessIncorrectPhonetic(word, correct);
+    }
+
+    // 如果成功生成了不同的音标，更新并返回成功
+    if (incorrect && incorrect !== correct) {
+      example.incorrect = incorrect;
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * 基于单词拼写和正确音标，猜测可能的错误发音
+   */
+  private guessIncorrectPhonetic(word: string, correct: string): string {
+    // 如果单词包含 th
+    if (word.includes('th')) {
+      if (correct.includes('θ')) {
+        return correct.replace(/θ/g, 's');
+      }
+      if (correct.includes('ð')) {
+        return correct.replace(/ð/g, 'd');
+      }
+    }
+    
+    // 如果单词以 v 开头
+    if (word.startsWith('v') && correct.includes('v')) {
+      return correct.replace(/^v/, 'w');
+    }
+    
+    // 如果单词包含 r
+    if (word.includes('r') && correct.includes('r')) {
+      return correct.replace(/r/g, 'l');
+    }
+    
+    // 如果单词包含 l
+    if (word.includes('l') && correct.includes('l')) {
+      return correct.replace(/l/g, 'r');
+    }
+    
+    // 默认：简化长元音为短元音
+    return correct
+      .replace(/iː/g, 'ɪ')
+      .replace(/uː/g, 'ʊ')
+      .replace(/ɑː/g, 'ʌ')
+      .replace(/ɔː/g, 'ɒ');
   }
 
   /**

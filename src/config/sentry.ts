@@ -29,19 +29,16 @@ export function initSentry() {
       
       // 集成配置
       integrations: [
-        // 浏览器追踪
-        new Sentry.BrowserTracing({
-          // 追踪路由变化
-          routingInstrumentation: Sentry.reactRouterV6Instrumentation(
-            React.useEffect,
-            useLocation,
-            useNavigationType,
-            createRoutesFromChildren,
-            matchRoutes
-          ),
+        // React Router v6 浏览器追踪（新版本API）
+        Sentry.reactRouterV6BrowserTracingIntegration({
+          useEffect: React.useEffect,
+          useLocation,
+          useNavigationType,
+          createRoutesFromChildren,
+          matchRoutes,
         }),
         // React 错误边界
-        new Sentry.Replay({
+        Sentry.replayIntegration({
           maskAllText: true,
           blockAllMedia: true,
         }),

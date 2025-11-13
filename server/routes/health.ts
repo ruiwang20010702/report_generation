@@ -26,7 +26,7 @@ router.get('/health', (_req: Request, res: Response) => {
  * 详细健康检查
  * 包含数据库、服务、资源使用情况等
  */
-router.get('/health/详细', async (_req: Request, res: Response) => {
+async function detailedHealthCheck(_req: Request, res: Response) {
   const startTime = Date.now();
   
   try {
@@ -71,7 +71,11 @@ router.get('/health/详细', async (_req: Request, res: Response) => {
       error: error instanceof Error ? error.message : 'Unknown error',
     });
   }
-});
+}
+
+// 注册详细健康检查路由（支持英文和中文）
+router.get('/health/详细', detailedHealthCheck);
+router.get('/health/detailed', detailedHealthCheck);
 
 /**
  * 存活探针 (Liveness Probe)
@@ -80,7 +84,7 @@ router.get('/health/详细', async (_req: Request, res: Response) => {
  */
 router.get('/health/live', (_req: Request, res: Response) => {
   res.status(200).json({
-    status: 'alive',
+    status: 'live',
     timestamp: new Date().toISOString(),
   });
 });
@@ -210,9 +214,9 @@ function checkSystemResources(): {
   
   // 判断内存使用情况
   let status: 'healthy' | 'degraded' | 'unhealthy' = 'healthy';
-  if (usagePercentage > 90) {
+  if (usagePercentage > 95) {
     status = 'unhealthy';
-  } else if (usagePercentage > 80) {
+  } else if (usagePercentage > 85) {
     status = 'degraded';
   }
   
