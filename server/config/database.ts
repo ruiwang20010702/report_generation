@@ -1,5 +1,6 @@
 import { Pool, PoolConfig } from 'pg';
 import dotenv from 'dotenv';
+import { alertDatabaseError, alertSlowPerformance } from '../services/alertService.js';
 
 // 加载环境变量（确保在创建连接池之前加载）
 dotenv.config();
@@ -117,6 +118,10 @@ export async function testConnection(): Promise<boolean> {
     if (error.stack) {
       console.error('   堆栈信息:', error.stack.split('\n').slice(0, 3).join('\n'));
     }
+    
+    // 发送数据库连接失败告警
+    await alertDatabaseError(error, '数据库连接测试').catch(() => {});
+    
     return false;
   }
 }
@@ -134,9 +139,22 @@ export async function query(text: string, params?: any[]) {
     if (process.env.NODE_ENV === 'development') {
       console.log('📊 执行查询:', { text, duration, rows: res.rowCount });
     }
+    
+    // 检查慢查询（超过3秒）
+    if (duration > 3000) {
+      console.warn(`⚠️  慢查询检测: ${duration}ms - ${text.substring(0, 100)}`);
+      await alertSlowPerformance('数据库查询', duration, 3000).catch(() => {});
+    }
+    
     return res;
   } catch (error) {
     console.error('❌ 查询错误:', { text, error });
+    
+    // 发送数据库错误告警
+    if (error instanceof Error) {
+      await alertDatabaseError(error, '数据库查询').catch(() => {});
+    }
+    
     throw error;
   }
 }
@@ -157,18 +175,12 @@ export async function closePool(): Promise<void> {
 }
 
 // 处理连接错误
-pool.on('error', (err) => {
+pool.on('error', async (err) => {
   console.error('❌ 数据库连接池错误:', err);
+  // 发送告警
+  await alertDatabaseError(err, '数据库连接池').catch(() => {});
 });
 
-// 优雅关闭
-process.on('SIGINT', async () => {
-  await closePool();
-  process.exit(0);
-});
-
-process.on('SIGTERM', async () => {
-  await closePool();
-  process.exit(0);
-});
+// 注意：优雅关闭由 gracefulShutdown.ts 统一管理
+// 不再在这里单独处理 SIGINT/SIGTERM 信号
 

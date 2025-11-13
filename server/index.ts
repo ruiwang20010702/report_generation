@@ -10,12 +10,19 @@ import { fileURLToPath } from 'url';
 // 因为 tingwuTranscriptionService 等服务在模块加载时就会初始化
 dotenv.config();
 
+// 初始化 Sentry（必须在其他导入之前）
+import { initSentry, sentryRequestHandler, sentryTracingHandler, sentryErrorHandler } from './config/sentry.js';
+const sentryEnabled = initSentry();
+
 import analysisRouter from './routes/analysis.js';
 import authRouter from './routes/auth.js';
 import adminRouter from './routes/admin.js';
+import healthRouter from './routes/health.js';
 import { testConnection } from './config/database.js';
 import { testEmailService } from './services/emailService.js';
+import { testAlertSystem } from './services/alertService.js';
 import { errorHandler, AppError, ErrorType } from './utils/errors.js';
+import { setupGracefulShutdown } from './utils/gracefulShutdown.js';
 
 const app: Express = express();
 const PORT = process.env.PORT || 3001;
@@ -25,14 +32,20 @@ const __dirname = path.dirname(__filename);
 // Vite 默认输出到项目根的 dist 目录，运行时位于 build/server
 const DIST_PATH = path.resolve(__dirname, '../../dist');
 
+// Sentry 中间件（必须在其他中间件之前）
+if (sentryEnabled) {
+  app.use(sentryRequestHandler);
+  app.use(sentryTracingHandler);
+}
+
 // 中间件
 app.use(cors({
   origin: true, // 开发环境允许所有来源
   credentials: true
 }));
 app.use(cookieParser());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '10mb' })); // 限制请求体大小
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // 全局限流：防止滥用
 const globalLimiter = rateLimit({
@@ -114,6 +127,28 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 app.use('/api/analysis', analysisRouter);
 app.use('/api/auth', authRouter);
 app.use('/api/admin', adminRouter);
+app.use('/api', healthRouter); // 健康检查路由（/api/health/*）
+
+// 测试告警端点（仅开发环境）
+if (process.env.NODE_ENV === 'development') {
+  app.post('/api/test-alert', async (req: Request, res: Response) => {
+    try {
+      const success = await testAlertSystem();
+      res.json({ 
+        success, 
+        message: success 
+          ? '告警测试邮件已发送，请检查收件箱' 
+          : '告警系统未配置或发送失败' 
+      });
+    } catch (error) {
+      res.status(500).json({ 
+        success: false, 
+        message: '发送测试告警失败',
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+}
 
 // 静态托管前端构建产物
 app.use(express.static(DIST_PATH));
@@ -134,11 +169,16 @@ app.get('*', (req: Request, res: Response, next: NextFunction) => {
   return res.sendFile(path.join(DIST_PATH, 'index.html'));
 });
 
+// Sentry 错误处理中间件（必须在自定义错误处理器之前）
+if (sentryEnabled) {
+  app.use(sentryErrorHandler);
+}
+
 // 错误处理 - 使用统一的错误处理系统（必须在所有路由之后）
 app.use(errorHandler);
 
 // 启动服务器
-app.listen(PORT, async () => {
+const server = app.listen(PORT, async () => {
   console.log(`🚀 Server is running on port ${PORT}`);
   console.log(`📊 API endpoint: http://localhost:${PORT}/api/analysis`);
   console.log(`🖥️  Frontend static dir: ${DIST_PATH}`);
@@ -156,6 +196,17 @@ app.listen(PORT, async () => {
   
   // 测试邮件服务配置
   await testEmailService();
+  
+  // 显示告警系统配置状态
+  const alertEmail = process.env.ALERT_EMAIL;
+  if (alertEmail) {
+    console.log(`🚨 告警系统已启用，接收邮箱: ${alertEmail}`);
+  } else {
+    console.log('ℹ️  告警系统未配置 (设置 ALERT_EMAIL 以启用)');
+  }
 });
+
+// 设置优雅关闭
+setupGracefulShutdown(server);
 
 export default app;

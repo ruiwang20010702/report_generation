@@ -24,6 +24,7 @@ import * as $Tingwu20230930 from '@alicloud/tingwu20230930';
 import * as $OpenApi from '@alicloud/openapi-client';
 import https from 'https';
 import { HttpsProxyAgent } from 'https-proxy-agent';
+import { alertQuotaWarning } from './alertService.js';
 
 export interface TranscriptionResult {
   text: string;
@@ -1054,6 +1055,9 @@ class TingwuTranscriptionService {
       console.log('✅ 通义听悟转写成功！');
       console.log(`💰 更新后剩余额度: ${this.stats.remainingMinutes} 分钟/天`);
 
+      // 检查额度并发送告警
+      await this.checkAndAlertQuota();
+
       return transcription;
     } catch (error: any) {
       console.error('❌ 通义听悟转写失败:', error);
@@ -1079,6 +1083,22 @@ class TingwuTranscriptionService {
       speakerLabels: true,
       onProgress,
     });
+  }
+
+  /**
+   * 检查额度并发送告警（如果需要）
+   */
+  private async checkAndAlertQuota(): Promise<void> {
+    try {
+      await alertQuotaWarning(
+        '通义听悟',
+        this.stats.remainingMinutes,
+        this.stats.freeMinutesLimit
+      );
+    } catch (error) {
+      console.error('发送额度告警失败:', error);
+      // 不影响主流程
+    }
   }
 }
 

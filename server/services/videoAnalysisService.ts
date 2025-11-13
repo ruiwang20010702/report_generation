@@ -6,6 +6,7 @@ import { WhisperService, TranscriptionResult } from './whisperService.js';
 import { tingwuTranscriptionService } from './tingwuTranscriptionService.js';
 import { reportRecordService } from './reportRecordService.js';
 import { AppError, ErrorType } from '../utils/errors.js';
+import { alertServiceError } from './alertService.js';
 
 /**
  * 📝 报告字数配置
