@@ -337,7 +337,8 @@ class TingwuTranscriptionService {
         throw new Error(`创建转写任务失败: 响应中未找到TaskId。Message: ${message || '未知错误'}`);
       }
 
-      console.log(`✅ 通义听悟转写任务已创建，TaskId: ${taskId}`);
+      const timestamp = new Date().toISOString().substring(11, 19);
+      console.log(`✅ [${timestamp}] 通义听悟转写任务已创建，TaskId: ${taskId}`);
       
       return taskId;
     } catch (error: any) {
@@ -463,6 +464,7 @@ class TingwuTranscriptionService {
       if (status === 'ONGOING' || status === 'RUNNING' || status === 'QUEUED') {
         attempts++;
         const progress = Math.min(Math.round((attempts / maxAttempts) * 100), 95);
+        const elapsedSeconds = attempts * 5;
         
         if (onProgress) {
           onProgress({
@@ -471,13 +473,15 @@ class TingwuTranscriptionService {
           });
         }
         
-        console.log(`⏳ 转写进行中... (${progress}%)`);
+        console.log(`⏳ [TaskId: ${taskId.substring(0, 8)}...] 转写进行中... (${progress}%, 已等待 ${elapsedSeconds}秒)`);
         continue;
       }
 
       // 任务成功（新API使用 COMPLETED，旧版本可能使用 SUCCESS）
       if (status === 'COMPLETED' || status === 'SUCCESS') {
-        console.log('✅ 转写任务完成！');
+        const elapsedSeconds = attempts * 5;
+        const timestamp = new Date().toISOString().substring(11, 19);
+        console.log(`✅ [${timestamp}] [TaskId: ${taskId.substring(0, 8)}...] 转写任务完成！总耗时: ${elapsedSeconds}秒`);
         
         if (onProgress) {
           onProgress({

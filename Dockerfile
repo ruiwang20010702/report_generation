@@ -8,8 +8,7 @@ WORKDIR /app
 COPY package*.json ./
 
 # 安装依赖（包含 dev 依赖用于构建）
-# 使用 npm install 而不是 npm ci 以支持 lockfileVersion 3
-RUN npm install --frozen-lockfile
+RUN npm ci
 
 # 复制全部源码
 COPY . .
