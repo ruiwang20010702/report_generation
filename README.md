@@ -16,7 +16,7 @@ AI 驱动的英语学习视频对比分析平台，帮助老师和教研团队�
 - 前端：React 18 + Vite + TypeScript + shadcn/ui + Tailwind，统一走 `VITE_API_URL` 调后端。
 - 后端：Express + TypeScript，负责鉴权、转写调度、GLM 分析、报告合成、成本统计。
 - 数据库：PostgreSQL（用户、验证码、报告记录）。
-- 外部依赖：阿里云通义听悟、智谱 GLM-4-Plus、阿里云邮件推送（发送登录验证码）。
+- 外部依赖：阿里云通义听悟、智谱 GLM-4-Plus、邮件推送（发送登录验证码）。
 
 ## 快速开始
 
