@@ -1,0 +1,152 @@
+================================================
+✅ Zeabur 部署准备完成
+================================================
+最后更新: 2025-11-13
+
+📋 部署前检查清单
+================================================
+
+✅ 1. 项目配置文件
+   - Dockerfile (已优化)
+   - .dockerignore (已创建)
+   - zeabur.yaml (已配置)
+   - package.json (构建脚本正确)
+
+✅ 2. 构建测试
+   - 后端构建成功 (build/server/)
+   - 前端构建成功 (dist/)
+   - 无 TypeScript 错误
+
+✅ 3. 服务器配置
+   - 支持 PORT 环境变量 (Zeabur 自动注入)
+   - 支持 DATABASE_URL (Zeabur PostgreSQL)
+   - 静态文件托管配置正确
+   - 健康检查端点: /api/health
+
+================================================
+🚀 部署步骤
+================================================
+
+1. 推送代码到 GitHub
+   git add .
+   git commit -m "Ready for Zeabur deployment"
+   git push
+
+2. 登录 Zeabur (https://zeabur.com)
+   - 使用 GitHub 账号登录
+
+3. 创建新项目
+   - 点击 "New Project"
+   - 选择你的 GitHub 仓库
+   - Zeabur 会自动检测 Dockerfile
+
+4. 添加 PostgreSQL 服务
+   - 在项目中点击 "Add Service"
+   - 选择 "PostgreSQL"
+   - 版本选择: 15
+   - Zeabur 会自动注入 DATABASE_URL
+
+5. 配置环境变量（必须）
+   点击 App Service > Variables，添加：
+
+   必需变量:
+   ├── NODE_ENV=production
+   ├── USE_MOCK_ANALYSIS=false
+   ├── ALIYUN_ACCESS_KEY_ID=你的AccessKeyID
+   ├── ALIYUN_ACCESS_KEY_SECRET=你的AccessKeySecret
+   ├── ALIYUN_TINGWU_APP_KEY=你的AppKey
+   ├── EMAIL_HOST=smtp.qiye.aliyun.com
+   ├── EMAIL_PORT=465
+   ├── EMAIL_USER=你的邮箱
+   ├── EMAIL_PASS=你的邮箱密码
+   ├── EMAIL_FROM=你的邮箱
+   ├── JWT_SECRET=随机生成的长字符串
+   ├── DB_SSL=true
+   └── DB_SSL_REJECT_UNAUTHORIZED=false
+
+   可选变量:
+   ├── OPENAI_API_KEY=sk-...
+   ├── ALERT_EMAIL=admin@company.com
+   ├── SENTRY_DSN=https://...@sentry.io/...
+   ├── SENTRY_ENVIRONMENT=production
+   └── ALLOWED_ORIGINS=https://your-app.zeabur.app
+
+6. 初始化数据库
+   连接到 Zeabur PostgreSQL 并运行:
+   database/init.sql
+
+7. 等待部署完成
+   - 首次部署约需 3-5 分钟
+   - 查看构建日志确认无错误
+   - 健康检查通过后自动上线
+
+8. 访问应用
+   Zeabur 会提供一个域名:
+   https://your-app.zeabur.app
+
+================================================
+📊 性能配置（已在 zeabur.yaml 中配置）
+================================================
+
+资源配置:
+- CPU: 2核
+- 内存: 4GB
+- 数据库存储: 5GB
+
+自动扩展:
+- 最小实例: 1
+- 最大实例: 3
+- CPU 触发阈值: 70%
+
+自动备份:
+- 频率: 每天凌晨 2:00
+- 保留时间: 7天
+
+================================================
+🔍 部署后验证
+================================================
+
+1. 健康检查
+   curl https://your-app.zeabur.app/api/health
+
+2. 数据库连接
+   curl https://your-app.zeabur.app/api/health/detailed
+
+3. 前端访问
+   打开浏览器访问: https://your-app.zeabur.app
+
+4. 测试登录功能
+   - 输入邮箱
+   - 接收验证码
+   - 完成登录
+
+================================================
+⚠️  常见问题
+================================================
+
+Q: 构建失败？
+A: 检查 Zeabur 构建日志，确保所有依赖都在 package.json 中
+
+Q: 数据库连接失败？
+A: 确认 DB_SSL=true 和 DB_SSL_REJECT_UNAUTHORIZED=false
+
+Q: 邮件发送失败？
+A: 检查阿里云企业邮箱配置和网络防火墙
+
+Q: 通义听悟调用失败？
+A: 验证 AccessKey 和 AppKey 是否正确
+
+Q: 应用启动慢？
+A: 首次启动需要初始化服务，正常需要 30-60 秒
+
+================================================
+📞 技术支持
+================================================
+
+- Zeabur 文档: https://zeabur.com/docs
+- 项目仓库: 查看 README.md
+- 环境变量清单: ZEABUR_ENV_CHECKLIST.txt
+
+================================================
+✅ 准备就绪，可以立即部署！
+================================================

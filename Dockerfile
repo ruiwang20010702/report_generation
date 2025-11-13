@@ -20,7 +20,7 @@ RUN npm run build
 ENV NODE_ENV=production
 
 # 暴露后端监听端口
-# 注意：Zeabur 会自动注入 PORT 环境变量，这里的 EXPOSE 只是文档性的
+# Zeabur 会自动注入 PORT 环境变量（通常是非3001端口）
 EXPOSE 3001
 
 # 启动 Node 服务，托管 API 与 dist 静态资源

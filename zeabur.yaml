@@ -23,7 +23,7 @@ services:
     
     # 健康检查
     healthCheck:
-      path: /api/analysis/health
+      path: /api/health
       initialDelaySeconds: 30
       periodSeconds: 10
     

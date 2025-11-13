@@ -1,0 +1,60 @@
+# 依赖
+node_modules
+npm-debug.log
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+bun.lockb
+
+# 开发构建产物
+dist
+build
+.vite
+.cache
+
+# 环境变量
+.env
+.env.*
+!.env.example
+
+# 版本控制
+.git
+.gitignore
+.gitattributes
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# 测试
+coverage
+.nyc_output
+*.test.js
+*.spec.js
+
+# 日志
+logs
+*.log
+runtime-logs
+backend.log
+
+# 临时文件
+*.tmp
+*.temp
+.DS_Store
+
+# 文档
+docs
+*.md
+!README.md
+
+# 脚本和测试
+scripts/tests
+test-*.js
+test-*.ts
+verify-*.js
+check-*.js
+

@@ -1,6 +1,6 @@
 import { Pool, PoolConfig } from 'pg';
 import dotenv from 'dotenv';
-import { alertDatabaseError, alertSlowPerformance } from '../services/alertService';
+import { alertDatabaseError, alertSlowPerformance } from '../services/alertService.js';
 
 // 加载环境变量（确保在创建连接池之前加载）
 dotenv.config();

@@ -1,0 +1,53 @@
+======================================
+Zeabur 部署必需环境变量清单
+======================================
+复制以下变量到 Zeabur 控制台 > 项目 > 环境变量
+
+=== 数据库（Zeabur 自动注入，无需手动设置） ===
+DATABASE_URL          (自动)
+POSTGRES_CONNECTION_STRING (自动)
+
+=== 基础配置 ===
+NODE_ENV=production
+USE_MOCK_ANALYSIS=false
+
+=== 阿里云通义听悟（语音转文字）- 必需 ===
+ALIYUN_ACCESS_KEY_ID=your_access_key_id
+ALIYUN_ACCESS_KEY_SECRET=your_access_key_secret
+ALIYUN_TINGWU_APP_KEY=your_app_key
+
+=== OpenAI（可选，用于高级分析）===
+OPENAI_API_KEY=sk-...
+
+=== 邮件服务（用户登录验证码）- 必需 ===
+EMAIL_HOST=smtp.qiye.aliyun.com
+EMAIL_PORT=465
+EMAIL_USER=your_email@company.com
+EMAIL_PASS=your_email_password
+EMAIL_FROM=your_email@company.com
+
+=== JWT 密钥（用户认证）- 必需 ===
+JWT_SECRET=your_random_secure_secret_key_here
+
+=== 告警邮箱（可选，用于系统监控）===
+ALERT_EMAIL=admin@company.com
+
+=== Sentry 错误追踪（可选）===
+SENTRY_DSN=https://...@sentry.io/...
+SENTRY_ENVIRONMENT=production
+
+=== CORS 跨域设置（生产环境）===
+ALLOWED_ORIGINS=https://your-domain.zeabur.app
+
+=== 数据库 SSL（Zeabur PostgreSQL 需要）===
+DB_SSL=true
+DB_SSL_REJECT_UNAUTHORIZED=false
+
+======================================
+部署步骤：
+1. 在 Zeabur 创建新项目
+2. 连接 GitHub 仓库
+3. 添加 PostgreSQL 服务
+4. 配置上述环境变量
+5. 触发部署
+======================================

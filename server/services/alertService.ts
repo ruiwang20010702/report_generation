@@ -3,8 +3,8 @@
  * 用于系统监控和异常告警
  */
 
-import { sendEmail } from './emailService';
-import { Sentry } from '../config/sentry';
+import { sendEmail } from './emailService.js';
+import { Sentry } from '../config/sentry.js';
 
 /**
  * 告警类型
