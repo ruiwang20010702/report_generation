@@ -55,6 +55,12 @@ new_UI_2/
 backend.log
 frontend.log
 .env.backup
+.env.backup.zeabur
+.env.bak
+.env.local.backup.zeabur
+.env.local.bak
+*.env.bak
+*.env.backup*
 
 # Secrets (ignored)
 .env.production

@@ -27,30 +27,27 @@ services:
       initialDelaySeconds: 30
       periodSeconds: 10
     
-    # 依赖数据库服务 - 这会让 Zeabur 自动注入 DATABASE_URL
-    depends_on:
-      - database
-    
     # 环境变量（这里只定义key，值在Zeabur控制台设置）
     env:
       NODE_ENV: production
       USE_MOCK_ANALYSIS: false
       # PORT 由 Zeabur 自动注入，不需要手动设置
-      # DATABASE_URL 由 Zeabur 自动注入（因为有 depends_on）
-      # 其他敏感变量在控制台设置
-
-  # PostgreSQL 数据库
-  database:
-    type: postgresql
-    version: "15"  # PostgreSQL 15
-    
-    # 资源配置
-    resources:
-      memory: 512  # 512MB内存（初期够用）
-      storage: 5   # 5GB存储
-    
-    # 自动备份
-    backup:
-      enabled: true
-      schedule: "0 2 * * *"  # 每天凌晨2点备份
-      retention: 7           # 保留7天
+      
+      # 阿里云 RDS PostgreSQL 数据库配置
+      # 注意：不再使用 Zeabur 自带的数据库，改用阿里云 RDS
+      DB_HOST: pgm-2zeocagx2zo8v2c55o.rwlb.rds.aliyuncs.com
+      DB_PORT: 5432
+      DB_NAME: report_generation
+      DB_USER: wangrui003
+      # DB_PASSWORD 在控制台设置（敏感信息）
+      DB_SSL: false
+      
+      # 其他敏感变量在控制台设置：
+      # - DB_PASSWORD
+      # - JWT_SECRET
+      # - ALIYUN_ACCESS_KEY_ID
+      # - ALIYUN_ACCESS_KEY_SECRET
+      # - ALIYUN_TINGWU_APP_KEY
+      # - GLM_API_KEY
+      # - SMTP_PASS
+      # - SENTRY_DSN

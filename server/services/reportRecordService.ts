@@ -10,6 +10,11 @@ export interface ReportRecord {
   userId?: string;
   studentName: string;
   studentId?: string;
+  videoUrl?: string;
+  transcript?: string;
+  audioDuration?: number;
+  fileName?: string;
+  fileUrl?: string;
   costBreakdown: CostBreakdown;
   analysisData?: any; // 完整的分析报告数据（可选）
 }
@@ -24,17 +29,31 @@ export class ReportRecordService {
         INSERT INTO reports (
           user_id,
           student_id,
+          student_name,
+          video_url,
+          transcript,
+          audio_duration,
+          file_name,
+          file_url,
           cost_breakdown,
           analysis,
+          analysis_data,
           created_at
-        ) VALUES ($1, $2, $3, $4, NOW())
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
         RETURNING id, created_at
       `;
 
       const values = [
         record.userId || null,
         record.studentId || null,
+        record.studentName || null,
+        record.videoUrl || null,
+        record.transcript || null,
+        record.audioDuration || null,
+        record.fileName || null,
+        record.fileUrl || null,
         JSON.stringify(record.costBreakdown),
+        record.analysisData ? JSON.stringify(record.analysisData) : null,
         record.analysisData ? JSON.stringify(record.analysisData) : null
       ];
 

@@ -1413,10 +1413,27 @@ ${JSON.stringify(video2Analysis, null, 2)}
       
       // 记录报告到数据库（异步，不阻塞返回）
       if (report.costBreakdown) {
+        // 合并两个视频的转录文本
+        const combinedTranscript = [
+          `=== 第一个视频转录 (${request.video1Time || '未知时间'}) ===`,
+          video1Result.transcription.text,
+          '',
+          `=== 第二个视频转录 (${request.video2Time || '未知时间'}) ===`,
+          video2Result.transcription.text
+        ].join('\n');
+        
+        // 计算总音频时长（秒）
+        const totalDuration = (video1Result.transcription.duration || 0) + (video2Result.transcription.duration || 0);
+        
         reportRecordService.recordReport({
           userId: request.userId,
           studentName: request.studentName,
           studentId: request.studentId,
+          videoUrl: `${request.video1};${request.video2}`, // 用分号分隔两个视频URL
+          transcript: combinedTranscript,
+          audioDuration: Math.round(totalDuration),
+          fileName: `${request.studentName}_${new Date().toISOString().split('T')[0]}`,
+          fileUrl: request.video1, // 使用第一个视频作为主要链接
           costBreakdown: report.costBreakdown,
           analysisData: report // 保存完整的报告数据
         }).catch(err => {
