@@ -61,20 +61,20 @@ app.use(cookieParser());
 app.use(express.json({ limit: '10mb' })); // 限制请求体大小
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// 全局限流：防止滥用
+// 全局限流：防止滥用（支持100并发）
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15分钟
-  max: 200, // 每个IP最多200个请求（已放宽：原100）
+  max: 2000, // 每个IP最多2000个请求（100并发 x 20请求/会话）
   message: '请求过于频繁，请稍后再试',
   standardHeaders: true,
   legacyHeaders: false,
 });
 
-// 分析接口专用限流：控制并发和成本
+// 分析接口专用限流：控制并发和成本（支持100并发）
 const analysisLimiter = rateLimit({
   windowMs: 10 * 60 * 1000, // 10分钟窗口
-  max: 15, // 每10分钟最多15个分析请求（已大幅放宽：原5次）
-  message: '视频分析请求过于频繁，请等待10分钟后再试。每10分钟限制15次分析。',
+  max: 200, // 每10分钟最多200个分析请求（100并发 x 2分析/会话）
+  message: '视频分析请求过于频繁，请等待10分钟后再试',
   standardHeaders: true,
   legacyHeaders: false,
   skipSuccessfulRequests: false, // 即使成功也计数

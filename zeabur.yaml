@@ -15,11 +15,11 @@ services:
       cpu: 2      # 2核CPU
       memory: 4096 # 4GB内存
     
-    # 自动扩展配置
+    # 自动扩展配置（支持100并发）
     scaling:
-      minReplicas: 1  # 最少1个实例（省钱）
-      maxReplicas: 3  # 最多3个实例（控制成本）
-      targetCPU: 70   # CPU达到70%时扩容
+      minReplicas: 1  # 临时降低到1个实例，避免镜像拉取失败
+      maxReplicas: 5  # 最多5个实例（100并发需要更多实例）
+      targetCPU: 60   # CPU达到60%时扩容（更早触发扩容）
     
     # 健康检查
     healthCheck:

@@ -10,7 +10,7 @@
     "dev:all": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
     "build:server": "tsc -p tsconfig.server.json",
     "build": "npm run build:server && vite build",
-    "start": "node build/server/index.js",
+    "start": "node --max-old-space-size=4096 build/server/index.js",
     "lint": "eslint .",
     "preview": "vite preview",
     "test:ai": "node test-all-models.js",

@@ -35,9 +35,10 @@ const dbConfig: PoolConfig = connectionString
   ? {
       // Zeabur 模式：使用连接字符串
       connectionString: connectionString,
-      // 连接池配置
-      max: parseInt(process.env.DB_POOL_MAX || '10', 10), // Zeabur环境减少连接数
-      idleTimeoutMillis: parseInt(process.env.DB_POOL_IDLE_TIMEOUT || '30000', 10),
+      // 连接池配置（支持100并发）
+      max: parseInt(process.env.DB_POOL_MAX || '100', 10), // 最大连接数
+      min: parseInt(process.env.DB_POOL_MIN || '10', 10), // 最小连接数
+      idleTimeoutMillis: parseInt(process.env.DB_POOL_IDLE_TIMEOUT || '60000', 10), // 空闲超时60s
       connectionTimeoutMillis: parseInt(process.env.DB_POOL_CONNECTION_TIMEOUT || '10000', 10),
       // SSL 配置（Zeabur PostgreSQL 不支持 SSL）
       ssl: getSSLConfig(),
@@ -49,9 +50,10 @@ const dbConfig: PoolConfig = connectionString
       database: process.env.DB_NAME || 'postgres',
       user: process.env.DB_USER || 'postgres',
       password: String(process.env.DB_PASSWORD || ''),
-      // 连接池配置
-      max: parseInt(process.env.DB_POOL_MAX || '20', 10),
-      idleTimeoutMillis: parseInt(process.env.DB_POOL_IDLE_TIMEOUT || '30000', 10),
+      // 连接池配置（支持100并发）
+      max: parseInt(process.env.DB_POOL_MAX || '100', 10), // 最大连接数
+      min: parseInt(process.env.DB_POOL_MIN || '10', 10), // 最小连接数
+      idleTimeoutMillis: parseInt(process.env.DB_POOL_IDLE_TIMEOUT || '60000', 10), // 空闲超时60s
       connectionTimeoutMillis: parseInt(process.env.DB_POOL_CONNECTION_TIMEOUT || '10000', 10),
       // SSL 配置
       ssl: getSSLConfig(),
