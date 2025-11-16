@@ -280,16 +280,22 @@ router.get('/quota', asyncHandler(async (req: Request, res: Response) => {
       totalMinutes: stats.freeMinutesLimit,
       usedMinutes: stats.totalMinutesUsed,
       remainingMinutes: stats.remainingMinutes,
-      usagePercentage: Math.round((stats.totalMinutesUsed / stats.freeMinutesLimit) * 100)
+      usagePercentage: Math.round((stats.totalMinutesUsed / stats.freeMinutesLimit) * 100),
+      isFreeQuotaExhausted: stats.remainingMinutes <= 0
     },
     period: {
       startDate: stats.resetDate,
       resetFrequency: 'daily',
       description: '每天0点自动重置免费额度'
     },
-    costSavings: {
-      estimatedSavings: `¥${(stats.totalMinutesUsed * 0.01).toFixed(2)}`,
-      description: '超出免费额度后按 ¥0.01/分钟计费'
+    pricing: {
+      freeQuota: '120分钟/天',
+      paidRate: '¥0.01/分钟',
+      currentStatus: stats.remainingMinutes > 0 ? '使用免费额度' : '使用付费额度',
+      estimatedCost: stats.totalMinutesUsed > stats.freeMinutesLimit 
+        ? `¥${((stats.totalMinutesUsed - stats.freeMinutesLimit) * 0.01).toFixed(2)}` 
+        : '¥0.00',
+      description: '免费额度用完后自动切换到付费模式，无需人工干预'
     }
   });
 }));

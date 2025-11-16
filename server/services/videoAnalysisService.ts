@@ -392,7 +392,7 @@ ${speakerInfo}
 
   /**
    * 🚀 使用通义听悟进行视频转录
-   * 通义听悟：价格便宜，免费额度高（每天2小时）
+   * 通义听悟：价格便宜，免费额度高（每天2小时），超出后自动使用付费额度
    */
   private async transcribeVideoSmart(
     videoUrl: string,
@@ -402,31 +402,29 @@ ${speakerInfo}
   ): Promise<TranscriptionResult> {
     // 🇨🇳 使用通义听悟服务
     if (!tingwuTranscriptionService.isAvailable()) {
-      const reason = !tingwuTranscriptionService.hasRemainingQuota()
-        ? '免费额度已用完（每天2小时，请等待第二天重置）' 
-        : '未配置 AccessKey（需要 ALIYUN_ACCESS_KEY_ID 和 ALIYUN_ACCESS_KEY_SECRET）';
-      
-      const errorType = !tingwuTranscriptionService.hasRemainingQuota()
-        ? ErrorType.QUOTA_EXCEEDED
-        : ErrorType.SERVICE_UNAVAILABLE;
-      
       throw new AppError(
-        errorType,
-        `通义听悟服务不可用：${reason}`,
+        ErrorType.SERVICE_UNAVAILABLE,
+        '通义听悟服务不可用：未配置 AccessKey',
         {
-          userMessage: `转录服务不可用：${reason}`,
+          userMessage: '转录服务不可用：未配置 AccessKey（需要 ALIYUN_ACCESS_KEY_ID 和 ALIYUN_ACCESS_KEY_SECRET）',
           context: {
             videoLabel,
-            hint: reason.includes('额度') 
-              ? '请等待明天额度重置（每天120分钟免费额度）'
-              : '请配置环境变量 ALIYUN_ACCESS_KEY_ID 和 ALIYUN_ACCESS_KEY_SECRET',
+            hint: '请配置环境变量 ALIYUN_ACCESS_KEY_ID 和 ALIYUN_ACCESS_KEY_SECRET',
           },
         }
       );
     }
 
     console.log(`🇨🇳 [${videoLabel}] 使用通义听悟服务（教育网课场景）`);
-    console.log(`💰 当前剩余免费额度: ${tingwuTranscriptionService.getStats().remainingMinutes} 分钟/天`);
+    
+    // 显示免费额度信息（仅供参考，不影响服务）
+    const stats = tingwuTranscriptionService.getStats();
+    if (stats.remainingMinutes > 0) {
+      console.log(`💰 剩余免费额度: ${stats.remainingMinutes} 分钟/天`);
+    } else {
+      console.log(`💰 免费额度已用完，使用付费额度（¥0.01/分钟）`);
+    }
+    
     const diarizationSpeakerCount = speakerCount ?? 3;
     console.log(`🎓 使用教育领域专属模型，说话人分离：${diarizationSpeakerCount}人，语言: ${language}`);
         
@@ -461,15 +459,12 @@ ${speakerInfo}
       let errorType = ErrorType.TRANSCRIPTION_ERROR;
       let userMessage = '视频转录失败，请检查视频链接和内容';
       
-      if (errorMessage.includes('额度') || errorMessage.includes('quota')) {
-        errorType = ErrorType.QUOTA_EXCEEDED;
-        userMessage = '转录服务免费额度已用完，请等待明天重置或升级套餐';
-      } else if (errorMessage.includes('URL') || errorMessage.includes('链接') || errorMessage.includes('link')) {
+      if (errorMessage.includes('URL') || errorMessage.includes('链接') || errorMessage.includes('link')) {
         errorType = ErrorType.VIDEO_PROCESSING_ERROR;
         userMessage = '视频链接无法访问，请确保链接有效且可公开访问';
-      } else if (errorMessage.includes('AccessKey') || errorMessage.includes('API key')) {
+      } else if (errorMessage.includes('AccessKey') || errorMessage.includes('API key') || errorMessage.includes('账号') || errorMessage.includes('余额')) {
         errorType = ErrorType.API_KEY_ERROR;
-        userMessage = '转录服务配置错误，请检查AccessKey设置';
+        userMessage = '转录服务配置或账户问题，请检查AccessKey设置和账户余额';
       }
       
       throw new AppError(

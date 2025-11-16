@@ -155,9 +155,10 @@ class TingwuTranscriptionService {
 
   /**
    * 检查服务是否可用
+   * 注意：免费额度用完后会自动使用付费额度，不影响服务可用性
    */
   isAvailable(): boolean {
-    return this.config !== null && this.client !== null && this.hasRemainingQuota();
+    return this.config !== null && this.client !== null;
   }
 
   /**
