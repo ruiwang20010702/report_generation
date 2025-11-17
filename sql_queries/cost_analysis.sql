@@ -6,13 +6,13 @@
 SELECT 
   u.email as 用户邮箱,
   COUNT(r.id) as 报告数量,
-  ROUND(SUM((r.cost_breakdown->'total'->>'cost')::numeric), 4) as 总花费元,
-  ROUND(AVG((r.cost_breakdown->'total'->>'cost')::numeric), 4) as 平均花费元,
+  ROUND(SUM((r.cost_detail->'total'->>'cost')::numeric), 4) as 总花费元,
+  ROUND(AVG((r.cost_detail->'total'->>'cost')::numeric), 4) as 平均花费元,
   TO_CHAR(MIN(r.created_at), 'YYYY-MM-DD HH24:MI') as 首次使用时间,
   TO_CHAR(MAX(r.created_at), 'YYYY-MM-DD HH24:MI') as 最近使用时间
 FROM reports r
 LEFT JOIN users u ON r.user_id = u.id
-WHERE r.cost_breakdown IS NOT NULL
+WHERE r.cost_detail IS NOT NULL
 GROUP BY u.email
 ORDER BY 总花费元 DESC;
 
@@ -23,13 +23,13 @@ SELECT
   u.email as 用户邮箱,
   r.analysis->>'studentName' as 学生姓名,
   COUNT(r.id) as 报告次数,
-  ROUND(SUM((r.cost_breakdown->'total'->>'cost')::numeric), 4) as 该学生总花费元,
-  ROUND(AVG((r.cost_breakdown->'total'->>'cost')::numeric), 4) as 平均单次花费元,
+  ROUND(SUM((r.cost_detail->'total'->>'cost')::numeric), 4) as 该学生总花费元,
+  ROUND(AVG((r.cost_detail->'total'->>'cost')::numeric), 4) as 平均单次花费元,
   TO_CHAR(MIN(r.created_at), 'YYYY-MM-DD HH24:MI') as 首次分析时间,
   TO_CHAR(MAX(r.created_at), 'YYYY-MM-DD HH24:MI') as 最近分析时间
 FROM reports r
 LEFT JOIN users u ON r.user_id = u.id
-WHERE r.cost_breakdown IS NOT NULL
+WHERE r.cost_detail IS NOT NULL
 GROUP BY u.email, r.analysis->>'studentName'
 ORDER BY u.email, 该学生总花费元 DESC;
 
@@ -40,14 +40,14 @@ SELECT
   u.email as 用户邮箱,
   r.analysis->>'studentName' as 学生姓名,
   TO_CHAR(r.created_at, 'YYYY-MM-DD HH24:MI:SS') as 生成时间,
-  ROUND((r.cost_breakdown->'transcription'->>'cost')::numeric, 4) as 转录成本元,
-  ROUND((r.cost_breakdown->'transcription'->>'totalMinutes')::numeric, 2) as 转录分钟数,
-  ROUND((r.cost_breakdown->'aiAnalysis'->>'totalCost')::numeric, 4) as AI分析成本元,
-  (r.cost_breakdown->'aiAnalysis'->>'totalTokens')::integer as 使用Token数,
-  ROUND((r.cost_breakdown->'total'->>'cost')::numeric, 4) as 总成本元
+  ROUND((r.cost_detail->'transcription'->>'cost')::numeric, 4) as 转录成本元,
+  ROUND((r.cost_detail->'transcription'->>'totalMinutes')::numeric, 2) as 转录分钟数,
+  ROUND((r.cost_detail->'aiAnalysis'->>'totalCost')::numeric, 4) as AI分析成本元,
+  (r.cost_detail->'aiAnalysis'->>'totalTokens')::integer as 使用Token数,
+  ROUND((r.cost_detail->'total'->>'cost')::numeric, 4) as 总成本元
 FROM reports r
 LEFT JOIN users u ON r.user_id = u.id
-WHERE r.cost_breakdown IS NOT NULL
+WHERE r.cost_detail IS NOT NULL
 ORDER BY r.created_at DESC
 LIMIT 50;
 
@@ -57,12 +57,12 @@ LIMIT 50;
 SELECT 
   TO_CHAR(r.created_at, 'YYYY-MM-DD') as 日期,
   COUNT(r.id) as 报告数量,
-  ROUND(SUM((r.cost_breakdown->'total'->>'cost')::numeric), 4) as 当日总花费元,
-  ROUND(AVG((r.cost_breakdown->'total'->>'cost')::numeric), 4) as 平均单次花费元,
+  ROUND(SUM((r.cost_detail->'total'->>'cost')::numeric), 4) as 当日总花费元,
+  ROUND(AVG((r.cost_detail->'total'->>'cost')::numeric), 4) as 平均单次花费元,
   COUNT(DISTINCT r.user_id) as 使用用户数,
   COUNT(DISTINCT r.analysis->>'studentName') as 分析学生数
 FROM reports r
-WHERE r.cost_breakdown IS NOT NULL
+WHERE r.cost_detail IS NOT NULL
 GROUP BY TO_CHAR(r.created_at, 'YYYY-MM-DD')
 ORDER BY 日期 DESC;
 
@@ -73,11 +73,11 @@ SELECT
   r.analysis->>'studentName' as 学生姓名,
   u.email as 所属用户,
   COUNT(r.id) as 分析次数,
-  ROUND(SUM((r.cost_breakdown->'total'->>'cost')::numeric), 4) as 总花费元,
-  ROUND(AVG((r.cost_breakdown->'total'->>'cost')::numeric), 4) as 平均花费元
+  ROUND(SUM((r.cost_detail->'total'->>'cost')::numeric), 4) as 总花费元,
+  ROUND(AVG((r.cost_detail->'total'->>'cost')::numeric), 4) as 平均花费元
 FROM reports r
 LEFT JOIN users u ON r.user_id = u.id
-WHERE r.cost_breakdown IS NOT NULL
+WHERE r.cost_detail IS NOT NULL
 GROUP BY r.analysis->>'studentName', u.email
 ORDER BY 总花费元 DESC
 LIMIT 10;
@@ -88,22 +88,22 @@ LIMIT 10;
 SELECT 
   u.email as 用户邮箱,
   COUNT(r.id) as 报告数量,
-  ROUND(SUM((r.cost_breakdown->'transcription'->>'cost')::numeric), 4) as 转录总成本元,
-  ROUND(SUM((r.cost_breakdown->'aiAnalysis'->>'totalCost')::numeric), 4) as AI总成本元,
-  ROUND(SUM((r.cost_breakdown->'total'->>'cost')::numeric), 4) as 总成本元,
+  ROUND(SUM((r.cost_detail->'transcription'->>'cost')::numeric), 4) as 转录总成本元,
+  ROUND(SUM((r.cost_detail->'aiAnalysis'->>'totalCost')::numeric), 4) as AI总成本元,
+  ROUND(SUM((r.cost_detail->'total'->>'cost')::numeric), 4) as 总成本元,
   ROUND(
-    SUM((r.cost_breakdown->'transcription'->>'cost')::numeric) / 
-    NULLIF(SUM((r.cost_breakdown->'total'->>'cost')::numeric), 0) * 100, 
+    SUM((r.cost_detail->'transcription'->>'cost')::numeric) / 
+    NULLIF(SUM((r.cost_detail->'total'->>'cost')::numeric), 0) * 100, 
     2
   ) || '%' as 转录成本占比,
   ROUND(
-    SUM((r.cost_breakdown->'aiAnalysis'->>'totalCost')::numeric) / 
-    NULLIF(SUM((r.cost_breakdown->'total'->>'cost')::numeric), 0) * 100, 
+    SUM((r.cost_detail->'aiAnalysis'->>'totalCost')::numeric) / 
+    NULLIF(SUM((r.cost_detail->'total'->>'cost')::numeric), 0) * 100, 
     2
   ) || '%' as AI成本占比
 FROM reports r
 LEFT JOIN users u ON r.user_id = u.id
-WHERE r.cost_breakdown IS NOT NULL
+WHERE r.cost_detail IS NOT NULL
 GROUP BY u.email
 ORDER BY 总成本元 DESC;
 
@@ -113,7 +113,7 @@ ORDER BY 总成本元 DESC;
 -- SELECT 
 --   r.analysis->>'studentName' as 学生姓名,
 --   COUNT(r.id) as 分析次数,
---   ROUND(SUM((r.cost_breakdown->'total'->>'cost')::numeric), 4) as 总花费元,
+--   ROUND(SUM((r.cost_detail->'total'->>'cost')::numeric), 4) as 总花费元,
 --   STRING_AGG(
 --     TO_CHAR(r.created_at, 'YYYY-MM-DD HH24:MI'), 
 --     ', ' 
@@ -122,7 +122,7 @@ ORDER BY 总成本元 DESC;
 -- FROM reports r
 -- LEFT JOIN users u ON r.user_id = u.id
 -- WHERE u.email = 'your-email@51talk.com'  -- 替换为实际邮箱
---   AND r.cost_breakdown IS NOT NULL
+--   AND r.cost_detail IS NOT NULL
 -- GROUP BY r.analysis->>'studentName'
 -- ORDER BY 总花费元 DESC;
 
@@ -133,12 +133,12 @@ SELECT
   COUNT(DISTINCT r.user_id) as 总用户数,
   COUNT(DISTINCT r.analysis->>'studentName') as 总学生数,
   COUNT(r.id) as 总报告数,
-  ROUND(SUM((r.cost_breakdown->'total'->>'cost')::numeric), 4) as 总花费元,
-  ROUND(AVG((r.cost_breakdown->'total'->>'cost')::numeric), 4) as 平均单次花费元,
-  ROUND(MIN((r.cost_breakdown->'total'->>'cost')::numeric), 4) as 最低单次花费元,
-  ROUND(MAX((r.cost_breakdown->'total'->>'cost')::numeric), 4) as 最高单次花费元
+  ROUND(SUM((r.cost_detail->'total'->>'cost')::numeric), 4) as 总花费元,
+  ROUND(AVG((r.cost_detail->'total'->>'cost')::numeric), 4) as 平均单次花费元,
+  ROUND(MIN((r.cost_detail->'total'->>'cost')::numeric), 4) as 最低单次花费元,
+  ROUND(MAX((r.cost_detail->'total'->>'cost')::numeric), 4) as 最高单次花费元
 FROM reports r
-WHERE r.cost_breakdown IS NOT NULL;
+WHERE r.cost_detail IS NOT NULL;
 
 -- ============================================
 
@@ -146,11 +146,11 @@ WHERE r.cost_breakdown IS NOT NULL;
 SELECT 
   TO_CHAR(DATE_TRUNC('week', r.created_at), 'YYYY-MM-DD') as 周开始日期,
   COUNT(r.id) as 报告数量,
-  ROUND(SUM((r.cost_breakdown->'total'->>'cost')::numeric), 4) as 周总花费元,
-  ROUND(AVG((r.cost_breakdown->'total'->>'cost')::numeric), 4) as 平均花费元,
+  ROUND(SUM((r.cost_detail->'total'->>'cost')::numeric), 4) as 周总花费元,
+  ROUND(AVG((r.cost_detail->'total'->>'cost')::numeric), 4) as 平均花费元,
   COUNT(DISTINCT r.user_id) as 活跃用户数
 FROM reports r
-WHERE r.cost_breakdown IS NOT NULL
+WHERE r.cost_detail IS NOT NULL
 GROUP BY DATE_TRUNC('week', r.created_at)
 ORDER BY 周开始日期 DESC;
 
@@ -161,17 +161,17 @@ SELECT
   u.email as 用户邮箱,
   r.analysis->>'studentName' as 学生姓名,
   TO_CHAR(r.created_at, 'YYYY-MM-DD HH24:MI:SS') as 生成时间,
-  r.cost_breakdown->'transcription'->>'service' as 转录服务,
-  ROUND((r.cost_breakdown->'transcription'->>'totalMinutes')::numeric, 2) as 转录分钟数,
-  ROUND((r.cost_breakdown->'transcription'->>'cost')::numeric, 4) as 转录成本元,
-  r.cost_breakdown->'aiAnalysis'->>'model' as AI模型,
-  (r.cost_breakdown->'aiAnalysis'->>'totalTokens')::integer as 总Token数,
-  ROUND((r.cost_breakdown->'aiAnalysis'->>'totalCost')::numeric, 4) as AI成本元,
-  ROUND((r.cost_breakdown->'total'->>'cost')::numeric, 4) as 总成本元,
-  r.cost_breakdown->'total'->>'breakdown' as 成本明细
+  r.cost_detail->'transcription'->>'service' as 转录服务,
+  ROUND((r.cost_detail->'transcription'->>'totalMinutes')::numeric, 2) as 转录分钟数,
+  ROUND((r.cost_detail->'transcription'->>'cost')::numeric, 4) as 转录成本元,
+  r.cost_detail->'aiAnalysis'->>'model' as AI模型,
+  (r.cost_detail->'aiAnalysis'->>'totalTokens')::integer as 总Token数,
+  ROUND((r.cost_detail->'aiAnalysis'->>'totalCost')::numeric, 4) as AI成本元,
+  ROUND((r.cost_detail->'total'->>'cost')::numeric, 4) as 总成本元,
+  r.cost_detail->'total'->>'breakdown' as 成本明细
 FROM reports r
 LEFT JOIN users u ON r.user_id = u.id
-WHERE r.cost_breakdown IS NOT NULL
+WHERE r.cost_detail IS NOT NULL
 ORDER BY r.created_at DESC
 LIMIT 1;
 

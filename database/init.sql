@@ -9,14 +9,14 @@
 -- ============================================
 CREATE TABLE IF NOT EXISTS users (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  email VARCHAR(255) UNIQUE NOT NULL,
-  password VARCHAR(255),
+  email VARCHAR(255) NOT NULL,
+  passwd_hash VARCHAR(255),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- 为 email 字段创建索引（加速查询）
-CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+-- 为 email 字段创建唯一索引（加速查询 + 保证唯一性）
+CREATE UNIQUE INDEX IF NOT EXISTS uniq_users_email ON users(email);
 
 -- 插入测试数据（可选，生产环境可删除）
 -- INSERT INTO users (email) VALUES ('test@example.com') ON CONFLICT (email) DO NOTHING;

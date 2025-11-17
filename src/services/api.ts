@@ -6,6 +6,7 @@ export interface VideoAnalysisRequest {
   video1: string;
   video2: string;
   studentName: string;
+  studentId: string;
   grade: string;
   level: string;
   unit: string;

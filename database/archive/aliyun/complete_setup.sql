@@ -94,13 +94,13 @@ CREATE TABLE IF NOT EXISTS reports (
   video_url TEXT,
   transcript TEXT,
   analysis JSONB,
-  student_id TEXT,
+  student_id TEXT NOT NULL,
   student_name TEXT,
-  audio_duration INTEGER,
+  audio_dur INTEGER,
   file_name TEXT,
   file_url TEXT,
   analysis_data JSONB,
-  cost_breakdown JSONB,
+  cost_detail JSONB,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
@@ -110,7 +110,7 @@ CREATE INDEX IF NOT EXISTS idx_reports_user_id ON reports(user_id);
 CREATE INDEX IF NOT EXISTS idx_reports_created_at ON reports(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_reports_student_id ON reports(student_id);
 CREATE INDEX IF NOT EXISTS idx_reports_student_name ON reports(student_name);
-CREATE INDEX IF NOT EXISTS idx_reports_cost_breakdown ON reports USING GIN (cost_breakdown);
+CREATE INDEX IF NOT EXISTS idx_reports_cost_detail ON reports USING GIN (cost_detail);
 
 -- 组合索引：优化常见查询模式
 CREATE INDEX IF NOT EXISTS idx_reports_student_created ON reports(student_name, created_at DESC);
@@ -143,13 +143,13 @@ COMMENT ON COLUMN reports.user_id IS '用户ID（外键）';
 COMMENT ON COLUMN reports.video_url IS '视频URL';
 COMMENT ON COLUMN reports.transcript IS '完整转录文本';
 COMMENT ON COLUMN reports.analysis IS '分析结果（旧版字段）';
-COMMENT ON COLUMN reports.student_id IS '学生ID（唯一标识）';
+COMMENT ON COLUMN reports.student_id IS '学生ID（必填）';
 COMMENT ON COLUMN reports.student_name IS '学生姓名';
-COMMENT ON COLUMN reports.audio_duration IS '音频/视频时长（秒）';
+COMMENT ON COLUMN reports.audio_dur IS '音频/视频时长（秒）';
 COMMENT ON COLUMN reports.file_name IS '原始文件名';
 COMMENT ON COLUMN reports.file_url IS '文件URL（可选）';
 COMMENT ON COLUMN reports.analysis_data IS '完整的分析报告数据（JSON格式）';
-COMMENT ON COLUMN reports.cost_breakdown IS '成本详细信息（JSON格式）：包含转录成本、AI分析成本、总成本等';
+COMMENT ON COLUMN reports.cost_detail IS '成本详细信息（JSON格式）：包含转录成本、AI分析成本、总成本等';
 COMMENT ON COLUMN reports.created_at IS '报告创建时间';
 COMMENT ON COLUMN reports.updated_at IS '报告更新时间';
 
@@ -270,7 +270,7 @@ ORDER BY tablename, indexname;
 -- 数据库初始化完成！
 -- ============================================
 -- 
--- 📊 成本追踪字段 (cost_breakdown) 结构示例：
+-- 📊 成本追踪字段 (cost_detail) 结构示例：
 -- {
 --   "transcription": {
 --     "service": "tingwu",
@@ -306,8 +306,8 @@ ORDER BY tablename, indexname;
 -- 3. 统计总成本：
 --    SELECT 
 --      COUNT(*) as report_count,
---      SUM((cost_breakdown->'total'->>'cost')::numeric) as total_cost_cny
---    FROM reports WHERE cost_breakdown IS NOT NULL;
+--      SUM((cost_detail->'total'->>'cost')::numeric) as total_cost_cny
+--    FROM reports WHERE cost_detail IS NOT NULL;
 --
 -- 4. 查看性能监控：
 --    SELECT * FROM slow_queries;

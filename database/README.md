@@ -1,215 +1,499 @@
-# 数据库迁移指南
+# 📊 数据库初始化指南
 
-## 📋 概述
+## 🚀 快速开始（推荐）
 
-本目录包含所有数据库初始化和迁移脚本。请按照以下顺序执行脚本以确保数据库结构正确。
+### Zeabur 部署（一键初始化）
 
-## 🚀 快速开始
-
-### 新数据库初始化
-
-如果你是第一次设置数据库，请执行以下步骤：
+如果你使用 Zeabur 部署，只需执行以下步骤：
 
 1. **在 Zeabur PostgreSQL Web Console 中执行初始化脚本**
-   ```bash
-   # 执行主初始化脚本（创建所有基础表）
-   psql -f database/init.sql
+   ```sql
+   -- 复制并执行 init.sql 的全部内容
    ```
 
-2. **执行迁移脚本（按顺序）**
-   ```bash
-   # 添加学生ID字段
-   psql -f database/add_student_id.sql
-   
-   # 更新报告表结构
-   psql -f database/update_reports_table.sql
-   
-   # 添加成本追踪
-   psql -f database/add_cost_tracking.sql
-   
-   # 优化索引
-   psql -f database/optimize_indexes.sql
+2. **验证表创建成功**
+   ```sql
+   SELECT table_name FROM information_schema.tables 
+   WHERE table_schema = 'public' 
+   ORDER BY table_name;
    ```
 
-### 在 Zeabur Web Console 中执行
+3. **预期结果：3 个表**
+   - `users` - 用户表
+   - `otps` - 验证码表
+   - `reports` - 报告表
 
-如果无法使用 `psql` 命令行，可以在 Zeabur 的 PostgreSQL Web Console 中直接复制粘贴 SQL 脚本内容执行。
+完成！🎉
 
-## 📁 脚本说明
+## 📁 目录结构
 
-### 基础表创建
+```
+database/
+├── schema.sql                  # ✅ 生产环境初始化脚本（推荐）
+├── init.sql                    # ✅ 快速原型/测试脚本
+├── migrate_field_names.sql     # 🔄 字段名迁移脚本
+├── optimize_indexes.sql        # 索引优化脚本
+├── setup.sh                    # 自动化部署脚本
+├── verify.sh                   # 数据库验证脚本
+├── README.md                   # 本文档（完整指南）
+├── QUICK_REFERENCE.md          # 📌 快速参考（字段/索引速查）
+├── ALIYUN_RDS_GUIDE.md         # 阿里云 RDS 部署指南
+├── FIELD_NAMING_CHANGES.md     # 字段命名规范变更说明
+│
+└── archive/                    # 归档目录
+    ├── aliyun/                 # 阿里云 RDS 相关（已归档）
+    │   ├── complete_setup.sql
+    │   ├── aliyun_rds_setup.sql
+    │   ├── SETUP_INSTRUCTIONS.md
+    │   └── README.md
+    │
+    ├── add_*.sql               # 历史迁移脚本
+    ├── create_*.sql            # 单表创建脚本
+    └── README_ARCHIVE.md       # 归档说明
+```
 
-| 文件 | 说明 | 何时使用 |
-|------|------|----------|
-| `init.sql` | **主初始化脚本**，创建 users、otps、reports 三个核心表 | 新数据库首次初始化 |
-| `create_users_table.sql` | 单独创建 users 表 | 仅需要用户表时 |
-| `create_otps_table.sql` | 单独创建 otps 表 | 仅需要验证码表时 |
-| `create_reports_table.sql` | 单独创建 reports 表 | 仅需要报告表时 |
+## 📋 核心文件说明
 
-### 迁移脚本（Migration）
+### 🏢 `schema.sql` - 生产环境初始化脚本（推荐）
 
-| 文件 | 说明 | 依赖 |
-|------|------|------|
-| `add_student_id.sql` | 为 reports 表添加 student_id 字段 | 需要先有 reports 表 |
-| `update_reports_table.sql` | 添加 student_name 和 analysis_data 字段 | 需要先有 reports 表 |
-| `add_cost_tracking.sql` | 添加 cost_breakdown 字段用于成本追踪 | 需要先有 reports 表 |
-| `add_password_to_users.sql` | 为 users 表添加 password 字段 | 需要先有 users 表 |
+**完整的生产级数据库架构**，包含：
+- ✅ 创建数据库扩展（uuid-ossp、pgcrypto）
+- ✅ 创建 3 个表：`users`、`otps`、`reports`
+- ✅ 完整的表结构（reports 表包含 14 个字段）
+- ✅ 13 个优化索引（包括 GIN 索引）
+- ✅ 完整的字段注释（便于维护）
+- ✅ 自动更新 `updated_at` 的触发器
+- ✅ 适用于阿里云 RDS、自建 PostgreSQL
 
-### 优化脚本
+**适用场景**：
+- 🏢 生产环境部署
+- 🏢 阿里云 RDS
+- 🏢 自建 PostgreSQL 服务器
+- 🏢 需要完整字段和成本追踪功能
 
-| 文件 | 说明 | 何时使用 |
-|------|------|----------|
-| `optimize_indexes.sql` | 优化数据库索引，提升查询性能 | 数据量较大时或性能优化时 |
+### 🧪 `init.sql` - 快速原型/测试脚本
+
+**简化版数据库架构**，包含：
+- ✅ 创建 3 个表：`users`、`otps`、`reports`
+- ✅ 基础表结构（reports 表只有 6 个核心字段）
+- ✅ 5 个基础索引
+- ✅ 快速上手，适合快速开发
+
+**适用场景**：
+- 🧪 Zeabur 快速部署
+- 🧪 开发环境测试
+- 🧪 原型验证
+- 🧪 MVP 快速启动
+
+### 📌 `QUICK_REFERENCE.md` - 快速参考
+
+**字段和索引速查表**，包含：
+- ✅ 所有表的字段列表
+- ✅ 所有索引列表
+- ✅ 常用 SQL 示例
+- ✅ 迁移命令速查
+- ✅ 代码示例（后端/SQL）
+
+**适合**：快速查找字段名、编写 SQL、代码开发
+
+### 📄 `ALIYUN_RDS_GUIDE.md` - 阿里云 RDS 部署指南
+
+完整的阿里云 RDS PostgreSQL 部署教程，包含：
+- 创建 RDS 实例的详细步骤
+- 安全配置和性能优化
+- 故障排查指南
+
+### 📝 `FIELD_NAMING_CHANGES.md` - 字段命名规范变更说明
+
+**重要！** 如果你的应用代码引用了以下旧字段名，请查看此文档：
+- ❌ `password_hash` → ✅ `passwd_hash`
+- ❌ `audio_duration` → ✅ `audio_dur`
+- ❌ `cost_breakdown` → ✅ `cost_detail`
+
+此文档包含：
+- 命名变更原因和规范
+- 详细的迁移步骤
+- 代码修改示例（后端/前端/SQL）
+
+### 🔄 `migrate_field_names.sql` - 字段名迁移脚本
+
+**自动化迁移脚本**，用于将现有数据库从旧字段名迁移到新字段名：
+
+```bash
+# ⚠️ 迁移前务必备份数据库！
+pg_dump $DATABASE_URL > backup_before_migration.sql
+
+# 执行迁移
+psql $DATABASE_URL -f database/migrate_field_names.sql
+```
+
+**脚本功能**：
+- ✅ 自动检测旧字段是否存在
+- ✅ 在事务中执行（失败自动回滚）
+- ✅ 重命名字段和索引
+- ✅ 完整的迁移前后验证
+- ✅ 数据完整性检查
+- ✅ 提供回滚方案
+
+**何时使用**：
+- 🔄 已有生产数据库需要升级到新命名规范
+- 🔄 从旧版本 schema 迁移到新版本
+
+### `optimize_indexes.sql` - 索引优化
+
+在以下情况执行此脚本：
+- 数据量增长到 10,000+ 条记录
+- 查询性能下降
+- 需要优化特定查询
+
+### `setup.sh` 和 `verify.sh` - 自动化脚本
+
+```bash
+# 自动化部署
+./database/setup.sh
+
+# 验证数据库结构
+./database/verify.sh
+```
+
+## 🎯 部署步骤
+
+### 方法 1：阿里云 RDS（生产环境）⭐
+
+**适合正式部署，推荐使用 `schema.sql`**
+
+1. **登录阿里云 RDS 控制台**
+   - 确保 PostgreSQL 实例已创建（推荐 PostgreSQL 14+）
+   - 配置白名单（添加你的 IP 地址）
+
+2. **使用 DMS 或 pgAdmin 连接**
+   ```
+   主机：your-rds-instance.pg.rds.aliyuncs.com
+   端口：5432
+   数据库：postgres（或自定义数据库名）
+   用户：你的用户名
+   密码：你的密码
+   ```
+
+3. **执行初始化脚本**
+   ```sql
+   -- 复制并执行 database/schema.sql 的全部内容
+   ```
+
+4. **验证部署**
+   ```sql
+   -- 检查表是否创建成功
+   SELECT table_name FROM information_schema.tables 
+   WHERE table_schema = 'public' 
+   ORDER BY table_name;
+   
+   -- 检查触发器
+   SELECT trigger_name, event_object_table 
+   FROM information_schema.triggers;
+   ```
+
+5. **配置应用程序**
+   ```bash
+   # .env 文件
+   DATABASE_URL="postgresql://username:password@your-rds.pg.rds.aliyuncs.com:5432/dbname"
+   ```
+
+### 方法 2：Zeabur Web Console（快速开发）
+
+**适合快速原型，使用 `init.sql`**
+
+1. 登录 Zeabur Dashboard
+2. 进入 PostgreSQL 服务
+3. 打开 **Web Console**
+4. 复制 `database/init.sql` 的全部内容
+5. 粘贴并执行
+6. 验证表创建成功
+
+### 方法 3：psql 命令行
+
+```bash
+# 生产环境（使用 schema.sql）
+psql $DATABASE_URL -f database/schema.sql
+
+# 开发环境（使用 init.sql）
+psql $DATABASE_URL -f database/init.sql
+
+# 或者使用完整连接字符串
+psql "postgresql://user:password@host:port/database" -f database/schema.sql
+```
+
+### 方法 4：自动化脚本
+
+```bash
+# 设置环境变量
+export DATABASE_URL="your_database_url"
+
+# 执行部署脚本（默认使用 schema.sql）
+cd /path/to/project
+./database/setup.sh
+
+# 或指定使用 init.sql
+./database/setup.sh init
+```
 
 ## ✅ 验证数据库结构
 
-执行以下 SQL 验证表结构是否正确：
+### 1. 检查表是否存在
 
 ```sql
--- 查看所有表
-SELECT table_name 
+SELECT table_name, 
+       (SELECT COUNT(*) FROM information_schema.columns 
+        WHERE columns.table_name = tables.table_name) as column_count
 FROM information_schema.tables 
 WHERE table_schema = 'public' 
 ORDER BY table_name;
-
--- 查看 reports 表结构
-SELECT column_name, data_type, is_nullable 
-FROM information_schema.columns 
-WHERE table_name = 'reports' 
-ORDER BY ordinal_position;
-
--- 查看 reports 表的索引
-SELECT indexname, indexdef 
-FROM pg_indexes 
-WHERE tablename = 'reports';
 ```
 
-### 预期的 reports 表结构
+**预期结果：**
+```
+table_name | column_count
+-----------+-------------
+otps       | 7
+reports    | 14
+users      | 6
+```
 
-| 字段名 | 类型 | 说明 |
-|--------|------|------|
-| id | UUID | 主键 |
-| user_id | UUID | 用户ID（外键） |
-| video_url | TEXT | 视频URL |
-| transcript | TEXT | 转录文本 |
-| analysis | JSONB | 分析结果 |
-| student_id | TEXT | 学生ID |
-| student_name | TEXT | 学生姓名 |
-| analysis_data | JSONB | 完整分析数据 |
-| cost_breakdown | JSONB | 成本详情 |
-| created_at | TIMESTAMP | 创建时间 |
-| updated_at | TIMESTAMP | 更新时间 |
+### 2. 检查索引
 
-### 预期的索引
+```sql
+SELECT tablename, indexname 
+FROM pg_indexes 
+WHERE schemaname = 'public' 
+ORDER BY tablename, indexname;
+```
 
-- `idx_reports_user_id` - 用户ID索引
-- `idx_reports_created_at` - 创建时间索引
-- `idx_reports_student_id` - 学生ID索引
-- `idx_reports_student_name` - 学生姓名索引
-- `idx_reports_cost_breakdown` - 成本数据索引（GIN）
+### 3. 测试连接
+
+```bash
+# 使用验证脚本
+./database/verify.sh
+
+# 或者手动测试
+psql $DATABASE_URL -c "SELECT version();"
+```
+
+## 📊 表结构说明
+
+### 🏢 schema.sql（生产版）vs 🧪 init.sql（简化版）
+
+#### users（用户表）
+
+| 字段 | 类型 | schema.sql | init.sql | 说明 |
+|------|------|-----------|----------|------|
+| id | UUID | ✅ | ✅ | 主键 |
+| email | TEXT/VARCHAR(255) | ✅ | ✅ | 邮箱（唯一） |
+| passwd_hash | TEXT/VARCHAR(255) | ✅ | ✅ | 密码哈希值 |
+| last_login | TIMESTAMP | ✅ | ❌ | 最后登录时间 |
+| created_at | TIMESTAMP | ✅ | ✅ | 创建时间 |
+| updated_at | TIMESTAMP | ✅ | ✅ | 更新时间 |
+
+#### otps（验证码表）
+
+| 字段 | 类型 | schema.sql | init.sql | 说明 |
+|------|------|-----------|----------|------|
+| id | UUID | ✅ | ✅ | 主键 |
+| email | TEXT/VARCHAR(255) | ✅ | ✅ | 邮箱 |
+| code | TEXT/VARCHAR(6) | ✅ | ✅ | 验证码 |
+| expires_at | TIMESTAMP | ✅ | ✅ | 过期时间 |
+| used | BOOLEAN | ✅ | ✅ | 是否已使用 |
+| used_at | TIMESTAMP | ❌ | ✅ | 使用时间 |
+| created_at | TIMESTAMP | ✅ | ✅ | 创建时间 |
+
+#### reports（报告表）⭐ 主要区别
+
+| 字段 | 类型 | schema.sql | init.sql | 说明 |
+|------|------|-----------|----------|------|
+| id | UUID | ✅ | ✅ | 主键 |
+| user_id | UUID | ✅ | ✅ | 用户ID（外键） |
+| user_email | TEXT | ✅ | ❌ | 用户邮箱 |
+| student_id | TEXT | ✅ | ✅ | 学生ID（必填） |
+| student_name | TEXT | ✅ | ❌ | 学生姓名 |
+| file_name | TEXT | ✅ | ❌ | 文件名 |
+| file_url | TEXT | ✅ | ❌ | 文件URL |
+| video_url | TEXT | ✅ | ✅ | 视频URL |
+| audio_dur | INTEGER | ✅ | ❌ | 音频时长（秒） |
+| transcript | TEXT | ✅ | ✅ | 转录文本 |
+| analysis | JSONB | ✅ | ✅ | 分析结果 |
+| analysis_data | JSONB | ✅ | ❌ | 完整分析数据 |
+| cost_detail | JSONB | ✅ | ❌ | 成本详情 |
+| total_cost | DECIMAL(10,4) | ✅ | ❌ | 总成本 |
+| created_at | TIMESTAMP | ✅ | ✅ | 创建时间 |
+| updated_at | TIMESTAMP | ✅ | ✅ | 更新时间 |
+
+### 📈 索引对比
+
+| 索引类型 | schema.sql | init.sql |
+|---------|-----------|----------|
+| users 表索引 | 2 个 | 1 个 |
+| otps 表索引 | 3 个 | 3 个 |
+| reports 表索引 | 8 个（含 GIN） | 2 个 |
+| **总计** | **13 个** | **6 个** |
+
+### 🎯 选择建议
+
+**使用 schema.sql（生产版）如果：**
+- ✅ 需要追踪成本数据（`cost_detail`、`total_cost`）
+- ✅ 需要学生信息（`student_id`、`student_name`）
+- ✅ 需要文件管理（`file_name`、`file_url`）
+- ✅ 需要查询性能优化（13个索引）
+- ✅ 需要自动更新时间戳（触发器）
+- ✅ 生产环境部署
+
+**使用 init.sql（简化版）如果：**
+- ✅ 快速原型验证
+- ✅ MVP 最小可行产品
+- ✅ 开发环境测试
+- ✅ 不需要成本追踪
+
+## 📐 命名规范说明
+
+本数据库架构遵循以下命名规范：
+
+### ✅ 已遵循的规范
+
+1. **非唯一索引**：使用 `idx_` 前缀
+   - `idx_users_created_at`
+   - `idx_reports_user_id`
+
+2. **唯一索引**：使用 `uniq_` 前缀
+   - `uniq_users_email`（邮箱唯一索引）
+
+3. **表名和字段名**：
+   - ✅ 小写字母 + 下划线分隔
+   - ✅ 不使用数据库保留字
+   - ✅ 字段名不超过 12 个字符（建议）
+
+### 📝 字段命名变更
+
+为符合 12 字符限制，部分字段已重命名：
+
+| 旧字段名 | 新字段名 | 说明 |
+|---------|---------|------|
+| `password_hash` | `passwd_hash` | 密码哈希值（13→11字符） |
+| `audio_duration` | `audio_dur` | 音频时长（14→9字符） |
+| `cost_breakdown` | `cost_detail` | 成本明细（14→11字符） |
+
+**⚠️ 重要提醒**：如果你的应用代码使用了旧字段名，请查看 [FIELD_NAMING_CHANGES.md](FIELD_NAMING_CHANGES.md) 获取完整的迁移指南。
 
 ## 🔧 常见问题
 
-### 1. 测试失败："table 'analysis_reports' does not exist"
+### 1. "表已存在"错误
 
-**原因**：你的数据库使用的是 `reports` 表名，而不是 `analysis_reports`。
+这是正常的，脚本使用 `CREATE TABLE IF NOT EXISTS`，可以安全地重复执行。
 
-**解决方案**：
-- 数据库表名是 `reports`（正确）
-- 测试文件已更新为使用 `reports` 表名
-- 确保执行了所有迁移脚本
+### 2. 连接被拒绝
 
-### 2. 字段不存在错误
+检查：
+- ✅ 数据库服务是否运行
+- ✅ 连接字符串是否正确
+- ✅ 网络是否可达
+- ✅ 安全组/防火墙配置
 
-**原因**：未执行迁移脚本。
+### 3. 权限不足
 
-**解决方案**：按顺序执行所有迁移脚本：
-```bash
-psql -f database/add_student_id.sql
-psql -f database/update_reports_table.sql
-psql -f database/add_cost_tracking.sql
-```
+确保数据库用户具有以下权限：
+- CREATE TABLE
+- CREATE INDEX
+- SELECT, INSERT, UPDATE, DELETE
 
-### 3. 索引不存在
+### 4. 字段不存在
 
-**原因**：未执行索引优化脚本。
+如果遇到字段不存在的错误：
+1. 删除现有表：`DROP TABLE users, otps, reports CASCADE;`
+2. 重新执行 `init.sql`
 
-**解决方案**：
-```bash
-psql -f database/optimize_indexes.sql
-```
+## 🧪 开发环境测试
 
-## 🔄 迁移清单
-
-在新环境部署时，请按照以下清单执行：
-
-- [ ] 1. 执行 `init.sql` 创建基础表
-- [ ] 2. 验证三个表（users、otps、reports）已创建
-- [ ] 3. 执行 `add_student_id.sql` 添加学生ID
-- [ ] 4. 执行 `update_reports_table.sql` 添加学生姓名和分析数据
-- [ ] 5. 执行 `add_cost_tracking.sql` 添加成本追踪
-- [ ] 6. 执行 `optimize_indexes.sql` 优化索引
-- [ ] 7. 验证所有字段和索引都已创建
-- [ ] 8. 运行测试：`npm test`
-
-## 📝 数据库连接配置
-
-确保你的 `.env` 文件包含正确的数据库连接信息：
-
-```env
-# Zeabur 模式（推荐）
-DATABASE_URL=postgresql://username:password@host:port/database
-DB_SSL=false
-
-# 或者传统模式
-DB_HOST=your-host
-DB_PORT=5432
-DB_NAME=your-database
-DB_USER=your-username
-DB_PASSWORD=your-password
-```
-
-## 🧪 运行数据库测试
-
-执行集成测试验证数据库配置：
+### 本地 PostgreSQL 测试
 
 ```bash
-# 运行所有测试
-npm test
+# 使用 Docker 启动本地数据库
+docker run -d \
+  --name test-postgres \
+  -e POSTGRES_PASSWORD=testpass \
+  -e POSTGRES_DB=testdb \
+  -p 5432:5432 \
+  postgres:17-alpine
 
-# 只运行数据库测试
+# 初始化数据库
+export DATABASE_URL="postgresql://postgres:testpass@localhost:5432/testdb"
+psql $DATABASE_URL -f database/init.sql
+
+# 验证
+./database/verify.sh
+```
+
+### 运行集成测试
+
+```bash
+# 确保数据库已初始化
 npm test -- tests/integration/database.test.ts
 ```
 
-## 📊 成本追踪查询
+## 📈 性能优化建议
 
-查看成本统计：
+### 1. 定期执行索引优化
 
-```sql
--- 总成本统计
-SELECT 
-  COUNT(*) as report_count,
-  SUM((cost_breakdown->'total'->>'cost')::numeric) as total_cost_cny
-FROM reports
-WHERE cost_breakdown IS NOT NULL;
-
--- 按日期统计
-SELECT 
-  DATE(created_at) as date,
-  COUNT(*) as report_count,
-  SUM((cost_breakdown->'total'->>'cost')::numeric) as daily_cost
-FROM reports
-WHERE cost_breakdown IS NOT NULL
-GROUP BY DATE(created_at)
-ORDER BY date DESC;
+```bash
+psql $DATABASE_URL -f database/optimize_indexes.sql
 ```
 
-## 🛟 需要帮助？
+### 2. 监控查询性能
 
-如果遇到问题：
+```sql
+-- 查看慢查询
+SELECT query, mean_exec_time, calls 
+FROM pg_stat_statements 
+ORDER BY mean_exec_time DESC 
+LIMIT 10;
+```
 
-1. 检查所有迁移脚本是否都已执行
-2. 验证数据库表结构是否正确
-3. 确认环境变量配置正确
-4. 查看测试输出的错误信息
-5. 参考 `tests/README.md` 了解测试配置
+### 3. 定期清理过期数据
+
+```sql
+-- 清理过期的验证码（7天前）
+DELETE FROM otps 
+WHERE created_at < NOW() - INTERVAL '7 days';
+
+-- 清理旧的测试报告（可选）
+DELETE FROM reports 
+WHERE created_at < NOW() - INTERVAL '30 days' 
+  AND student_id LIKE 'test_%';
+```
+
+## 📦 归档文件说明
+
+### `archive/` 目录
+
+包含历史文件和不再使用的配置：
+
+- **`archive/aliyun/`** - 阿里云 RDS 相关文件（已停用）
+- **`archive/schema.sql`** - 旧的 schema 文件（已合并到 init.sql）
+- **`archive/add_*.sql`** - 历史迁移脚本（已合并到 init.sql）
+- **`archive/create_*.sql`** - 单表创建脚本（已合并到 init.sql）
+
+这些文件保留用于历史参考，**不应在新部署中使用**。
+
+## 🔒 安全建议
+
+1. **不要提交敏感信息**：`.gitignore` 应包含 `.env` 文件
+2. **使用强密码**：数据库密码至少 16 字符
+3. **启用 SSL**：生产环境必须使用加密连接
+4. **定期备份**：使用 `pg_dump` 或云平台自动备份
+5. **最小权限原则**：应用程序用户不需要 SUPERUSER 权限
+
+## 🆘 需要帮助？
+
+- 📖 参考项目根目录的 `QUICKSTART_ZEABUR.md`
+- 🐛 遇到问题请检查 `tests/README.md`
+- 💬 查看项目 Issues 或提交新问题
+
+---
+
+**当前版本**：v2.0（简化版，2025-11-17）  
+**上次更新**：2025-11-17

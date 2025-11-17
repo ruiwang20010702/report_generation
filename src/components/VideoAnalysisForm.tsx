@@ -14,7 +14,7 @@ interface FormData {
   video1: string;
   video2: string;
   studentName: string;
-  studentId?: string;
+  studentId: string;
   grade: string;
   level: string;
   unit: string;
@@ -106,6 +106,12 @@ export const VideoAnalysisForm = ({ onSubmit }: VideoAnalysisFormProps) => {
       newErrors.studentName = "请输入学生姓名";
     } else if (formData.studentName.length < 2 || formData.studentName.length > 10) {
       newErrors.studentName = "姓名长度应为2-10个字符";
+    }
+
+    if (!formData.studentId.trim()) {
+      newErrors.studentId = "请输入学生ID";
+    } else if (formData.studentId.length < 3 || formData.studentId.length > 20) {
+      newErrors.studentId = "学生ID长度应为3-20个字符";
     }
 
     if (!formData.grade) {
@@ -241,16 +247,17 @@ export const VideoAnalysisForm = ({ onSubmit }: VideoAnalysisFormProps) => {
               <div className="space-y-2">
                 <Label htmlFor="studentId" className="flex items-center gap-2 text-base font-semibold">
                   <User className="w-5 h-5 text-secondary" />
-                  学生ID <span className="text-xs text-muted-foreground font-normal">(可选)</span>
+                  学生ID <span className="text-destructive">*</span>
                 </Label>
                 <Input
                   id="studentId"
                   type="text"
-                  placeholder="请输入学生ID"
+                  placeholder="请输入学生ID（例如：STU001）"
                   value={formData.studentId}
                   onChange={(e) => updateFormField({ studentId: e.target.value })}
                   className="h-12"
                 />
+                {errors.studentId && <p className="text-sm text-destructive">{errors.studentId}</p>}
               </div>
             </div>
 

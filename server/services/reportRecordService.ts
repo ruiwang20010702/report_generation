@@ -12,10 +12,10 @@ export interface ReportRecord {
   studentId?: string;
   videoUrl?: string;
   transcript?: string;
-  audioDuration?: number;
+  audioDur?: number;
   fileName?: string;
   fileUrl?: string;
-  costBreakdown: CostBreakdown;
+  costDetail: CostBreakdown;
   analysisData?: any; // 完整的分析报告数据（可选）
 }
 
@@ -32,10 +32,10 @@ export class ReportRecordService {
           student_name,
           video_url,
           transcript,
-          audio_duration,
+          audio_dur,
           file_name,
           file_url,
-          cost_breakdown,
+          cost_detail,
           analysis,
           analysis_data,
           created_at
@@ -49,10 +49,10 @@ export class ReportRecordService {
         record.studentName || null,
         record.videoUrl || null,
         record.transcript || null,
-        record.audioDuration || null,
+        record.audioDur || null,
         record.fileName || null,
         record.fileUrl || null,
-        JSON.stringify(record.costBreakdown),
+        JSON.stringify(record.costDetail),
         record.analysisData ? JSON.stringify(record.analysisData) : null,
         record.analysisData ? JSON.stringify(record.analysisData) : null
       ];
@@ -66,7 +66,7 @@ export class ReportRecordService {
       console.log(`   学生姓名: ${record.studentName}`);
       if (record.studentId) console.log(`   学生ID: ${record.studentId}`);
       console.log(`   生成时间: ${createdAt}`);
-      console.log(`   总成本: ¥${record.costBreakdown.total.cost.toFixed(4)}`);
+      console.log(`   总成本: ¥${record.costDetail.total.cost.toFixed(4)}`);
 
       return reportId;
     } catch (error) {
@@ -86,7 +86,7 @@ export class ReportRecordService {
           id,
           student_id,
           analysis->>'studentName' as student_name,
-          cost_breakdown,
+          cost_detail,
           created_at
         FROM reports
         WHERE user_id = $1
@@ -110,12 +110,12 @@ export class ReportRecordService {
       let query = `
         SELECT 
           COUNT(*) as total_reports,
-          SUM((cost_breakdown->'total'->>'cost')::numeric) as total_cost,
-          AVG((cost_breakdown->'total'->>'cost')::numeric) as avg_cost,
+          SUM((cost_detail->'total'->>'cost')::numeric) as total_cost,
+          AVG((cost_detail->'total'->>'cost')::numeric) as avg_cost,
           MIN(created_at) as first_report,
           MAX(created_at) as last_report
         FROM reports
-        WHERE cost_breakdown IS NOT NULL
+        WHERE cost_detail IS NOT NULL
       `;
 
       const values: any[] = [];
@@ -144,7 +144,7 @@ export class ReportRecordService {
           r.student_id,
           u.email as user_email,
           r.analysis->>'studentName' as student_name,
-          r.cost_breakdown,
+          r.cost_detail,
           r.created_at
         FROM reports r
         LEFT JOIN users u ON r.user_id = u.id

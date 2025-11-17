@@ -1426,10 +1426,10 @@ ${JSON.stringify(video2Analysis, null, 2)}
           studentId: request.studentId,
           videoUrl: `${request.video1};${request.video2}`, // 用分号分隔两个视频URL
           transcript: combinedTranscript,
-          audioDuration: Math.round(totalDuration),
+          audioDur: Math.round(totalDuration),
           fileName: `${request.studentName}_${new Date().toISOString().split('T')[0]}`,
           fileUrl: request.video1, // 使用第一个视频作为主要链接
-          costBreakdown: report.costBreakdown,
+          costDetail: report.costBreakdown,
           analysisData: report // 保存完整的报告数据
         }).catch(err => {
           console.error('⚠️ 报告记录保存失败（不影响主流程）:', err.message);

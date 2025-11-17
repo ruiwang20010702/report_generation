@@ -142,7 +142,7 @@ if (report.costBreakdown) {
   reportRecordService.recordReport({
     userId: request.userId,
     studentName: request.studentName,
-    costBreakdown: report.costBreakdown,
+    costDetail: report.costBreakdown,
     analysisData: report // 保存完整的报告数据
   }).catch(err => {
     console.error('⚠️ 报告记录保存失败（不影响主流程）:', err.message);

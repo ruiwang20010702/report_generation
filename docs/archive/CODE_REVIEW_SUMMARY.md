@@ -84,7 +84,7 @@ if (report.costBreakdown) {
   reportRecordService.recordReport({
     userId: request.userId,          // ✅ 从请求中获取
     studentName: request.studentName, // ✅ 正确传递
-    costBreakdown: report.costBreakdown, // ✅ 完整成本数据
+    costDetail: report.costBreakdown, // ✅ 完整成本数据
     analysisData: report              // ✅ 保存完整报告
   }).catch(err => {
     // ✅ 异步保存，不阻塞主流程

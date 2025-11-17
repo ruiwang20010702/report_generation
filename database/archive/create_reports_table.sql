@@ -3,7 +3,7 @@ CREATE TABLE IF NOT EXISTS reports (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
   student_name TEXT NOT NULL,
-  audio_duration INTEGER NOT NULL,
+  audio_dur INTEGER NOT NULL,
   transcript TEXT NOT NULL,
   analysis_data JSONB NOT NULL,
   file_name TEXT NOT NULL,
@@ -32,7 +32,7 @@ COMMENT ON TABLE reports IS '51Talk 课程音频分析报告';
 COMMENT ON COLUMN reports.id IS '报告唯一标识符';
 COMMENT ON COLUMN reports.created_at IS '报告创建时间';
 COMMENT ON COLUMN reports.student_name IS '学生姓名';
-COMMENT ON COLUMN reports.audio_duration IS '音频时长（秒）';
+COMMENT ON COLUMN reports.audio_dur IS '音频时长（秒）';
 COMMENT ON COLUMN reports.transcript IS '完整转录文本';
 COMMENT ON COLUMN reports.analysis_data IS '分析结果（JSON格式）';
 COMMENT ON COLUMN reports.file_name IS '原始音频文件名';

@@ -73,13 +73,13 @@ CREATE TABLE IF NOT EXISTS reports (
   video_url TEXT,
   transcript TEXT,
   analysis JSONB,
-  student_id TEXT,
+  student_id TEXT NOT NULL,
   student_name TEXT,
-  audio_duration INTEGER,
+  audio_dur INTEGER,
   file_name TEXT,
   file_url TEXT,
   analysis_data JSONB,
-  cost_breakdown JSONB,
+  cost_detail JSONB,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
@@ -89,7 +89,7 @@ CREATE INDEX IF NOT EXISTS idx_reports_user_id ON reports(user_id);
 CREATE INDEX IF NOT EXISTS idx_reports_created_at ON reports(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_reports_student_id ON reports(student_id);
 CREATE INDEX IF NOT EXISTS idx_reports_student_name ON reports(student_name);
-CREATE INDEX IF NOT EXISTS idx_reports_cost_breakdown ON reports USING GIN (cost_breakdown);
+CREATE INDEX IF NOT EXISTS idx_reports_cost_detail ON reports USING GIN (cost_detail);
 
 -- 组合索引：优化常见查询模式
 CREATE INDEX IF NOT EXISTS idx_reports_student_created ON reports(student_name, created_at DESC);
@@ -152,7 +152,7 @@ ON CONFLICT (email) DO NOTHING
 RETURNING *;
 
 -- 插入测试报告
-INSERT INTO reports (student_name, audio_duration, transcript, analysis_data, file_name)
+INSERT INTO reports (student_name, audio_dur, transcript, analysis_data, file_name)
 VALUES ('测试学生', 300, '这是一段测试转录文本', '{"test": true}'::jsonb, 'test.mp3')
 RETURNING id, student_name, created_at;
 
@@ -168,7 +168,7 @@ SELECT * FROM reports LIMIT 5;
 SELECT 
     id,
     student_name,
-    audio_duration,
+    audio_dur,
     created_at
 FROM reports 
 ORDER BY created_at DESC 
@@ -178,7 +178,7 @@ LIMIT 10;
 SELECT 
     id,
     created_at,
-    audio_duration,
+    audio_dur,
     file_name
 FROM reports 
 WHERE student_name = '张三' 

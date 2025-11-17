@@ -1,113 +1,131 @@
 # 📊 项目当前状态
 
-**更新时间**: $(date '+%Y-%m-%d %H:%M:%S')
+**更新时间**: 2025-11-17
 
 ---
 
 ## ✅ 已完成的工作
 
-### 1. 测试系统 ✅
+### 1. 核心功能 ✅
+- ✅ **视频分析系统**：通义听悟转写 + GLM-4-Plus 分析
+- ✅ **用户认证系统**：邮箱验证码 + 密码登录
+- ✅ **报告生成**：三大维度分析（学习数据、进步维度、改进领域）
+- ✅ **成本追踪**：自动计算和记录 AI 调用成本
+- ✅ **Mock 模式**：支持无 API Key 的演示模式
+
+### 2. 生产环境优化 ✅
+- ✅ **安全加固**：XSS/SQL注入防护、安全响应头、输入验证
+- ✅ **结构化日志**：Request ID追踪、5级日志系统
+- ✅ **性能监控**：响应时间、资源监控、健康检查端点
+- ✅ **错误处理**：统一错误处理、Sentry 集成、邮件告警
+- ✅ **速率限制**：全局限流 + 接口级限流
+
+### 3. 数据库部署 ✅
+- ✅ **阿里云 PolarDB PostgreSQL 17**
+- ✅ 数据库连接已验证
+- ✅ Schema 文件已准备（database/schema.sql）
+- ⚠️  需要执行：`npm run setup:db` 创建表结构
+
+### 4. 测试系统 ✅
 - ✅ **27个集成测试全部通过**
   - 安全测试（7个）
   - API测试（10个）
   - 健康检查测试（6个）
   - 数据库测试（4个）
-- ✅ 测试覆盖率良好
-- ✅ 所有关键功能验证通过
 
-### 2. 生产环境优化 ✅
-- ✅ 安全加固（安全头、输入验证、防护机制）
-- ✅ 结构化日志（Request ID追踪、5级日志）
-- ✅ 性能指标收集（响应时间、资源监控）
-- ✅ 健康检查端点（/api/health/*）
-- ✅ 错误处理和恢复机制
-- ✅ 速率限制和流量控制
-
-### 3. 文档完善 ✅
-- ✅ 环境配置指南
-- ✅ 快速部署文档
-- ✅ 配置检查清单
-- ✅ 测试文档
-- ✅ 数据库文档
-
-### 4. 工具和脚本 ✅
-- ✅ 快速配置脚本（./scripts/quick-setup.sh）
-- ✅ 环境检查工具（npm run check:env）
-- ✅ 数据库测试工具（npm run test:db）
-- ✅ 自动化测试套件
+### 5. 文档体系 ✅
+- ✅ 项目目录结构已整理
+- ✅ 过时文档已归档到 `docs/archive/`
+- ✅ 工作报告统一存放在 `docs/work-reports/`
+- ✅ 保留核心文档：README、配置指南、部署文档
 
 ---
 
-## 🎯 当前阶段：环境配置
+## 🎯 当前阶段：数据库初始化
 
-你现在处于**环境配置和部署准备**阶段。
+项目代码和基础设施已就绪，需要**初始化数据库表结构**。
 
 ---
 
 ## 📋 下一步行动计划
 
-### 立即行动（今天）
+### 立即行动（5分钟）
 
-#### 选项A：快速体验（10分钟）- 推荐先做这个
-\`\`\`bash
-# 1. 运行配置向导
-./scripts/quick-setup.sh
+#### 初始化数据库表结构
+```bash
+# 方式1：使用 npm 脚本（推荐）
+npm run setup:db
 
-# 2. 使用Mock模式（无需外部API）
-echo "USE_MOCK_ANALYSIS=true" >> .env
+# 方式2：手动执行 SQL
+psql -h report-generation-project-pub.rwlb.rds.aliyuncs.com \
+     -p 5432 \
+     -U report_write \
+     -d report_generation_project \
+     -f database/schema.sql
+```
 
-# 3. 启动应用
-npm run dev:all
-
-# 4. 访问 http://localhost:8080
-\`\`\`
-
-✅ 这样可以立即看到应用运行效果，无需注册任何服务
+#### 验证数据库
+```bash
+# 验证表是否创建成功
+npm run test:db
+```
 
 ---
 
-#### 选项B：完整配置（30-60分钟）- 准备生产环境
-\`\`\`bash
-# 1. 查看配置清单
-cat CONFIG_CHECKLIST.md
+### 后续步骤
 
-# 2. 获取必需的API密钥（15-30分钟）
-# - JWT Secret（1分钟，本地生成）
-# - 智谱GLM（5分钟）
-# - 阿里云密钥（10-15分钟）
+#### 选项A：快速体验 Mock 模式（10分钟）
+```bash
+# 1. 配置 Mock 模式
+echo "USE_MOCK_ANALYSIS=true" >> .env
 
-# 3. 配置.env文件（5分钟）
-
-# 4. 验证配置（5分钟）
-npm run check:env
-npm run test:db
-npm test
-
-# 5. 启动并测试
+# 2. 启动应用
 npm run dev:all
-\`\`\`
 
-✅ 完成后即可进行真实的AI分析和生产部署
+# 3. 访问 http://localhost:8080
+```
+
+✅ 无需 AI API Key，立即查看效果
+
+---
+
+#### 选项B：配置生产环境（30分钟）
+```bash
+# 1. 配置 AI 服务密钥
+# 编辑 .env 文件，添加：
+# GLM_API_KEY=【智谱GLM密钥】
+# ALIYUN_ACCESS_KEY_ID=【阿里云ID】
+# ALIYUN_ACCESS_KEY_SECRET=【阿里云Secret】
+
+# 2. 验证配置
+npm run check:env
+
+# 3. 启动并测试真实分析
+npm run dev:all
+```
+
+✅ 完成后可进行真实的 AI 视频分析
 
 ---
 
 ### 短期目标（本周）
 
-- [ ] 完成环境配置
-- [ ] 本地完整测试
-- [ ] 选择部署平台（Zeabur / 阿里云）
-- [ ] 完成首次部署
-- [ ] 配置域名（可选）
+- [x] 数据库部署（阿里云 PolarDB）
+- [ ] 初始化数据库表结构
+- [ ] 本地测试 Mock 模式
+- [ ] 配置 AI 服务密钥
+- [ ] 本地测试真实分析
+- [ ] 部署到 Zeabur（可选）
 
 ---
 
 ### 中期目标（本月）
 
 - [ ] 邀请用户测试
-- [ ] 收集反馈
-- [ ] 配置Sentry监控
-- [ ] 优化性能
-- [ ] 添加使用文档
+- [ ] 收集功能反馈
+- [ ] 优化分析准确度
+- [ ] 配置自定义域名
+- [ ] 监控成本和性能
 
 ---
 
@@ -115,60 +133,74 @@ npm run dev:all
 
 | 需要做什么 | 看哪个文档 | 时间 |
 |-----------|-----------|------|
-| 🚀 **现在就想看效果** | \`NEXT_STEPS.md\` + Mock模式 | 10分钟 |
-| 🔧 **配置生产环境** | \`CONFIG_CHECKLIST.md\` | 30分钟 |
-| 📖 **详细配置指南** | \`ENVIRONMENT_SETUP_GUIDE.md\` | 15分钟阅读 |
-| ⚡ **快速部署Zeabur** | \`QUICKSTART_ZEABUR.md\` | 10-15分钟 |
-| ✅ **部署前检查** | \`DEPLOYMENT_CHECKLIST.md\` | 5分钟 |
-| 🧪 **测试相关** | \`tests/README.md\` | 参考 |
+| 🚀 **项目概览** | `README.md` | 5分钟 |
+| 📊 **当前状态** | `CURRENT_STATUS.md` | 3分钟 |
+| 🗄️ **数据库设置** | `database/README.md` | 10分钟 |
+| 🔧 **环境配置** | `ENVIRONMENT_SETUP_GUIDE.md` | 15分钟 |
+| ⚡ **快速部署** | `QUICKSTART_ZEABUR.md` | 10分钟 |
+| ✅ **配置检查** | `CONFIG_CHECKLIST.md` | 5分钟 |
+| 🧪 **测试指南** | `tests/README.md` | 参考 |
+| 📦 **部署检查** | `DEPLOYMENT_CHECKLIST.md` | 5分钟 |
 
 ---
 
 ## 🎯 推荐流程
 
-### 第一次接触？按这个顺序：
+### 第一次使用？按这个顺序：
 
-1. **快速体验**（10分钟）
-   \`\`\`bash
-   ./scripts/quick-setup.sh
-   # 使用Mock模式，立即看到效果
-   \`\`\`
+#### 阶段1：初始化数据库（5分钟）
+```bash
+# 1. 执行数据库初始化
+npm run setup:db
 
-2. **阅读配置清单**（10分钟）
-   \`\`\`bash
-   cat CONFIG_CHECKLIST.md
-   # 了解需要配置什么
-   \`\`\`
+# 2. 验证数据库连接
+npm run test:db
+```
 
-3. **获取密钥**（15-30分钟）
-   - 注册智谱账号，获取GLM Key
-   - 注册阿里云，获取AccessKey和听悟AppKey
-   - 本地生成JWT Secret
+#### 阶段2：快速体验 Mock 模式（10分钟）
+```bash
+# 1. 配置 Mock 模式
+echo "USE_MOCK_ANALYSIS=true" >> .env
 
-4. **完整配置**（5分钟）
-   \`\`\`bash
-   # 编辑.env文件，填入获取的密钥
-   vim .env
-   \`\`\`
+# 2. 启动应用
+npm run dev:all
 
-5. **验证测试**（5分钟）
-   \`\`\`bash
-   npm run check:env
-   npm run test:db
-   npm test
-   \`\`\`
+# 3. 浏览器访问 http://localhost:8080
+# 4. 使用任意 @51talk.com 邮箱登录
+# 5. 提交分析表单，勾选"使用模拟数据"
+```
 
-6. **本地测试**（10分钟）
-   \`\`\`bash
-   npm run dev:all
-   # 测试真实的AI分析功能
-   \`\`\`
+#### 阶段3：配置真实 AI 服务（30分钟）
+```bash
+# 1. 获取 API 密钥
+#    - 智谱GLM: https://open.bigmodel.cn/
+#    - 阿里云: https://ram.console.aliyun.com/manage/ak
 
-7. **部署上线**（15-30分钟）
-   - 推送代码到GitHub
-   - 按照QUICKSTART_ZEABUR.md部署
+# 2. 编辑 .env 文件
+vim .env
+# 添加：
+# GLM_API_KEY=你的密钥
+# ALIYUN_ACCESS_KEY_ID=你的ID
+# ALIYUN_ACCESS_KEY_SECRET=你的Secret
 
-**总时间：1-2小时即可完成从配置到上线！**
+# 3. 验证配置
+npm run check:env
+
+# 4. 重启应用测试
+npm run dev:all
+```
+
+#### 阶段4：部署到生产（15分钟）
+```bash
+# 1. 推送代码到 GitHub
+git add .
+git commit -m "Ready for production"
+git push
+
+# 2. 按照 QUICKSTART_ZEABUR.md 部署
+```
+
+**总时间：约1小时完成从初始化到生产部署！**
 
 ---
 
@@ -202,32 +234,55 @@ npm run dev:all
 
 ---
 
-## 💪 准备好了吗？
+## 💪 立即开始
 
-**现在开始配置：**
-\`\`\`bash
-./scripts/quick-setup.sh
-\`\`\`
+**初始化数据库：**
+```bash
+npm run setup:db
+```
 
-**或查看详细清单：**
-\`\`\`bash
-cat CONFIG_CHECKLIST.md
-\`\`\`
+**启动应用（Mock模式）：**
+```bash
+echo "USE_MOCK_ANALYSIS=true" >> .env
+npm run dev:all
+```
 
-**或查看下一步指引：**
-\`\`\`bash
-cat NEXT_STEPS.md
-\`\`\`
+**访问应用：**
+```
+http://localhost:8080
+```
 
 ---
 
 ## 📞 需要帮助？
 
-- 配置问题 → \`CONFIG_CHECKLIST.md\`
-- 部署问题 → \`QUICKSTART_ZEABUR.md\`
-- 测试问题 → \`tests/README.md\`
-- 功能问题 → \`docs/guides/TROUBLESHOOTING.md\`
+| 问题类型 | 查看文档 |
+|---------|---------|
+| 数据库配置 | `database/README.md` |
+| 环境配置 | `CONFIG_CHECKLIST.md` |
+| 部署问题 | `QUICKSTART_ZEABUR.md` |
+| API 接口 | `README.md` 的 API 概览 |
+| 测试相关 | `tests/README.md` |
 
 ---
 
-**祝配置顺利！🚀**
+## 📁 项目目录结构
+
+```
+├── src/              # 前端代码（React + TypeScript）
+├── server/           # 后端代码（Express + TypeScript）
+├── database/         # 数据库脚本和文档
+├── scripts/          # 配置和部署脚本
+├── tests/            # 集成测试
+├── docs/             # 项目文档
+│   ├── archive/      # 归档的过时文档
+│   ├── work-reports/ # 工作日报周报
+│   ├── deployment/   # 部署相关文档
+│   ├── guides/       # 使用指南
+│   └── technical/    # 技术文档
+└── public/           # 静态资源
+```
+
+---
+
+**祝使用顺利！🚀**

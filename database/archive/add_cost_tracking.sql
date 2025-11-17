@@ -6,16 +6,16 @@
 -- ============================================
 
 -- 添加成本追踪字段
-ALTER TABLE reports ADD COLUMN IF NOT EXISTS cost_breakdown JSONB;
+ALTER TABLE reports ADD COLUMN IF NOT EXISTS cost_detail JSONB;
 
 -- 添加索引以便快速查询成本统计
-CREATE INDEX IF NOT EXISTS idx_reports_cost_breakdown ON reports USING GIN (cost_breakdown);
+CREATE INDEX IF NOT EXISTS idx_reports_cost_detail ON reports USING GIN (cost_detail);
 
 -- 添加注释
-COMMENT ON COLUMN reports.cost_breakdown IS '成本详细信息（JSON格式）：包含转录成本、AI分析成本、总成本等';
+COMMENT ON COLUMN reports.cost_detail IS '成本详细信息（JSON格式）：包含转录成本、AI分析成本、总成本等';
 
 -- ============================================
--- cost_breakdown 字段结构示例
+-- cost_detail 字段结构示例
 -- ============================================
 -- {
 --   "transcription": {
@@ -68,32 +68,32 @@ COMMENT ON COLUMN reports.cost_breakdown IS '成本详细信息（JSON格式）�
 -- SELECT 
 --   id,
 --   created_at,
---   cost_breakdown->>'total' as total_cost,
---   cost_breakdown->'transcription'->>'totalMinutes' as transcription_minutes,
---   cost_breakdown->'aiAnalysis'->>'totalTokens' as ai_tokens
+--   cost_detail->>'total' as total_cost,
+--   cost_detail->'transcription'->>'totalMinutes' as transcription_minutes,
+--   cost_detail->'aiAnalysis'->>'totalTokens' as ai_tokens
 -- FROM reports 
--- WHERE cost_breakdown IS NOT NULL
+-- WHERE cost_detail IS NOT NULL
 -- ORDER BY created_at DESC 
 -- LIMIT 10;
 
 -- 2. 统计总成本
 -- SELECT 
 --   COUNT(*) as report_count,
---   SUM((cost_breakdown->'total'->>'cost')::numeric) as total_cost_cny,
---   AVG((cost_breakdown->'total'->>'cost')::numeric) as avg_cost_per_report,
---   SUM((cost_breakdown->'transcription'->>'totalMinutes')::numeric) as total_transcription_minutes,
---   SUM((cost_breakdown->'aiAnalysis'->>'totalTokens')::numeric) as total_ai_tokens
+--   SUM((cost_detail->'total'->>'cost')::numeric) as total_cost_cny,
+--   AVG((cost_detail->'total'->>'cost')::numeric) as avg_cost_per_report,
+--   SUM((cost_detail->'transcription'->>'totalMinutes')::numeric) as total_transcription_minutes,
+--   SUM((cost_detail->'aiAnalysis'->>'totalTokens')::numeric) as total_ai_tokens
 -- FROM reports
--- WHERE cost_breakdown IS NOT NULL;
+-- WHERE cost_detail IS NOT NULL;
 
 -- 3. 按日期统计成本
 -- SELECT 
 --   DATE(created_at) as date,
 --   COUNT(*) as report_count,
---   SUM((cost_breakdown->'total'->>'cost')::numeric) as daily_cost,
---   SUM((cost_breakdown->'transcription'->>'totalMinutes')::numeric) as daily_minutes
+--   SUM((cost_detail->'total'->>'cost')::numeric) as daily_cost,
+--   SUM((cost_detail->'transcription'->>'totalMinutes')::numeric) as daily_minutes
 -- FROM reports
--- WHERE cost_breakdown IS NOT NULL
+-- WHERE cost_detail IS NOT NULL
 -- GROUP BY DATE(created_at)
 -- ORDER BY date DESC
 -- LIMIT 30;
@@ -102,10 +102,10 @@ COMMENT ON COLUMN reports.cost_breakdown IS '成本详细信息（JSON格式）�
 -- SELECT 
 --   user_id,
 --   COUNT(*) as report_count,
---   SUM((cost_breakdown->'total'->>'cost')::numeric) as total_cost,
---   AVG((cost_breakdown->'total'->>'cost')::numeric) as avg_cost
+--   SUM((cost_detail->'total'->>'cost')::numeric) as total_cost,
+--   AVG((cost_detail->'total'->>'cost')::numeric) as avg_cost
 -- FROM reports
--- WHERE cost_breakdown IS NOT NULL
+-- WHERE cost_detail IS NOT NULL
 -- GROUP BY user_id
 -- ORDER BY total_cost DESC;
 
