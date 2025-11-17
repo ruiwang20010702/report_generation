@@ -1,7 +1,6 @@
 import express, { Express, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
-import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -26,6 +25,7 @@ import { setupGracefulShutdown } from './utils/gracefulShutdown.js';
 import { enableAllSecurityMiddleware } from './middleware/security.js';
 import { enableStructuredLogging, logger } from './middleware/logging.js';
 import { metricsMiddleware, enablePerformanceMonitoring, createMetricsEndpoint } from './middleware/metrics.js';
+import { globalLimiter, analysisLimiter, authLimiter } from './middleware/rateLimiter.js';
 
 const app: Express = express();
 const PORT = process.env.PORT || 3001;
@@ -61,39 +61,25 @@ app.use(cookieParser());
 app.use(express.json({ limit: '10mb' })); // 限制请求体大小
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// 全局限流：防止滥用（支持100并发）
-const globalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15分钟
-  max: 2000, // 每个IP最多2000个请求（100并发 x 20请求/会话）
-  message: '请求过于频繁，请稍后再试',
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-
-// 分析接口专用限流：控制并发和成本（支持100并发）
-const analysisLimiter = rateLimit({
-  windowMs: 10 * 60 * 1000, // 10分钟窗口
-  max: 200, // 每10分钟最多200个分析请求（100并发 x 2分析/会话）
-  message: '视频分析请求过于频繁，请等待10分钟后再试',
-  standardHeaders: true,
-  legacyHeaders: false,
-  skipSuccessfulRequests: false, // 即使成功也计数
-});
-
-// 认证接口限流：防止暴力破解
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15分钟
-  max: 5, // 最多5次登录尝试
-  message: '登录尝试次数过多，请15分钟后再试',
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-
 // 应用限流
-app.use('/api/', globalLimiter);
+// 🔥 优化：使用基于用户ID的限流策略，支持真正的100并发
+// 详见：docs/technical/100_CONCURRENT_ANALYSIS.md
+
+// 先应用特定路径的限流器（必须在全局限流器之前）
 app.use('/api/analysis/analyze', analysisLimiter);
 app.use('/api/auth/verify-otp', authLimiter);
 app.use('/api/auth/login', authLimiter);
+
+// 全局限流器（跳过已经有专用限流器的路径）
+app.use('/api/', (req, res, next) => {
+  // 跳过已有专用限流器的路径
+  if (req.path === '/analysis/analyze' || 
+      req.path === '/auth/verify-otp' || 
+      req.path === '/auth/login') {
+    return next();
+  }
+  globalLimiter(req, res, next);
+});
 
 // 路由
 app.use('/api/analysis', analysisRouter);
