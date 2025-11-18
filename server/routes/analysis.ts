@@ -1,9 +1,9 @@
 import { Router, Request, Response } from 'express';
-import { VideoAnalysisService } from '../services/videoAnalysisService.js';
 import { VideoAnalysisRequest } from '../types/index.js';
 import { tingwuTranscriptionService } from '../services/tingwuTranscriptionService.js';
 import { AppError, ErrorType, asyncHandler, createErrorContext } from '../utils/errors.js';
 import { isValidVideoUrl, isValidStudentName, isValidStudentId, safeSubstring } from '../utils/validation.js';
+import { analysisJobQueue } from '../services/analysisJobQueue.js';
 
 const router = Router();
 
@@ -72,15 +72,6 @@ router.post('/transcribe-test', asyncHandler(async (req: Request, res: Response)
     textPreview: safeSubstring(transcription.text, 0, 400)
   });
 }));
-
-// 延迟初始化，确保环境变量已加载
-let analysisService: VideoAnalysisService | null = null;
-const getAnalysisService = () => {
-  if (!analysisService) {
-    analysisService = new VideoAnalysisService();
-  }
-  return analysisService;
-};
 
 /**
  * POST /api/analysis/analyze
@@ -179,18 +170,10 @@ router.post('/analyze', asyncHandler(async (req: Request, res: Response) => {
   // 检查是否使用mock模式（优先使用请求参数，其次使用环境变量）
   const useMock = requestData.useMockData ?? (process.env.USE_MOCK_ANALYSIS === 'true');
 
-  const service = getAnalysisService();
-  
-  let result;
   if (useMock) {
-    console.log('🎭 Using MOCK analysis mode');
-    result = await service.analyzeMock(requestData);
-    console.log('✅ Mock analysis completed');
+    console.log('🎭 使用 MOCK 分析模式');
   } else {
-    console.log('🤖 Using REAL AI analysis mode');
-    
-    // 检查是否有可用的 API Key（用户提供的或服务器配置的）
-    // 注意：系统使用智谱 GLM 模型，不是 OpenAI
+    console.log('🤖 使用真实 AI 分析模式');
     const hasServerKey = !!process.env.GLM_API_KEY;
     const hasUserKey = !!requestData.apiKey;
     
@@ -206,52 +189,41 @@ router.post('/analyze', asyncHandler(async (req: Request, res: Response) => {
     }
     
     if (hasUserKey) {
-      console.log('   Using user-provided GLM API Key: ' + safeSubstring(requestData.apiKey, 0, 10) + '...');
+      console.log('   使用用户提供的 GLM API Key: ' + safeSubstring(requestData.apiKey, 0, 10) + '...');
     } else {
-      console.log('   Using server-configured GLM API Key');
-    }
-    
-    try {
-      result = await service.analyzeVideos(requestData);
-      const elapsedTime = ((Date.now() - startTime) / 1000).toFixed(2);
-      console.log(`✅ Real AI analysis completed in ${elapsedTime}s`);
-    } catch (analysisError) {
-      const elapsedTime = ((Date.now() - startTime) / 1000).toFixed(2);
-      console.error(`❌ Analysis failed after ${elapsedTime}s:`, analysisError);
-      
-      // 将错误转换为AppError（如果还不是）
-      if (analysisError instanceof AppError) {
-        // context是只读的，不能直接修改，直接抛出
-        throw analysisError;
-      }
-      
-      // 根据错误消息推断错误类型
-      const errorMessage = analysisError instanceof Error ? analysisError.message : String(analysisError);
-      let errorType = ErrorType.INTERNAL_ERROR;
-      
-      if (errorMessage.includes('transcribe') || errorMessage.includes('转录')) {
-        errorType = ErrorType.TRANSCRIPTION_ERROR;
-      } else if (errorMessage.includes('API key') || errorMessage.includes('API Key') || errorMessage.includes('GLM')) {
-        errorType = ErrorType.API_KEY_ERROR;
-      } else if (errorMessage.includes('timeout') || errorMessage.includes('超时')) {
-        errorType = ErrorType.TIMEOUT_ERROR;
-      } else if (errorMessage.includes('quota') || errorMessage.includes('额度')) {
-        errorType = ErrorType.QUOTA_EXCEEDED;
-      }
-      
-      throw new AppError(
-        errorType,
-        errorMessage,
-        {
-          originalError: analysisError instanceof Error ? analysisError : undefined,
-          context: { ...context, elapsedTime: `${elapsedTime}秒`, studentName: requestData.studentName },
-        }
-      );
+      console.log('   使用服务器配置的 GLM API Key');
     }
   }
 
-  res.json(result);
+  console.log('📬 将分析任务加入异步队列');
+  const queuedJob = analysisJobQueue.enqueue(requestData, { useMock });
+
+  res.status(202).json({
+    message: '分析任务已排队，稍后通过 jobId 查询结果',
+    job: queuedJob,
+    pollAfterSeconds: Math.max(10, Math.min(60, Math.round((queuedJob.estimatedWaitSeconds || 30) / 3))),
+  });
 }));
+
+/**
+ * GET /api/analysis/jobs/:jobId
+ * 查询异步任务状态
+ */
+router.get('/jobs/:jobId', (req: Request, res: Response) => {
+  const job = analysisJobQueue.getJob(req.params.jobId);
+  if (!job) {
+      throw new AppError(
+      ErrorType.NOT_FOUND,
+      `Job ${req.params.jobId} not found`,
+        {
+        userMessage: '未找到对应的分析任务，请确认 jobId 是否正确',
+        context: createErrorContext(req),
+        }
+      );
+  }
+
+  res.json(job);
+});
 
 /**
  * GET /api/analysis/health

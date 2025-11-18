@@ -1,6 +1,36 @@
 import axios, { AxiosError } from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3001');
+const API_BASE_URL =
+  import.meta.env.VITE_API_URL ||
+  (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3001');
+
+export type AnalysisJobStatus = 'queued' | 'processing' | 'completed' | 'failed';
+
+export interface AnalysisJobError {
+  type?: string;
+  message: string;
+  userMessage?: string;
+  context?: Record<string, unknown>;
+}
+
+export interface AnalysisJobState {
+  jobId: string;
+  status: AnalysisJobStatus;
+  submittedAt: string;
+  startedAt?: string;
+  completedAt?: string;
+  position: number;
+  estimatedWaitSeconds: number;
+  durationSeconds?: number;
+  result?: VideoAnalysisResponse;
+  error?: AnalysisJobError;
+}
+
+export interface AnalysisJobEnqueueResponse {
+  message: string;
+  job: AnalysisJobState;
+  pollAfterSeconds: number;
+}
 
 export interface VideoAnalysisRequest {
   video1: string;
@@ -9,9 +39,14 @@ export interface VideoAnalysisRequest {
   studentId: string;
   grade: string;
   level: string;
-  unit: string;
+  unit?: string;
   date?: string;
   date2?: string;
+  video1Time?: string;
+  video2Time?: string;
+  apiKey?: string;
+  useMockData?: boolean;
+  userId?: string;
 }
 
 export interface LearningDataMetric {
@@ -107,72 +142,163 @@ export class VideoAnalysisAPI {
   }
 
   /**
-   * 分析视频
+   * 将分析任务加入后台队列
    */
-  async analyzeVideos(request: VideoAnalysisRequest): Promise<VideoAnalysisResponse> {
+  async enqueueAnalysis(request: VideoAnalysisRequest): Promise<AnalysisJobEnqueueResponse> {
     try {
-      console.log('Sending analysis request to:', `${this.baseURL}/api/analysis/analyze`);
-      
-      const response = await axios.post<VideoAnalysisResponse>(
+      const response = await axios.post<AnalysisJobEnqueueResponse>(
         `${this.baseURL}/api/analysis/analyze`,
         request,
         {
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          timeout: 600000, // 10分钟超时（真实AI分析需要更长时间，包括视频下载、转录、分析）
+          headers: { 'Content-Type': 'application/json' },
+          timeout: 120000
         }
       );
-
       return response.data;
     } catch (error) {
-      console.error('Analysis request failed:', error);
-      
+      console.error('Analysis enqueue failed:', error);
+      return this.handleAxiosError(error, '分析任务排队失败，请稍后重试');
+    }
+  }
+
+  /**
+   * 查询任务状态
+   */
+  async getAnalysisJob(jobId: string): Promise<AnalysisJobState> {
+    try {
+      const response = await axios.get<AnalysisJobState>(
+        `${this.baseURL}/api/analysis/jobs/${jobId}`,
+        {
+          timeout: 15000
+        }
+      );
+      return response.data;
+    } catch (error) {
+      console.error(`Fetch job ${jobId} failed:`, error);
+      return this.handleAxiosError(error, '查询分析任务状态失败', {
+        statusMessageOverrides: {
+          404: '未找到对应的分析任务，请确认 jobId 是否正确或稍后再试'
+        },
+        timeoutMessage: '查询任务状态超时，请检查网络或稍后重试'
+      });
+    }
+  }
+
+  /**
+   * 阻塞等待任务完成（兼容旧的同步调用方式）
+   */
+  async analyzeVideos(request: VideoAnalysisRequest): Promise<VideoAnalysisResponse> {
+    const { job, pollAfterSeconds } = await this.enqueueAnalysis(request);
+    if (job.status === 'completed' && job.result) {
+      return job.result;
+    }
+    return this.waitForAnalysisResult(job.jobId, {
+      initialDelayMs: Math.max(5000, (pollAfterSeconds || 10) * 1000)
+    });
+  }
+
+  async waitForAnalysisResult(
+    jobId: string,
+    options?: {
+      initialDelayMs?: number;
+      maxDelayMs?: number;
+      signal?: AbortSignal;
+      onPoll?: (state: AnalysisJobState) => void;
+    }
+  ): Promise<VideoAnalysisResponse> {
+    const delay = (ms: number) =>
+      new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(resolve, ms);
+        if (options?.signal) {
+          options.signal.addEventListener(
+            'abort',
+            () => {
+              clearTimeout(timer);
+              reject(new Error('分析任务已被取消'));
+            },
+            { once: true }
+          );
+        }
+      });
+
+    let interval = options?.initialDelayMs ?? 10000;
+    const maxDelay = options?.maxDelayMs ?? 60000;
+
+    while (true) {
+      await delay(interval);
+      const job = await this.getAnalysisJob(jobId);
+      options?.onPoll?.(job);
+
+      if (job.status === 'completed' && job.result) {
+        return job.result;
+      }
+      if (job.status === 'failed') {
+        throw new Error(job.error?.userMessage || job.error?.message || '分析任务失败，请稍后重试');
+      }
+
+      const estimatedMs =
+        job.estimatedWaitSeconds > 0 ? job.estimatedWaitSeconds * 1000 : interval * 1.2;
+      interval = Math.min(maxDelay, Math.max(5000, Math.round(estimatedMs / 2)));
+    }
+  }
+
+  private handleAxiosError(
+    error: unknown,
+    defaultMessage: string,
+    options?: {
+      statusMessageOverrides?: Record<number, string>;
+      timeoutMessage?: string;
+    }
+  ): never {
       if (axios.isAxiosError(error)) {
-        const axiosError = error as AxiosError;
+      const axiosError = error as AxiosError<{ error?: string; message?: string; details?: string }>;
         
         if (axiosError.code === 'ECONNABORTED') {
-          // 超时错误
-          throw new Error('请求超时（超过10分钟）。可能原因：1) 视频文件太大（建议<50MB） 2) 网络速度慢 3) OpenAI API 响应慢。建议使用较短的视频（3-5分钟）。');
+        throw new Error(
+          options?.timeoutMessage ||
+            '请求超时（超过10分钟）。可能原因：1) 视频文件太大（建议<50MB） 2) 网络速度慢 3) AI 服务响应慢。建议使用较短的视频（3-5分钟）。'
+        );
         } else if (axiosError.response) {
-          // 服务器返回了错误响应
-          const errorData = axiosError.response.data as { error?: string; message?: string; details?: string };
+        const errorData = axiosError.response.data || {};
           const status = axiosError.response.status;
           
-          // 根据HTTP状态码提供更具体的错误信息
-          let errorMessage = errorData.message || errorData.error || '分析失败';
+        let errorMessage =
+          options?.statusMessageOverrides?.[status] ||
+          errorData.message ||
+          errorData.error ||
+          defaultMessage;
           
-          if (status === 400) {
-            errorMessage = errorData.message || errorData.error || '请求参数错误。请检查：1) 视频链接是否有效 2) 是否提供了所有必需字段 3) 是否提供了 OpenAI API Key（如需要）';
-          } else if (status === 401) {
-            errorMessage = 'API Key 无效或缺失。使用真实AI分析需要提供有效的 OpenAI API Key';
-          } else if (status === 404) {
+        if (status === 400 && !options?.statusMessageOverrides?.[status]) {
+          errorMessage =
+            errorData.message ||
+            errorData.error ||
+            '请求参数错误。请检查：1) 视频链接是否有效 2) 是否提供了所有必需字段 3) 是否提供了必要的 API Key（如需要）';
+        } else if (status === 401 && !options?.statusMessageOverrides?.[status]) {
+          errorMessage = 'API Key 无效或缺失。使用真实AI分析需要提供有效的 GLM API Key';
+        } else if (status === 404 && !options?.statusMessageOverrides?.[status]) {
             errorMessage = 'API 端点未找到。请检查后端服务是否正常运行';
-          } else if (status === 500) {
-            // 服务器内部错误，尝试使用服务器返回的详细错误信息
-            if (errorData.message && errorData.message !== '分析视频时出错') {
-              errorMessage = errorData.message;
-            } else {
-              errorMessage = '服务器内部错误。可能原因：1) 视频下载失败 2) 视频转录失败 3) AI 分析失败。请查看服务器日志获取详细信息';
-            }
-          } else if (status === 504) {
+        } else if (status === 500 && !options?.statusMessageOverrides?.[status]) {
+          errorMessage =
+            errorData.message && errorData.message !== '分析视频时出错'
+              ? errorData.message
+              : '服务器内部错误。可能原因：1) 视频下载失败 2) 视频转录失败 3) AI 分析失败。请查看服务器日志获取详细信息';
+        } else if (status === 504 && !options?.statusMessageOverrides?.[status]) {
             errorMessage = '请求超时。视频下载或AI分析耗时过长，请尝试使用较短的视频（3-5分钟）';
           }
           
-          // 如果有详细信息，添加到错误消息中
-          if (errorData.details && process.env.NODE_ENV === 'development') {
+        if (errorData.details && import.meta.env.DEV) {
             errorMessage += `\n详细信息: ${errorData.details}`;
           }
           
           throw new Error(errorMessage);
         } else if (axiosError.request) {
-          // 请求已发送但没有收到响应
-          throw new Error('服务器无响应。请检查：1) 后端服务是否在运行 2) 端口3001是否可访问 3) 查看浏览器控制台和服务器日志获取详细信息');
+        throw new Error(
+          '服务器无响应。请检查：1) 后端服务是否在运行 2) 端口3001是否可访问 3) 查看浏览器控制台和服务器日志获取详细信息'
+        );
         }
       }
       
-      throw new Error('分析视频时出错，请稍后重试');
-    }
+    throw new Error(defaultMessage);
   }
 
   /**

@@ -41,7 +41,8 @@ CREATE TABLE IF NOT EXISTS otps (
     code TEXT NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
-    used BOOLEAN DEFAULT FALSE
+    used BOOLEAN DEFAULT FALSE,
+    used_at TIMESTAMP WITH TIME ZONE
 );
 
 -- OTP表索引
@@ -57,6 +58,7 @@ COMMENT ON COLUMN otps.code IS '验证码';
 COMMENT ON COLUMN otps.created_at IS '创建时间';
 COMMENT ON COLUMN otps.expires_at IS '过期时间';
 COMMENT ON COLUMN otps.used IS '是否已使用';
+COMMENT ON COLUMN otps.used_at IS '使用时间';
 
 -- =====================================================
 -- 报告表 (reports)

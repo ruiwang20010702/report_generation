@@ -1,10 +1,14 @@
-import { useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { VideoAnalysisForm } from "@/components/VideoAnalysisForm";
 import { LoadingState } from "@/components/LoadingState";
 import { ReportDisplay } from "@/components/ReportDisplay";
 import logo51Talk from "@/assets/51talk-logo.jpg";
-import { videoAnalysisAPI, VideoAnalysisResponse } from "@/services/api";
+import {
+  videoAnalysisAPI,
+  VideoAnalysisResponse,
+  AnalysisJobState,
+} from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { LogOut } from "lucide-react";
@@ -16,6 +20,7 @@ interface FormData {
   video1: string;
   video2: string;
   studentName: string;
+  studentId: string;
   grade: string;
   level: string;
   unit: string;
@@ -25,203 +30,159 @@ interface FormData {
   useMockData?: boolean;
 }
 
-// Mock data for demonstration
-const MOCK_REPORT_DATA = {
-  learningData: {
-    handRaising: {
-      trend: "提升" as const,
-      percentage: "↑ 15%",
-      analysis: "本周主动发言次数相比上周增加了15%，展现出更强的课堂参与意愿"
-    },
-    answerLength: {
-      trend: "提升" as const,
-      percentage: "↑ 23%",
-      analysis: "回答平均长度从5个词增加到7个词，语言表达更加完整"
-    },
-    completeSentences: {
-      trend: "提升" as const,
-      percentage: "↑ 18%",
-      analysis: "完整句子使用率从60%提升至78%，语法结构更加规范"
-    },
-    readingAccuracy: {
-      trend: "持平" as const,
-      percentage: "92%",
-      analysis: "保持了较高的阅读准确率，发音清晰准确"
-    }
-  },
-  progressDimensions: {
-    fluency: {
-      analysis: "学生的语言流利度有明显提升，说话时停顿减少，能够更自然地表达想法。从视频中可以看出，回答问题时的思考时间缩短了约2秒。",
-      example: "第二个视频中回答 'What did you do yesterday?' 时，能够流畅地说出完整句子：'I went to the park and played with my friends.'"
-    },
-    confidence: {
-      analysis: "自信心增强明显，声音洪亮，眼神交流更加自然。主动发言频率提升，愿意主动参与课堂互动。",
-      example: "主动要求回答老师提问，并在回答时面带微笑，姿态自信"
-    },
-    languageApplication: {
-      analysis: "开始尝试使用课堂外学到的词汇和表达，语言运用更加灵活多样。能够将所学知识应用到实际对话中。",
-      example: "使用了 'awesome'、'fantastic' 等课外词汇来形容周末活动"
-    },
-    sentenceComplexity: {
-      analysis: "句型结构更加复杂，开始使用复合句和连接词。不再局限于简单的主谓宾结构。",
-      example: "能够说出：'I like swimming because it makes me feel happy and healthy.'"
-    }
-  },
-  improvementAreas: {
-    pronunciation: {
-      overview: "这是目前最需要关注的系统提升的方面。",
-      details: "由于连读加快，一些单词的发音细节容易被忽略。",
-      examples: [
-        {
-          word: "awfully",
-          incorrect: "/ˈɔː.fəli/",
-          correct: "/ˈɔː.fli/",
-          type: "元音不准确"
-        },
-        {
-          word: "ballet",
-          incorrect: "/bæˈleɪ/",
-          correct: "/ˈbæl.eɪ/",
-          type: "重音问题"
-        },
-        {
-          word: "think",
-          incorrect: "/sɪŋk/",
-          correct: "/θɪŋk/",
-          type: "th音问题"
-        },
-        {
-          word: "van",
-          incorrect: "/wæn/",
-          correct: "/væn/",
-          type: "v音问题"
-        }
-      ],
-      persistentIssues: {
-        title: "持续性问题",
-        items: [
-          "shell, scale 等以 sh 或 sc 开头且包含 l 的单词发音有合唱倾向",
-          "feather 中的 /ð/ 音不够清晰"
-        ]
-      },
-      suggestions: [
-        {
-          title: "慢下来",
-          description: "在连读新词或不确定的单词时，可以刻意放慢语速。确保每个音节都被清晰地表达出来。"
-        },
-        {
-          title: "跟读模仿",
-          description: "找到这些单词的标准发音，进行多次跟读模仿，直至可以以下自己的声音和标准进行对比。"
-        },
-        {
-          title: "关注音标",
-          description: "学习和掌握一些关键元音和辅音的发音规则，特别是容易混淆的音素的发音。"
-        }
-      ]
-    },
-    grammar: {
-      overview: "您的整体语法很好，但在一些细节上可以做得更完美。",
-      details: "主要问题集中在第三人称单数、动词搭配和介词使用等方面。",
-      examples: [
-        {
-          category: "第三人称单数",
-          incorrect: "She is feeds her cat",
-          correct: "She feeds her cat",
-          explanation: "应当使用动词原形加s的形式"
-        },
-        {
-          category: "动词搭配",
-          incorrect: "My sister want to eat my make soup",
-          correct: "...eat the soup I make/made",
-          explanation: "使用正确的表达方式"
-        },
-        {
-          category: "介词使用",
-          incorrect: "feeding for his dog",
-          correct: "feeding his dog",
-          explanation: "介词选择使用"
-        }
-      ],
-      suggestions: [
-        {
-          title: "语法复习",
-          description: "在口语练习前，可以进行简短的语法复习，思考句子的构造规则，思考对于英语还原的习惯。"
-        },
-        {
-          title: "针对性练习",
-          description: "针对性地做一些第三人称单数'喂养基础练习'等基础语法点，并通过句型练习巩固。"
-        }
-      ]
-    },
-    intonation: {
-      overview: "语调方面还有提升空间",
-      details: "在7月7日的课程中，由于环境原因和阅读紧张，她的语调起伏较少，听起来略显平淡。",
-      suggestions: [
-        {
-          title: "多听多模仿",
-          description: "多听一些自然的英语对话或故事（非正式演讲、生活化的内容），感受和模仿说话者的语调变化，让英语更富有生活情绪。"
-        }
-      ]
-    }
-  }
-};
+interface JobProgressLog {
+  id: string;
+  timestamp: string;
+  message: string;
+}
 
 const Index = () => {
   const [appState, setAppState] = useState<AppState>("form");
   const [reportData, setReportData] = useState<VideoAnalysisResponse | null>(null);
+  const [jobState, setJobState] = useState<AnalysisJobState | null>(null);
+  const [jobLogs, setJobLogs] = useState<JobProgressLog[]>([]);
+  const [nextPollSeconds, setNextPollSeconds] = useState<number | null>(null);
   const { toast } = useToast();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
+  const pollTokenRef = useRef(0);
+
+  const cancelPolling = useCallback(() => {
+    pollTokenRef.current += 1;
+  }, []);
+
+  const resetJobTracking = useCallback(() => {
+    setJobState(null);
+    setJobLogs([]);
+    setNextPollSeconds(null);
+  }, []);
+
+  const appendJobLog = useCallback((message: string) => {
+    setJobLogs((prev) => {
+      const entry: JobProgressLog = {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        timestamp: new Date().toISOString(),
+        message,
+      };
+      const merged = [...prev, entry];
+      return merged.slice(-25);
+    });
+  }, []);
+
+  const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+  const calculateNextDelay = (job: AnalysisJobState, previousDelay: number) => {
+    if (job.status === "queued" && job.estimatedWaitSeconds > 0) {
+      return Math.min(60000, Math.max(5000, Math.round((job.estimatedWaitSeconds * 1000) / 2)));
+    }
+    if (job.status === "processing") {
+      return Math.min(60000, Math.max(7000, previousDelay * 0.9));
+    }
+    return Math.max(5000, Math.min(previousDelay * 1.1, 15000));
+  };
+
+  const waitForJobCompletion = useCallback(
+    async (jobId: string, sessionToken: number, initialDelaySeconds?: number) => {
+      let delayMs = Math.max(
+        5000,
+        Math.min(60000, (initialDelaySeconds ?? 10) * 1000)
+      );
+      let attempt = 0;
+
+      while (pollTokenRef.current === sessionToken) {
+        await wait(delayMs);
+        attempt += 1;
+        appendJobLog(`第 ${attempt} 次轮询任务状态（间隔 ${Math.round(delayMs / 1000)} 秒）`);
+
+        if (pollTokenRef.current !== sessionToken) {
+          break;
+        }
+
+        const latestJob = await videoAnalysisAPI.getAnalysisJob(jobId);
+        if (pollTokenRef.current !== sessionToken) {
+          break;
+        }
+
+        setJobState(latestJob);
+
+        if (latestJob.status === "completed" && latestJob.result) {
+          appendJobLog("任务已完成，正在载入报告数据");
+          return latestJob.result;
+        }
+
+        if (latestJob.status === "failed") {
+          appendJobLog(
+            `任务失败：${latestJob.error?.userMessage || latestJob.error?.message || "未知原因"}`
+          );
+          throw new Error(
+            latestJob.error?.userMessage ||
+              latestJob.error?.message ||
+              "分析任务失败，请稍后重试"
+          );
+        }
+
+        delayMs = calculateNextDelay(latestJob, delayMs);
+        setNextPollSeconds(Math.round(delayMs / 1000));
+      }
+
+      throw new Error("分析任务已被取消");
+    },
+    [appendJobLog]
+  );
 
   const handleFormSubmit = async (data: FormData) => {
     console.log('🚀 Form submitted with data:', data);
     setAppState("loading");
+    cancelPolling();
+    resetJobTracking();
+    const sessionToken = ++pollTokenRef.current;
     
     try {
-      // 如果使用模拟数据
-      if (data.useMockData) {
-        console.log('🎭 Using mock data...');
-        // 模拟API调用延迟
-        await new Promise(resolve => setTimeout(resolve, 8000));
-        
-        const mockResult: VideoAnalysisResponse = {
-          studentName: data.studentName,
-          grade: data.grade,
-          level: data.level,
-          unit: data.unit,
-          ...MOCK_REPORT_DATA
-        };
-        
-        setReportData(mockResult);
-        setAppState("report");
-        
-        toast({
-          title: "分析完成！（模拟数据）",
-          description: "已成功生成学习报告",
-        });
+      console.log('📡 Calling async analysis API...');
+      const requestData = {
+        ...data,
+        userId: user?.id
+      };
+
+      appendJobLog('已发送分析请求，等待任务排队结果...');
+      const enqueueResult = await videoAnalysisAPI.enqueueAnalysis(requestData);
+      setJobState(enqueueResult.job);
+      setNextPollSeconds(enqueueResult.pollAfterSeconds);
+
+      appendJobLog(
+        enqueueResult.job.status === "queued"
+          ? `任务已入队，当前位置 ${enqueueResult.job.position || 0}`
+          : "任务已开始处理"
+      );
+
+      if (
+        enqueueResult.job.status === "completed" &&
+        enqueueResult.job.result &&
+        pollTokenRef.current === sessionToken
+      ) {
+        appendJobLog("任务已即时完成");
+        setReportData(enqueueResult.job.result);
       } else {
-        // 使用真实 API
-        console.log('📡 Calling real API...');
-        // 添加 userId 到请求数据
-        const requestData = {
-          ...data,
-          userId: user?.id
-        };
-        const result = await videoAnalysisAPI.analyzeVideos(requestData);
-        console.log('✅ API response received:', result);
+        const result = await waitForJobCompletion(
+          enqueueResult.job.jobId,
+          sessionToken,
+          enqueueResult.pollAfterSeconds
+        );
         setReportData(result);
-        
-        setAppState("report");
-        
-        toast({
-          title: "分析完成！",
-          description: "已成功生成学习报告",
-        });
       }
+
+      setAppState("report");
+
+      toast({
+        title: "分析完成！",
+        description: "已成功生成学习报告",
+      });
     } catch (error) {
       console.error('❌ Analysis failed:', error);
       
       setAppState("form");
+      cancelPolling();
+      resetJobTracking();
       
       // 格式化错误消息，处理多行错误
       let errorMessage = error instanceof Error ? error.message : "未知错误，请稍后重试";
@@ -256,6 +217,8 @@ const Index = () => {
   const handleBackToForm = () => {
     setAppState("form");
     setReportData(null);
+    cancelPolling();
+    resetJobTracking();
   };
 
   const handleBackToLogin = async () => {
@@ -305,7 +268,13 @@ const Index = () => {
         </div>
       )}
 
-      {appState === "loading" && <LoadingState />}
+      {appState === "loading" && (
+        <LoadingState
+          jobState={jobState}
+          logs={jobLogs}
+          nextPollSeconds={nextPollSeconds}
+        />
+      )}
 
       {appState === "report" && reportData && (
         <ReportDisplay

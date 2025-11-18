@@ -91,9 +91,10 @@ users (6 字段)
 ├── created_at, updated_at, last_login
 └── 索引：uniq_users_email, idx_users_created_at
 
-otps (6 字段)
+otps (7 字段)
 ├── id, email, code
 ├── created_at, expires_at, used
+├── used_at
 └── 索引：3 个
 
 reports (16 字段) ⭐ 核心表
@@ -330,6 +331,7 @@ psql $DATABASE_URL -c "SELECT version();"
 | created_at | TIMESTAMP | DEFAULT NOW() | 创建时间 |
 | expires_at | TIMESTAMP | NOT NULL | 过期时间 |
 | used | BOOLEAN | DEFAULT FALSE | 是否已使用 |
+| used_at | TIMESTAMP | - | 使用时间 |
 
 **索引：**
 - `idx_otps_email` - 邮箱索引
