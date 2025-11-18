@@ -97,6 +97,21 @@ body.report-exporting #report-content {
   padding: 2rem !important;
 }
 
+/* 🔧 修复 html2canvas 文字偏移问题 - 增强像素精确度 */
+body.report-exporting * {
+  /* 确保字体渲染稳定 */
+  -webkit-font-smoothing: subpixel-antialiased !important;
+  -moz-osx-font-smoothing: auto !important;
+  /* 禁用动画和过渡效果（避免截图时的不稳定） */
+  transition: none !important;
+  animation: none !important;
+  /* 强制像素对齐 */
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: crisp-edges;
+  /* 防止文本渲染变形 */
+  text-rendering: geometricPrecision;
+}
+
 body.report-exporting .md\:p-8 {
   padding: 2rem !important;
 }

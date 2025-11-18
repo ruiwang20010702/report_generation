@@ -7,6 +7,7 @@ import { tingwuTranscriptionService } from './tingwuTranscriptionService.js';
 import { reportRecordService } from './reportRecordService.js';
 import { AppError, ErrorType } from '../utils/errors.js';
 import { alertServiceError } from './alertService.js';
+import { curriculumService } from './curriculumService.js';
 
 /**
  * 📝 报告字数配置
@@ -578,6 +579,27 @@ ${speakerInfo}
         );
       }
 
+      // 🎯 查询课程知识库（如果提供了level和unit）
+      let curriculumReference = '';
+      if (studentInfo.level && studentInfo.unit) {
+        try {
+          const curriculumContext = curriculumService.getCurriculumContext(
+            studentInfo.level,
+            studentInfo.unit
+          );
+          
+          if (curriculumContext) {
+            curriculumReference = curriculumService.formatForImprovementSuggestions(curriculumContext);
+            console.log(`✅ 已加载课程内容: ${curriculumContext.level} Unit ${curriculumContext.unit} - ${curriculumContext.theme}`);
+          } else {
+            console.warn(`⚠️  未找到课程内容: ${studentInfo.level} Unit ${studentInfo.unit}`);
+          }
+        } catch (error) {
+          console.error('❌ 查询课程知识库失败:', error);
+          // 不影响主流程，继续执行
+        }
+      }
+
       const video1Analysis = JSON.parse(video1Result.analysis);
       const video2Analysis = JSON.parse(video2Result.analysis);
       
@@ -739,6 +761,20 @@ ${JSON.stringify(video2Analysis, null, 2)}
 
 ---
 
+${curriculumReference ? `\n${curriculumReference}\n` : ''}
+
+🚨 **关于"提升建议"(improvementAreas.suggestions)的全局要求**：
+1. 每个维度（pronunciation、grammar、intonation）都需要生成2个建议
+2. 总共6个建议中，引用的课程单词和句子**必须全部不同**，不能有任何重复
+3. 建议的分配策略：
+   - pronunciation建议：选择包含特定音标的单词 + 基础句式
+   - grammar建议：选择体现语法规则的单词 + 包含目标语法的句式
+   - intonation建议：选择多音节单词 + 较长的表达性句式
+4. 如果课程内容不足以支撑6个不重复的建议，优先保证单词不重复，句子可以适当灵活处理
+5. **🚨 格式要求**：在建议内容中引用单词和句子时，请使用纯文本格式，不要使用任何 markdown 符号（如 **、-、* 等）。单词和句子应该直接写出，可以使用数字编号（如 1)、2)）或简单的换行分隔。
+
+---
+
 **请以JSON格式返回分析报告**（保持现有字段名，在analysis和example字段中融入以上所有分析）：
 
 {
@@ -809,11 +845,11 @@ ${JSON.stringify(video2Analysis, null, 2)}
       "suggestions": [
         {
           "title": "建议标题（基于阈值触发或通用建议）",
-          "description": "详细的练习建议和方法（至少${REPORT_WORD_COUNT.improvementAreas.suggestion}词）"
+          "description": "详细的练习建议和方法。💡 如果提供了课程大纲参考，请结合本单元的核心词汇和句式给出具体可操作的练习建议（至少${REPORT_WORD_COUNT.improvementAreas.suggestion}词）"
         },
         {
           "title": "第二个建议标题（基于阈值触发或通用建议，需要与第一个建议标题不同）",
-          "description": "第二个练习建议和方法（至少${REPORT_WORD_COUNT.improvementAreas.suggestion}词）"
+          "description": "第二个练习建议和方法。💡 如果提供了课程大纲参考，请结合本单元的核心词汇和句式给出具体可操作的练习建议（至少${REPORT_WORD_COUNT.improvementAreas.suggestion}词）"
         }
       ]
     },
@@ -842,12 +878,46 @@ ${JSON.stringify(video2Analysis, null, 2)}
       ],
       "suggestions": [
         {
-          "title": "建议标题（基于阈值触发或通用建议）",
-          "description": "详细的练习建议和方法（至少${REPORT_WORD_COUNT.improvementAreas.suggestion}词）"
+          "title": "发音练习：单词跟读",
+          "description": "针对发音错误的单词跟读练习建议。🔥【必须要求】：如果提供了课程大纲参考，必须从【核心词汇】中选择2-3个包含特定音标的单词（如含th/r/l等发音难点的单词）作为练习例子，并说明具体的跟读方法（至少${REPORT_WORD_COUNT.improvementAreas.suggestion}词）。🚨注意：这些单词不能与grammar和intonation维度的建议重复。"
         },
         {
-          "title": "第二个建议标题（基于阈值触发或通用建议，需要与第一个建议标题不同）",
-          "description": "第二个练习建议和方法（至少${REPORT_WORD_COUNT.improvementAreas.suggestion}词）"
+          "title": "发音练习：句子朗读",
+          "description": "针对发音错误的句子朗读练习建议。🔥【必须要求】：如果提供了课程大纲参考，必须从【核心句式】中选择1-2个基础句式作为练习例子，并说明具体的朗读方法（至少${REPORT_WORD_COUNT.improvementAreas.suggestion}词）。🚨注意：这些句子不能与grammar和intonation维度的建议重复。"
+        }
+      ]
+        },
+    "grammar": {
+      "overview": "语法方面的整体评估和趋势总结（基于两次课堂对比）。这是一个完整的段落概述，需要包含：1) 学生语法的总体掌握水平；2) 两次课堂中语法表现的主要变化；3) 常见的语法问题类型；4) 语法准确性对口语表达的影响；5) 未来提升的方向。字数要求：至少${REPORT_WORD_COUNT.improvementAreas.overview}词，确保内容完整、逻辑连贯。",
+      "details": "详细的语法问题深度分析。这部分要在overview的基础上进一步展开，包含：1) 具体对比两次课堂的语法错误类型、频率和严重程度；2) 分析学生在不同语法项目（如时态、第三人称单数、介词等）上的掌握差异；3) 提供早期课堂和最近课堂的语法表现对比；4) 分析语法问题的根源和改进路径。字数要求：至少${REPORT_WORD_COUNT.improvementAreas.details}词，内容要比overview更加深入和具体。",
+      "examples": [
+        {
+          "category": "错误类别1（如：第三人称单数）",
+          "incorrect": "错误句子（最好是转录文本中真实出现的句子）",
+          "correct": "正确句子",
+          "explanation": "错误解释和语法规则"
+        },
+        {
+          "category": "错误类别2（如：时态使用、动词搭配）",
+          "incorrect": "错误句子（最好是转录文本中真实出现的句子） ",
+          "correct": "正确句子",
+          "explanation": "错误解释和语法规则"
+        },
+        {
+          "category": "错误类别3（如：介词使用、冠词使用）",
+          "incorrect": "错误句子（最好是转录文本中真实出现的句子）",
+          "correct": "正确句子",
+          "explanation": "错误解释和语法规则"
+        }
+      ],
+      "suggestions": [
+        {
+          "title": "语法练习：单词应用",
+          "description": "针对语法错误的单词应用练习建议。🔥【必须要求】：如果提供了课程大纲参考，必须从【核心词汇】中选择2-3个体现语法规则的单词（如动词、名词等）作为练习例子，并说明具体的练习方法（至少${REPORT_WORD_COUNT.improvementAreas.suggestion}词）。🚨注意：这些单词不能与pronunciation和intonation维度的建议重复。"
+        },
+        {
+          "title": "语法练习：句式练习",
+          "description": "针对语法错误的句式练习建议。🔥【必须要求】：如果提供了课程大纲参考，必须从【核心句式】中选择1-2个包含目标语法的句子作为练习例子，并说明具体的练习方法（至少${REPORT_WORD_COUNT.improvementAreas.suggestion}词）。🚨注意：这些句子不能与pronunciation和intonation维度的建议重复。"
         }
       ]
     },
@@ -856,12 +926,12 @@ ${JSON.stringify(video2Analysis, null, 2)}
       "details": "详细的语调与节奏深度分析。这部分要在overview的基础上进一步展开，包含：1) 具体对比两次课堂的语调变化（升调、降调的使用是否自然）；2) 分析句子节奏和停顿的合理性及其变化；3) 评估语速的流畅度和句子重音的掌握情况；4) 对比早期课堂和最近课堂在语音韵律特征上的具体差异。注意：这部分应该专注于语调、节奏、重音等韵律特征，而不是讨论发音准确性（发音准确性在pronunciation部分讨论）。字数要求：至少${REPORT_WORD_COUNT.improvementAreas.details}词，内容要比overview更加深入和具体。",
       "suggestions": [
         {
-          "title": "建议标题（基于阈值触发或通用建议）",
-          "description": "详细的练习建议和方法（至少${REPORT_WORD_COUNT.improvementAreas.suggestion}词）"
+          "title": "语调练习：单词重音",
+          "description": "针对语调问题的单词重音练习建议。🔥【必须要求】：如果提供了课程大纲参考，必须从【核心词汇】中选择2-3个多音节单词作为练习例子，标注重音位置并说明具体的练习方法（至少${REPORT_WORD_COUNT.improvementAreas.suggestion}词）。🚨注意：这些单词不能与pronunciation和grammar维度的建议重复。"
         },
         {
-          "title": "第二个建议标题（基于阈值触发或通用建议，需要与第一个建议标题不同）",
-          "description": "第二个练习建议和方法（至少${REPORT_WORD_COUNT.improvementAreas.suggestion}词）"
+          "title": "语调练习：句子韵律",
+          "description": "针对语调问题的句子韵律练习建议。🔥【必须要求】：如果提供了课程大纲参考，必须从【核心句式】中选择1-2个较长的表达性句式作为练习例子，标注升降调和停顿位置，并说明具体的练习方法（至少${REPORT_WORD_COUNT.improvementAreas.suggestion}词）。🚨注意：这些句子不能与pronunciation和grammar维度的建议重复。"
         }
       ]
   }
@@ -1174,6 +1244,11 @@ ${JSON.stringify(video2Analysis, null, 2)}
       incorrect = this.guessIncorrectPhonetic(word, correct);
     }
 
+    // 8. 最后的兜底方案：如果还是没有生成不同的音标，使用通用音标替换
+    if (!incorrect || incorrect === correct) {
+      incorrect = this.forceGenerateDifferentPhonetic(correct);
+    }
+
     // 如果成功生成了不同的音标，更新并返回成功
     if (incorrect && incorrect !== correct) {
       example.incorrect = incorrect;
@@ -1218,6 +1293,124 @@ ${JSON.stringify(video2Analysis, null, 2)}
       .replace(/uː/g, 'ʊ')
       .replace(/ɑː/g, 'ʌ')
       .replace(/ɔː/g, 'ɒ');
+  }
+
+  /**
+   * 强制生成一个不同的音标（兜底方案）
+   * 通过多种策略保证一定能生成与原音标不同的版本
+   */
+  private forceGenerateDifferentPhonetic(correct: string): string {
+    // 策略 1: 尝试所有常见的音标替换
+    const commonReplacements = [
+      // 长元音 → 短元音
+      { from: /iː/g, to: 'ɪ' },
+      { from: /i:/g, to: 'ɪ' },
+      { from: /uː/g, to: 'ʊ' },
+      { from: /u:/g, to: 'ʊ' },
+      { from: /ɑː/g, to: 'ʌ' },
+      { from: /ɑ:/g, to: 'ʌ' },
+      { from: /ɔː/g, to: 'ɒ' },
+      { from: /ɔ:/g, to: 'ɒ' },
+      { from: /ɜː/g, to: 'ə' },
+      { from: /ɜ:/g, to: 'ə' },
+      
+      // 双元音替换
+      { from: /aʊ/g, to: 'au' },
+      { from: /eɪ/g, to: 'e' },
+      { from: /aɪ/g, to: 'ai' },
+      { from: /ɔɪ/g, to: 'oi' },
+      { from: /əʊ/g, to: 'o' },
+      
+      // 特殊辅音
+      { from: /θ/g, to: 's' },
+      { from: /ð/g, to: 'z' },
+      { from: /ʃ/g, to: 's' },
+      { from: /ʒ/g, to: 'z' },
+      { from: /ŋ/g, to: 'n' },
+      { from: /tʃ/g, to: 'ts' },
+      { from: /dʒ/g, to: 'dz' },
+      
+      // l/r 互换
+      { from: /l/g, to: 'r' },
+      { from: /r/g, to: 'l' },
+      
+      // v/w 互换
+      { from: /v/g, to: 'w' },
+      { from: /w/g, to: 'v' },
+    ];
+
+    // 尝试每个替换规则
+    for (const replacement of commonReplacements) {
+      if (replacement.from.test(correct)) {
+        const result = correct.replace(replacement.from, replacement.to);
+        if (result !== correct) {
+          return result;
+        }
+      }
+    }
+
+    // 策略 2: 如果包含特定音标，直接替换
+    const directMappings: Record<string, string> = {
+      'æ': 'e',
+      'e': 'æ',
+      'ɪ': 'i',
+      'i': 'ɪ',
+      'ʊ': 'u',
+      'u': 'ʊ',
+      'ɒ': 'ɔ',
+      'ɔ': 'ɒ',
+      'ʌ': 'a',
+      'a': 'ʌ',
+      'ə': 'e',
+      'p': 'b',
+      'b': 'p',
+      't': 'd',
+      'd': 't',
+      'k': 'g',
+      'g': 'k',
+      'f': 'v',
+      's': 'z',
+      'z': 's',
+    };
+
+    // 尝试替换第一个找到的可映射字符
+    for (let i = 0; i < correct.length; i++) {
+      const char = correct[i];
+      if (directMappings[char]) {
+        const result = correct.substring(0, i) + directMappings[char] + correct.substring(i + 1);
+        if (result !== correct) {
+          return result;
+        }
+      }
+    }
+
+    // 策略 3: 移除或添加重音符号
+    if (correct.includes('ˈ')) {
+      return correct.replace(/ˈ/g, '');
+    } else if (correct.length > 2) {
+      // 在第一个元音前添加重音
+      return correct.replace(/([aeiouæɪʊɒɔʌəɛ])/, 'ˈ$1');
+    }
+
+    // 策略 4: 移除或添加音节分隔符
+    if (correct.includes('.')) {
+      return correct.replace(/\./g, '');
+    } else if (correct.length > 4) {
+      // 在中间添加音节分隔符
+      const mid = Math.floor(correct.length / 2);
+      return correct.substring(0, mid) + '.' + correct.substring(mid);
+    }
+
+    // 策略 5: 最后的兜底 - 简单的字符替换
+    // 将第一个非斜杠字符改为 'X'（明显的错误标记）
+    for (let i = 0; i < correct.length; i++) {
+      if (correct[i] !== '/' && correct[i] !== ' ') {
+        return correct.substring(0, i) + 'X' + correct.substring(i + 1);
+      }
+    }
+
+    // 如果音标只有斜杠，返回一个通用错误音标
+    return '/X/';
   }
 
   /**

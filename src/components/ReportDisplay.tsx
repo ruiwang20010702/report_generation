@@ -126,6 +126,13 @@ export const ReportDisplay = ({ data, onBack }: ReportDisplayProps) => {
         throw new Error('找不到报告内容');
       }
 
+      // 🔧 滚动到顶部，确保标题被包含在截图中
+      window.scrollTo({ top: 0, behavior: 'instant' });
+      reportElement.scrollTop = 0;
+      
+      // 等待滚动完成
+      await new Promise(resolve => setTimeout(resolve, 50));
+
       originalBodyHadClass = document.body.classList.contains('report-exporting');
       originalWidthStyle = reportElement.style.width;
       originalMaxWidthStyle = reportElement.style.maxWidth;
@@ -144,6 +151,10 @@ export const ReportDisplay = ({ data, onBack }: ReportDisplayProps) => {
       reportElement.style.maxWidth = `${computedWidth}px`;
       reportElement.style.setProperty('--report-export-width', `${computedWidth}px`);
       document.body.classList.add('report-exporting');
+
+      // 等待所有图片和字体加载完成
+      await document.fonts.ready;
+      await new Promise(resolve => setTimeout(resolve, 100)); // 额外等待确保渲染完成
 
       // 使用 html2canvas 生成高质量截图
       const canvas = await html2canvas(reportElement, {
@@ -166,6 +177,39 @@ export const ReportDisplay = ({ data, onBack }: ReportDisplayProps) => {
             clonedElement.style.setProperty('--report-export-width', `${computedWidth}px`);
           }
           clonedDoc.body.classList.add('report-exporting');
+          
+          // 🔧 修复文字偏移问题：增强文本渲染精确度
+          const textElements = clonedDoc.querySelectorAll('h1, h2, h3, h4, h5, h6, p, span, li, td, th, label, a, button, div');
+          textElements.forEach((el: Element) => {
+            if (el instanceof HTMLElement) {
+              const computed = clonedDoc.defaultView?.getComputedStyle(el);
+              if (computed) {
+                // 强化字体属性
+                el.style.fontFamily = computed.fontFamily;
+                el.style.fontSize = computed.fontSize;
+                el.style.fontWeight = computed.fontWeight;
+                el.style.lineHeight = computed.lineHeight;
+                el.style.letterSpacing = computed.letterSpacing;
+                el.style.textAlign = computed.textAlign;
+                el.style.whiteSpace = computed.whiteSpace;
+                el.style.wordSpacing = computed.wordSpacing;
+                
+                // 强制子像素渲染对齐（关键）
+                el.style.transform = 'translateZ(0)';
+                el.style.backfaceVisibility = 'hidden';
+                el.style.webkitFontSmoothing = 'subpixel-antialiased';
+                
+                // 确保盒模型一致
+                el.style.boxSizing = computed.boxSizing;
+                
+                // 如果有 padding/margin，精确复制（防止计算误差）
+                if (computed.paddingTop !== '0px') el.style.paddingTop = computed.paddingTop;
+                if (computed.paddingRight !== '0px') el.style.paddingRight = computed.paddingRight;
+                if (computed.paddingBottom !== '0px') el.style.paddingBottom = computed.paddingBottom;
+                if (computed.paddingLeft !== '0px') el.style.paddingLeft = computed.paddingLeft;
+              }
+            }
+          });
         },
       });
 

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { VideoAnalysisForm } from "@/components/VideoAnalysisForm";
 import { LoadingState } from "@/components/LoadingState";
@@ -166,12 +166,56 @@ const MOCK_REPORT_DATA = {
   }
 };
 
+// LocalStorage keys
+const STORAGE_KEYS = {
+  APP_STATE: 'videoAnalysis_appState',
+  REPORT_DATA: 'videoAnalysis_reportData',
+};
+
 const Index = () => {
   const [appState, setAppState] = useState<AppState>("form");
   const [reportData, setReportData] = useState<VideoAnalysisResponse | null>(null);
   const { toast } = useToast();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
+
+  // 📦 页面加载时从 localStorage 恢复数据
+  useEffect(() => {
+    try {
+      const savedState = localStorage.getItem(STORAGE_KEYS.APP_STATE);
+      const savedData = localStorage.getItem(STORAGE_KEYS.REPORT_DATA);
+      
+      if (savedState === 'report' && savedData) {
+        const parsedData = JSON.parse(savedData);
+        setReportData(parsedData);
+        setAppState('report');
+        console.log('✅ 已从 localStorage 恢复报告数据');
+      }
+    } catch (error) {
+      console.error('❌ 恢复数据失败:', error);
+      // 如果恢复失败，清除损坏的数据
+      localStorage.removeItem(STORAGE_KEYS.APP_STATE);
+      localStorage.removeItem(STORAGE_KEYS.REPORT_DATA);
+    }
+  }, []);
+
+  // 💾 当报告数据变化时，保存到 localStorage
+  useEffect(() => {
+    if (appState === 'report' && reportData) {
+      try {
+        localStorage.setItem(STORAGE_KEYS.APP_STATE, 'report');
+        localStorage.setItem(STORAGE_KEYS.REPORT_DATA, JSON.stringify(reportData));
+        console.log('💾 报告数据已保存到 localStorage');
+      } catch (error) {
+        console.error('❌ 保存数据失败:', error);
+        toast({
+          title: "保存失败",
+          description: "无法保存报告数据，刷新页面后可能会丢失",
+          variant: "destructive",
+        });
+      }
+    }
+  }, [appState, reportData, toast]);
 
   const handleFormSubmit = async (data: FormData) => {
     console.log('🚀 Form submitted with data:', data);
@@ -254,6 +298,11 @@ const Index = () => {
   };
 
   const handleBackToForm = () => {
+    // 🗑️ 返回表单时清除保存的数据
+    localStorage.removeItem(STORAGE_KEYS.APP_STATE);
+    localStorage.removeItem(STORAGE_KEYS.REPORT_DATA);
+    console.log('🗑️ 已清除 localStorage 中的报告数据');
+    
     setAppState("form");
     setReportData(null);
   };
