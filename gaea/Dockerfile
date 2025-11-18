@@ -1,5 +1,5 @@
 # 使用官方 Node 运行时镜像（Alpine 更小）
-FROM node:20-alpine
+FROM node:20
 
 # 工作目录
 WORKDIR /app
