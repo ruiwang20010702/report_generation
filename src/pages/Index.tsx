@@ -139,10 +139,10 @@ const Index = () => {
     
     try {
       console.log('📡 Calling async analysis API...');
-      const requestData = {
-        ...data,
-        userId: user?.id
-      };
+        const requestData = {
+          ...data,
+          userId: user?.id
+        };
 
       appendJobLog('已发送分析请求，等待任务排队结果...');
       const enqueueResult = await videoAnalysisAPI.enqueueAnalysis(requestData);
@@ -170,13 +170,13 @@ const Index = () => {
         );
         setReportData(result);
       }
-
-      setAppState("report");
-
-      toast({
-        title: "分析完成！",
-        description: "已成功生成学习报告",
-      });
+        
+        setAppState("report");
+        
+        toast({
+          title: "分析完成！",
+          description: "已成功生成学习报告",
+        });
     } catch (error) {
       console.error('❌ Analysis failed:', error);
       
