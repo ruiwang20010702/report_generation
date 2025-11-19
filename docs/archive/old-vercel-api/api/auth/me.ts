@@ -1,7 +1,17 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import jwt from 'jsonwebtoken';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+/**
+ * 获取 JWT Secret（运行时读取环境变量）
+ * 如果未设置，抛出错误以确保安全性
+ */
+function getJwtSecret(): string {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    throw new Error('JWT_SECRET environment variable is not set. Please configure it in your .env file.');
+  }
+  return secret;
+}
 
 export default async function handler(
   req: VercelRequest,
@@ -40,7 +50,7 @@ export default async function handler(
     }
 
     // 验证 token
-    const decoded = jwt.verify(token, JWT_SECRET) as any;
+    const decoded = jwt.verify(token, getJwtSecret()) as any;
 
     return res.status(200).json({
       user: {

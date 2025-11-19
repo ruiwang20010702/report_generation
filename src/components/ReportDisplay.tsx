@@ -14,7 +14,7 @@ import { useState } from "react";
 
 interface ReportData {
   studentName: string;
-  studentId?: string;
+  studentId: string; // 学生ID（必选，与后端类型定义一致）
   grade: string;
   level: string;
   unit: string;

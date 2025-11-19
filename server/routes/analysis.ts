@@ -147,14 +147,62 @@ router.post('/analyze', asyncHandler(async (req: Request, res: Response) => {
     );
   }
 
-  // 验证学生ID格式（如果提供）
-  if (requestData.studentId && !isValidStudentId(requestData.studentId)) {
+  // 验证学生ID（必填）
+  if (!requestData.studentId) {
+    throw new AppError(
+      ErrorType.VALIDATION_ERROR,
+      'Missing student ID',
+      {
+        userMessage: '请提供学生ID',
+        context,
+      }
+    );
+  }
+
+  // 验证学生ID格式
+  if (!isValidStudentId(requestData.studentId)) {
     throw new AppError(
       ErrorType.VALIDATION_ERROR,
       'Invalid student ID format',
       {
         userMessage: '学生ID格式不正确，应为2-50个字符（仅支持字母、数字、下划线和短横线）',
         context: { ...context, studentId: safeSubstring(requestData.studentId, 0, 50) },
+      }
+    );
+  }
+
+  // 验证年级（必填）
+  if (!requestData.grade) {
+    throw new AppError(
+      ErrorType.VALIDATION_ERROR,
+      'Missing grade',
+      {
+        userMessage: '请提供年级',
+        context,
+      }
+    );
+  }
+
+  // 验证级别（必填）
+  if (!requestData.level) {
+    throw new AppError(
+      ErrorType.VALIDATION_ERROR,
+      'Missing level',
+      {
+        userMessage: '请提供级别',
+        context,
+      }
+    );
+  }
+
+  // 验证单元（必填）
+  if (!requestData.unit) {
+    throw new AppError(
+      ErrorType.VALIDATION_ERROR,
+      'Missing unit',
+      {
+        userMessage: '请提供单元',
+        context,
       }
     );
   }

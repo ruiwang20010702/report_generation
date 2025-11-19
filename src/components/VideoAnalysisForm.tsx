@@ -122,6 +122,10 @@ export const VideoAnalysisForm = ({ onSubmit }: VideoAnalysisFormProps) => {
       newErrors.level = "请选择级别";
     }
 
+    if (!formData.unit.trim()) {
+      newErrors.unit = "请输入单元";
+    }
+
     if (!formData.date) {
       newErrors.date = "请选择日期";
     }
@@ -296,26 +300,27 @@ export const VideoAnalysisForm = ({ onSubmit }: VideoAnalysisFormProps) => {
                   </SelectContent>
                 </Select>
                 {errors.level && <p className="text-sm text-destructive">{errors.level}</p>}
-            </div>
+              </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="unit" className="flex items-center gap-2 text-base font-semibold">
-                <Film className="w-5 h-5 text-secondary" />
-                单元 <span className="text-xs text-muted-foreground font-normal">(可选)</span>
-              </Label>
-              <div className="flex items-center gap-2">
-                <span className="text-foreground font-medium whitespace-nowrap">Unit</span>
-                <Input
-                  id="unit"
-                  type="number"
-                  min="1"
-                  max="100"
-                  placeholder="输入数字，如 5"
-                  value={formData.unit}
+              <div className="space-y-2">
+                <Label htmlFor="unit" className="flex items-center gap-2 text-base font-semibold">
+                  <Film className="w-5 h-5 text-secondary" />
+                  单元
+                </Label>
+                <div className="flex items-center gap-2">
+                  <span className="text-foreground font-medium whitespace-nowrap">Unit</span>
+                  <Input
+                    id="unit"
+                    type="number"
+                    min="1"
+                    max="100"
+                    placeholder="输入数字，如 5"
+                    value={formData.unit}
                     onChange={(e) => updateFormField({ unit: e.target.value })}
-                  className="h-12 flex-1"
-                />
+                    className="h-12 flex-1"
+                  />
                 </div>
+                {errors.unit && <p className="text-sm text-destructive">{errors.unit}</p>}
               </div>
             </div>
           </div>

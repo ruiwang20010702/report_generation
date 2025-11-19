@@ -29,7 +29,7 @@ async function importUser(email: string, password: string) {
       // 用户已存在，更新密码
       console.log('⚠️  用户已存在，更新密码...');
       await query(
-        'UPDATE users SET password = $1, updated_at = TIMEZONE(\'utc\'::text, NOW()) WHERE email = $2',
+        'UPDATE users SET passwd_hash = $1, updated_at = TIMEZONE(\'utc\'::text, NOW()) WHERE email = $2',
         [hashedPassword, email]
       );
       console.log(`✅ 用户密码已更新: ${email}`);
@@ -38,7 +38,7 @@ async function importUser(email: string, password: string) {
       // 用户不存在，创建新用户
       console.log('📝 创建新用户...');
       const result = await query(
-        'INSERT INTO users (email, password, created_at, updated_at) VALUES ($1, $2, TIMEZONE(\'utc\'::text, NOW()), TIMEZONE(\'utc\'::text, NOW())) RETURNING id, email, created_at',
+        'INSERT INTO users (email, passwd_hash, created_at, updated_at) VALUES ($1, $2, TIMEZONE(\'utc\'::text, NOW()), TIMEZONE(\'utc\'::text, NOW())) RETURNING id, email, created_at',
         [email, hashedPassword]
       );
       console.log(`✅ 用户创建成功: ${email}`);
@@ -69,16 +69,16 @@ async function main() {
     await query('SELECT NOW()');
     console.log('✅ 数据库连接成功\n');
 
-    // 确保 password 字段存在
-    console.log('🔍 检查 password 字段...');
+    // 确保 passwd_hash 字段存在
+    console.log('🔍 检查 passwd_hash 字段...');
     try {
-      await query('SELECT password FROM users LIMIT 1');
-      console.log('✅ password 字段已存在\n');
+      await query('SELECT passwd_hash FROM users LIMIT 1');
+      console.log('✅ passwd_hash 字段已存在\n');
     } catch (error: any) {
       if (error.message.includes('column') && error.message.includes('does not exist')) {
-        console.log('⚠️  password 字段不存在，正在添加...');
-        await query('ALTER TABLE users ADD COLUMN IF NOT EXISTS password TEXT');
-        console.log('✅ password 字段已添加\n');
+        console.log('⚠️  passwd_hash 字段不存在，正在添加...');
+        await query('ALTER TABLE users ADD COLUMN IF NOT EXISTS passwd_hash TEXT');
+        console.log('✅ passwd_hash 字段已添加\n');
       } else {
         throw error;
       }

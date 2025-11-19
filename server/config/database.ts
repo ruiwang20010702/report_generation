@@ -122,7 +122,10 @@ export async function testConnection(): Promise<boolean> {
     }
     
     // 发送数据库连接失败告警
-    await alertDatabaseError(error, '数据库连接测试').catch(() => {});
+    await alertDatabaseError(error, '数据库连接测试').catch((alertError) => {
+      // 告警失败不应该影响主流程，但需要记录错误
+      console.error('[Database] Failed to send connection test error alert:', alertError);
+    });
     
     return false;
   }
@@ -145,7 +148,10 @@ export async function query(text: string, params?: any[]) {
     // 检查慢查询（超过3秒）
     if (duration > 3000) {
       console.warn(`⚠️  慢查询检测: ${duration}ms - ${text.substring(0, 100)}`);
-      await alertSlowPerformance('数据库查询', duration, 3000).catch(() => {});
+      await alertSlowPerformance('数据库查询', duration, 3000).catch((alertError) => {
+        // 告警失败不应该影响主流程，但需要记录错误
+        console.error('[Database] Failed to send slow query alert:', alertError);
+      });
     }
     
     return res;
@@ -154,7 +160,10 @@ export async function query(text: string, params?: any[]) {
     
     // 发送数据库错误告警
     if (error instanceof Error) {
-      await alertDatabaseError(error, '数据库查询').catch(() => {});
+      await alertDatabaseError(error, '数据库查询').catch((alertError) => {
+        // 告警失败不应该影响主流程，但需要记录错误
+        console.error('[Database] Failed to send database error alert:', alertError);
+      });
     }
     
     throw error;
@@ -180,7 +189,10 @@ export async function closePool(): Promise<void> {
 pool.on('error', async (err) => {
   console.error('❌ 数据库连接池错误:', err);
   // 发送告警
-  await alertDatabaseError(err, '数据库连接池').catch(() => {});
+  await alertDatabaseError(err, '数据库连接池').catch((alertError) => {
+    // 告警失败不应该影响主流程，但需要记录错误
+    console.error('[Database] Failed to send connection pool error alert:', alertError);
+  });
 });
 
 // 注意：优雅关闭由 gracefulShutdown.ts 统一管理

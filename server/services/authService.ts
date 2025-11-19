@@ -10,9 +10,14 @@ const ALLOWED_EMAIL_DOMAIN = '@51talk.com'; // 允许的邮箱域名
 
 /**
  * 获取 JWT Secret（运行时读取环境变量）
+ * 如果未设置，抛出错误以确保安全性
  */
 function getJwtSecret(): string {
-  return process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    throw new Error('JWT_SECRET environment variable is not set. Please configure it in your .env file.');
+  }
+  return secret;
 }
 
 /**
@@ -178,7 +183,7 @@ export async function loginWithPassword(email: string, password: string): Promis
 
   // 查找用户
   const result = await query(
-    'SELECT id, email, password FROM users WHERE email = $1',
+    'SELECT id, email, passwd_hash FROM users WHERE email = $1',
     [email]
   );
 
@@ -189,12 +194,12 @@ export async function loginWithPassword(email: string, password: string): Promis
   const user = result.rows[0];
 
   // 检查用户是否设置了密码
-  if (!user.password) {
+  if (!user.passwd_hash) {
     throw new Error('该账户尚未设置密码，请使用验证码登录');
   }
 
   // 验证密码
-  const isPasswordValid = await bcrypt.compare(password, user.password);
+  const isPasswordValid = await bcrypt.compare(password, user.passwd_hash);
   if (!isPasswordValid) {
     throw new Error('密码错误');
   }
@@ -245,7 +250,7 @@ export async function setPassword(email: string, password: string): Promise<void
 
   // 更新密码
   await query(
-    'UPDATE users SET password = $1 WHERE email = $2',
+    'UPDATE users SET passwd_hash = $1 WHERE email = $2',
     [hashedPassword, email]
   );
 }

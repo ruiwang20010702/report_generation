@@ -3,6 +3,7 @@ import { VideoAnalysisRequest, VideoAnalysisResponse } from '../types/index.js';
 import { AppError, ErrorType } from '../utils/errors.js';
 import { VideoAnalysisService } from './videoAnalysisService.js';
 import { pool } from '../config/database.js';
+import { alertDatabaseError } from './alertService.js';
 
 export type AnalysisJobStatus = 'queued' | 'processing' | 'completed' | 'failed';
 
@@ -64,6 +65,9 @@ export class AnalysisJobQueue {
   private processQueueChain: Promise<void> = Promise.resolve();
   // 数据库持久化开关（如果数据库不可用，降级到内存模式）
   private persistenceEnabled = false;
+  // 数据库操作失败计数器（用于追踪连续失败，如果失败太多则禁用持久化）
+  private databaseFailureCount = 0;
+  private readonly MAX_DATABASE_FAILURES = 10; // 连续失败10次后禁用持久化
 
   constructor(concurrency: number = DEFAULT_CONCURRENCY) {
     this.concurrency = concurrency;
@@ -116,14 +120,18 @@ export class AnalysisJobQueue {
     this.jobOrder.push(job.id);
     
     // 持久化到数据库（异步，不阻塞）
+    // 注意：即使数据库操作失败，任务仍然会入队（降级到内存模式）
     if (this.persistenceEnabled) {
       this.persistJobToDatabase(job).catch((error) => {
-        console.error(`[AnalysisJobQueue] Failed to persist job ${job.id}:`, error);
-        // 数据库失败不影响任务入队，但记录错误
-        this.logEvent('persist_failed', {
+        // 错误已在 persistJobToDatabase 中记录和追踪
+        // 这里只记录额外的上下文信息
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        this.logEvent('persist_failed_at_enqueue', {
           jobId: job.id,
-          error: error instanceof Error ? error.message : 'Unknown error'
+          error: errorMessage,
+          note: 'Job still enqueued in memory mode'
         });
+        // 数据库失败不影响任务入队，任务队列仍能正常工作
       });
     }
 
@@ -183,42 +191,57 @@ export class AnalysisJobQueue {
     // 循环处理任务，直到达到并发限制或队列为空
     while (this.activeCount < this.concurrency && this.jobOrder.length > 0) {
       // 原子操作：在串行化上下文中检查和修改
-      const nextJobId = this.jobOrder.shift();
-      if (!nextJobId) {
+    const nextJobId = this.jobOrder.shift();
+    if (!nextJobId) {
         break;
-      }
+    }
 
-      const job = this.jobs.get(nextJobId);
-      if (!job) {
-        this.logEvent('job_missing', { jobId: nextJobId });
+    const job = this.jobs.get(nextJobId);
+    if (!job) {
+      this.logEvent('job_missing', { jobId: nextJobId });
         // 跳过缺失的任务，继续处理下一个
         continue;
-      }
+    }
 
       // 在串行化上下文中安全地增加 activeCount
-      this.activeCount += 1;
-      job.status = 'processing';
-      job.startedAt = new Date();
+    this.activeCount += 1;
+    job.status = 'processing';
+    job.startedAt = new Date();
       
       // 更新数据库状态（异步，不阻塞）
+      // 注意：即使数据库操作失败，任务处理仍会继续
       if (this.persistenceEnabled) {
         this.updateJobStatusInDatabase(job.id, 'processing', {
           startedAt: job.startedAt
         }).catch((error) => {
-          console.error(`[AnalysisJobQueue] Failed to update job status ${job.id}:`, error);
+          // 错误已在 updateJobStatusInDatabase 中记录和追踪
+          // 这里只记录额外的上下文信息
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          this.logEvent('update_failed_at_start', {
+            jobId: job.id,
+            error: errorMessage,
+            note: 'Job processing continues despite database update failure'
+          });
         });
       }
       
-      this.logEvent('job_started', {
-        jobId: job.id,
-        queueDepth: this.jobOrder.length,
-        activeCount: this.activeCount,
-        useMock: job.useMock
-      });
+    this.logEvent('job_started', {
+      jobId: job.id,
+      queueDepth: this.jobOrder.length,
+      activeCount: this.activeCount,
+      useMock: job.useMock
+    });
 
       // 异步处理任务，不阻塞队列处理循环
+      // 注意：processJob 内部已经处理了所有错误，这个 catch 是为了防止未处理的 Promise rejection
       this.processJob(job).catch((error) => {
-        console.error(`[AnalysisJobQueue] Job ${job.id} processing error:`, error);
+        // 这种情况理论上不应该发生，因为 processJob 内部已经处理了所有错误
+        // 但如果发生了，说明有未处理的错误，需要记录
+        console.error(`[AnalysisJobQueue] Unexpected unhandled error in job ${job.id}:`, error);
+        this.logEvent('unexpected_job_error', {
+          jobId: job.id,
+          error: error instanceof Error ? error.message : String(error)
+        });
       });
     }
 
@@ -245,12 +268,20 @@ export class AnalysisJobQueue {
       job.completedAt = new Date();
       
       // 更新数据库状态（异步，不阻塞）
+      // 注意：即使数据库操作失败，任务已完成状态已保存在内存中
       if (this.persistenceEnabled) {
         this.updateJobStatusInDatabase(job.id, 'completed', {
           completedAt: job.completedAt,
           result: job.result
         }).catch((error) => {
-          console.error(`[AnalysisJobQueue] Failed to update job completion ${job.id}:`, error);
+          // 错误已在 updateJobStatusInDatabase 中记录和追踪
+          // 这里只记录额外的上下文信息
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          this.logEvent('update_failed_at_completion', {
+            jobId: job.id,
+            error: errorMessage,
+            note: 'Job completed in memory, but database update failed'
+          });
         });
       }
       
@@ -266,12 +297,20 @@ export class AnalysisJobQueue {
       job.completedAt = new Date();
       
       // 更新数据库状态（异步，不阻塞）
+      // 注意：即使数据库操作失败，任务失败状态已保存在内存中
       if (this.persistenceEnabled) {
         this.updateJobStatusInDatabase(job.id, 'failed', {
           completedAt: job.completedAt,
           error: job.error
         }).catch((error) => {
-          console.error(`[AnalysisJobQueue] Failed to update job failure ${job.id}:`, error);
+          // 错误已在 updateJobStatusInDatabase 中记录和追踪
+          // 这里只记录额外的上下文信息
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          this.logEvent('update_failed_at_failure', {
+            jobId: job.id,
+            error: errorMessage,
+            note: 'Job failed in memory, but database update failed'
+          });
         });
       }
       
@@ -395,36 +434,114 @@ export class AnalysisJobQueue {
   }
 
   /**
-   * 将任务持久化到数据库
+   * 判断错误是否可重试（临时性错误）
    */
-  private async persistJobToDatabase(job: AnalysisJobInternal): Promise<void> {
-    try {
-      await pool.query(
-        `INSERT INTO analysis_jobs (job_id, status, request_data, use_mock, submitted_at)
-         VALUES ($1, $2, $3, $4, $5)
-         ON CONFLICT (job_id) DO UPDATE SET
-           status = EXCLUDED.status,
-           request_data = EXCLUDED.request_data,
-           use_mock = EXCLUDED.use_mock,
-           updated_at = CURRENT_TIMESTAMP`,
-        [
-          job.id,
-          job.status,
-          JSON.stringify(job.request),
-          job.useMock,
-          job.submittedAt
-        ]
-      );
-    } catch (error) {
-      // 如果数据库操作失败，记录错误但不抛出异常
-      // 这样即使数据库有问题，任务队列仍能正常工作（降级到内存模式）
-      console.error(`[AnalysisJobQueue] Database persist error for job ${job.id}:`, error);
-      throw error;
+  private isRetryableError(error: unknown): boolean {
+    if (!(error instanceof Error)) {
+      return false;
     }
+    
+    const errorMessage = error.message.toLowerCase();
+    const errorCode = (error as any).code;
+    
+    // 网络错误、超时、连接错误等可以重试
+    return (
+      errorCode === 'ECONNRESET' ||
+      errorCode === 'ETIMEDOUT' ||
+      errorCode === 'ENOTFOUND' ||
+      errorCode === 'ECONNREFUSED' ||
+      errorCode === 'ESOCKETTIMEDOUT' ||
+      errorMessage.includes('timeout') ||
+      errorMessage.includes('connection') ||
+      errorMessage.includes('network')
+    );
   }
 
   /**
-   * 更新数据库中的任务状态
+   * 将任务持久化到数据库（带重试机制）
+   */
+  private async persistJobToDatabase(job: AnalysisJobInternal, retries: number = 2): Promise<void> {
+    let lastError: unknown;
+    
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try {
+        await pool.query(
+          `INSERT INTO analysis_jobs (job_id, status, request_data, use_mock, submitted_at)
+           VALUES ($1, $2, $3, $4, $5)
+           ON CONFLICT (job_id) DO UPDATE SET
+             status = EXCLUDED.status,
+             request_data = EXCLUDED.request_data,
+             use_mock = EXCLUDED.use_mock,
+             updated_at = CURRENT_TIMESTAMP`,
+          [
+            job.id,
+            job.status,
+            JSON.stringify(job.request),
+            job.useMock,
+            job.submittedAt
+          ]
+        );
+        
+        // 成功时重置失败计数器
+        if (this.databaseFailureCount > 0) {
+          this.databaseFailureCount = 0;
+          this.logEvent('database_recovered', { jobId: job.id });
+        }
+        
+        return; // 成功，退出
+      } catch (error) {
+        lastError = error;
+        
+        // 如果是最后一次尝试，或者错误不可重试，则不再重试
+        if (attempt === retries || !this.isRetryableError(error)) {
+          break;
+        }
+        
+        // 等待后重试（指数退避）
+        const delayMs = Math.min(1000 * Math.pow(2, attempt), 5000);
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+      }
+    }
+    
+    // 所有重试都失败了
+    this.databaseFailureCount++;
+    const error = lastError instanceof Error ? lastError : new Error(String(lastError));
+    
+    console.error(`[AnalysisJobQueue] Database persist error for job ${job.id} (attempts: ${retries + 1}, failures: ${this.databaseFailureCount}):`, error);
+    
+    // 记录错误事件
+    this.logEvent('persist_failed', {
+      jobId: job.id,
+      error: error.message,
+      failureCount: this.databaseFailureCount,
+      retryable: this.isRetryableError(lastError)
+    });
+    
+    // 如果连续失败太多次，禁用持久化
+    if (this.databaseFailureCount >= this.MAX_DATABASE_FAILURES) {
+      this.persistenceEnabled = false;
+      this.logEvent('persistence_auto_disabled', {
+        reason: 'too_many_failures',
+        failureCount: this.databaseFailureCount
+      });
+      
+      // 发送告警
+      alertDatabaseError(error, `任务持久化失败（已禁用持久化）`).catch((alertError) => {
+        console.error('[AnalysisJobQueue] Failed to send database error alert:', alertError);
+      });
+    } else if (this.databaseFailureCount >= 5) {
+      // 失败5次以上时发送告警
+      alertDatabaseError(error, `任务持久化失败（连续失败${this.databaseFailureCount}次）`).catch((alertError) => {
+        console.error('[AnalysisJobQueue] Failed to send database error alert:', alertError);
+      });
+    }
+    
+    // 抛出错误，让调用者知道操作失败
+    throw error;
+  }
+
+  /**
+   * 更新数据库中的任务状态（带重试机制）
    */
   private async updateJobStatusInDatabase(
     jobId: string,
@@ -434,45 +551,103 @@ export class AnalysisJobQueue {
       completedAt?: Date;
       result?: VideoAnalysisResponse;
       error?: AnalysisJobState['error'];
-    }
+    },
+    retries: number = 2
   ): Promise<void> {
-    try {
-      const updateFields: string[] = ['status = $2', 'updated_at = CURRENT_TIMESTAMP'];
-      const values: any[] = [jobId, status];
-      let paramIndex = 3;
+    let lastError: unknown;
+    
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try {
+        const updateFields: string[] = ['status = $2', 'updated_at = CURRENT_TIMESTAMP'];
+        const values: any[] = [jobId, status];
+        let paramIndex = 3;
 
-      if (updates.startedAt) {
-        updateFields.push(`started_at = $${paramIndex}`);
-        values.push(updates.startedAt);
-        paramIndex++;
+        if (updates.startedAt) {
+          updateFields.push(`started_at = $${paramIndex}`);
+          values.push(updates.startedAt);
+          paramIndex++;
+        }
+
+        if (updates.completedAt) {
+          updateFields.push(`completed_at = $${paramIndex}`);
+          values.push(updates.completedAt);
+          paramIndex++;
+        }
+
+        if (updates.result) {
+          updateFields.push(`result_data = $${paramIndex}`);
+          values.push(JSON.stringify(updates.result));
+          paramIndex++;
+        }
+
+        if (updates.error) {
+          updateFields.push(`error_data = $${paramIndex}`);
+          values.push(JSON.stringify(updates.error));
+          paramIndex++;
+        }
+
+        await pool.query(
+          `UPDATE analysis_jobs SET ${updateFields.join(', ')} WHERE job_id = $1`,
+          values
+        );
+        
+        // 成功时重置失败计数器
+        if (this.databaseFailureCount > 0) {
+          this.databaseFailureCount = 0;
+          this.logEvent('database_recovered', { jobId });
+        }
+        
+        return; // 成功，退出
+      } catch (error) {
+        lastError = error;
+        
+        // 如果是最后一次尝试，或者错误不可重试，则不再重试
+        if (attempt === retries || !this.isRetryableError(error)) {
+          break;
+        }
+        
+        // 等待后重试（指数退避）
+        const delayMs = Math.min(1000 * Math.pow(2, attempt), 5000);
+        await new Promise(resolve => setTimeout(resolve, delayMs));
       }
-
-      if (updates.completedAt) {
-        updateFields.push(`completed_at = $${paramIndex}`);
-        values.push(updates.completedAt);
-        paramIndex++;
-      }
-
-      if (updates.result) {
-        updateFields.push(`result_data = $${paramIndex}`);
-        values.push(JSON.stringify(updates.result));
-        paramIndex++;
-      }
-
-      if (updates.error) {
-        updateFields.push(`error_data = $${paramIndex}`);
-        values.push(JSON.stringify(updates.error));
-        paramIndex++;
-      }
-
-      await pool.query(
-        `UPDATE analysis_jobs SET ${updateFields.join(', ')} WHERE job_id = $1`,
-        values
-      );
-    } catch (error) {
-      console.error(`[AnalysisJobQueue] Database update error for job ${jobId}:`, error);
-      throw error;
     }
+    
+    // 所有重试都失败了
+    this.databaseFailureCount++;
+    const error = lastError instanceof Error ? lastError : new Error(String(lastError));
+    
+    console.error(`[AnalysisJobQueue] Database update error for job ${jobId} (attempts: ${retries + 1}, failures: ${this.databaseFailureCount}):`, error);
+    
+    // 记录错误事件
+    this.logEvent('update_failed', {
+      jobId,
+      status,
+      error: error.message,
+      failureCount: this.databaseFailureCount,
+      retryable: this.isRetryableError(lastError)
+    });
+    
+    // 如果连续失败太多次，禁用持久化
+    if (this.databaseFailureCount >= this.MAX_DATABASE_FAILURES) {
+      this.persistenceEnabled = false;
+      this.logEvent('persistence_auto_disabled', {
+        reason: 'too_many_failures',
+        failureCount: this.databaseFailureCount
+      });
+      
+      // 发送告警
+      alertDatabaseError(error, `任务状态更新失败（已禁用持久化）`).catch((alertError) => {
+        console.error('[AnalysisJobQueue] Failed to send database error alert:', alertError);
+      });
+    } else if (this.databaseFailureCount >= 5) {
+      // 失败5次以上时发送告警
+      alertDatabaseError(error, `任务状态更新失败（连续失败${this.databaseFailureCount}次）`).catch((alertError) => {
+        console.error('[AnalysisJobQueue] Failed to send database error alert:', alertError);
+      });
+    }
+    
+    // 抛出错误，让调用者知道操作失败
+    throw error;
   }
 
   /**
