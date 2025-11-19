@@ -39,9 +39,12 @@ interface EnqueueOptions {
   useMock: boolean;
 }
 
+// 默认并发数：支持100个任务同时处理
+// 可通过环境变量 ANALYSIS_JOB_CONCURRENCY 调整（建议范围：10-200）
+// 注意：过高的并发数可能导致外部API限流和成本增加
 const DEFAULT_CONCURRENCY = Math.max(
   1,
-  Number.parseInt(process.env.ANALYSIS_JOB_CONCURRENCY || '1', 10)
+  Number.parseInt(process.env.ANALYSIS_JOB_CONCURRENCY || '100', 10)
 );
 
 const DEFAULT_ESTIMATED_DURATION_MS = Math.max(
