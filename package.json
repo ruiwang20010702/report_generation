@@ -24,6 +24,8 @@
     "test:db": "tsx scripts/test-database.ts",
     "setup:db": "tsx scripts/setup-database.ts",
     "check:env": "tsx scripts/check-env.ts",
+    "check:migration": "tsx scripts/check-migration-safety.ts",
+    "run:migration": "tsx scripts/run-migration.ts",
     "setup:env": "tsx scripts/setup-env.ts",
     "test": "jest",
     "test:watch": "jest --watch",

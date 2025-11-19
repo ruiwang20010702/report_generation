@@ -196,7 +196,7 @@ router.post('/analyze', asyncHandler(async (req: Request, res: Response) => {
   }
 
   console.log('📬 将分析任务加入异步队列');
-  const queuedJob = analysisJobQueue.enqueue(requestData, { useMock });
+  const queuedJob = await analysisJobQueue.enqueue(requestData, { useMock });
 
   res.status(202).json({
     message: '分析任务已排队，稍后通过 jobId 查询结果',

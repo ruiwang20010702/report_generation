@@ -2,6 +2,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { VideoAnalysisRequest, VideoAnalysisResponse } from '../types/index.js';
 import { AppError, ErrorType } from '../utils/errors.js';
 import { VideoAnalysisService } from './videoAnalysisService.js';
+import { pool } from '../config/database.js';
 
 export type AnalysisJobStatus = 'queued' | 'processing' | 'completed' | 'failed';
 
@@ -59,6 +60,10 @@ export class AnalysisJobQueue {
   private readonly concurrency: number;
   private readonly analysisService: VideoAnalysisService;
   private recentDurations: number[] = [];
+  // Promise 链用于串行化 processQueue 调用，解决竞态条件
+  private processQueueChain: Promise<void> = Promise.resolve();
+  // 数据库持久化开关（如果数据库不可用，降级到内存模式）
+  private persistenceEnabled = false;
 
   constructor(concurrency: number = DEFAULT_CONCURRENCY) {
     this.concurrency = concurrency;
@@ -67,9 +72,38 @@ export class AnalysisJobQueue {
       concurrency: this.concurrency,
       estimateMs: DEFAULT_ESTIMATED_DURATION_MS
     });
+    // 检查数据库是否可用（异步，不阻塞构造函数）
+    this.checkPersistenceAvailability().catch((error) => {
+      console.error('[AnalysisJobQueue] Failed to check persistence availability:', error);
+    });
   }
 
-  enqueue(request: VideoAnalysisRequest, options: EnqueueOptions): AnalysisJobState {
+  /**
+   * 检查数据库持久化是否可用
+   */
+  private async checkPersistenceAvailability(): Promise<void> {
+    try {
+      await pool.query('SELECT 1');
+      this.persistenceEnabled = true;
+      this.logEvent('persistence_enabled', { enabled: true });
+    } catch (error) {
+      this.persistenceEnabled = false;
+      this.logEvent('persistence_disabled', {
+        enabled: false,
+        reason: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  }
+
+  /**
+   * 手动启用持久化（在数据库连接确认后调用）
+   */
+  enablePersistence(): void {
+    this.persistenceEnabled = true;
+    this.logEvent('persistence_manually_enabled', { enabled: true });
+  }
+
+  async enqueue(request: VideoAnalysisRequest, options: EnqueueOptions): Promise<AnalysisJobState> {
     const job: AnalysisJobInternal = {
       id: uuidv4(),
       request,
@@ -80,13 +114,29 @@ export class AnalysisJobQueue {
 
     this.jobs.set(job.id, job);
     this.jobOrder.push(job.id);
+    
+    // 持久化到数据库（异步，不阻塞）
+    if (this.persistenceEnabled) {
+      this.persistJobToDatabase(job).catch((error) => {
+        console.error(`[AnalysisJobQueue] Failed to persist job ${job.id}:`, error);
+        // 数据库失败不影响任务入队，但记录错误
+        this.logEvent('persist_failed', {
+          jobId: job.id,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        });
+      });
+    }
+
     this.logEvent('job_enqueued', {
       jobId: job.id,
       studentName: request.studentName,
       queueDepth: this.jobOrder.length,
-      useMock: job.useMock
+      useMock: job.useMock,
+      persisted: this.persistenceEnabled
     });
-    this.processQueue();
+    
+    // 触发队列处理（异步，不阻塞）
+    void this.processQueue();
     const state = this.toPublicState(job.id);
     if (!state) {
       throw new Error('Failed to create job state');
@@ -106,42 +156,104 @@ export class AnalysisJobQueue {
     return this.activeCount;
   }
 
-  private async processQueue() {
-    if (this.activeCount >= this.concurrency) {
+  /**
+   * 处理队列中的任务
+   * 使用 Promise 链确保串行执行，解决竞态条件：
+   * 1. activeCount 的检查-修改竞态
+   * 2. jobOrder.shift() 的并发问题
+   * 3. enqueue 和 processQueue 的并发调用
+   * 4. 递归调用的并发叠加
+   */
+  private processQueue(): Promise<void> {
+    // 将新的处理加入 Promise 链，确保串行执行
+    this.processQueueChain = this.processQueueChain.then(async () => {
+      await this.processQueueInternal();
+    }).catch((error) => {
+      // 捕获错误，避免 Promise 链断裂
+      console.error('[AnalysisJobQueue] processQueue error:', error);
+    });
+    return this.processQueueChain;
+  }
+
+  /**
+   * 内部队列处理逻辑
+   * 使用循环处理多个任务，而不是递归调用
+   */
+  private async processQueueInternal(): Promise<void> {
+    // 循环处理任务，直到达到并发限制或队列为空
+    while (this.activeCount < this.concurrency && this.jobOrder.length > 0) {
+      // 原子操作：在串行化上下文中检查和修改
+      const nextJobId = this.jobOrder.shift();
+      if (!nextJobId) {
+        break;
+      }
+
+      const job = this.jobs.get(nextJobId);
+      if (!job) {
+        this.logEvent('job_missing', { jobId: nextJobId });
+        // 跳过缺失的任务，继续处理下一个
+        continue;
+      }
+
+      // 在串行化上下文中安全地增加 activeCount
+      this.activeCount += 1;
+      job.status = 'processing';
+      job.startedAt = new Date();
+      
+      // 更新数据库状态（异步，不阻塞）
+      if (this.persistenceEnabled) {
+        this.updateJobStatusInDatabase(job.id, 'processing', {
+          startedAt: job.startedAt
+        }).catch((error) => {
+          console.error(`[AnalysisJobQueue] Failed to update job status ${job.id}:`, error);
+        });
+      }
+      
+      this.logEvent('job_started', {
+        jobId: job.id,
+        queueDepth: this.jobOrder.length,
+        activeCount: this.activeCount,
+        useMock: job.useMock
+      });
+
+      // 异步处理任务，不阻塞队列处理循环
+      this.processJob(job).catch((error) => {
+        console.error(`[AnalysisJobQueue] Job ${job.id} processing error:`, error);
+      });
+    }
+
+    // 如果达到并发限制，记录日志
+    if (this.activeCount >= this.concurrency && this.jobOrder.length > 0) {
       this.logEvent('worker_saturated', {
         activeCount: this.activeCount,
-        concurrency: this.concurrency
+        concurrency: this.concurrency,
+        queued: this.jobOrder.length
       });
-      return;
     }
+  }
 
-    const nextJobId = this.jobOrder.shift();
-    if (!nextJobId) {
-      return;
-    }
-
-    const job = this.jobs.get(nextJobId);
-    if (!job) {
-      this.logEvent('job_missing', { jobId: nextJobId });
-      this.processQueue();
-      return;
-    }
-
-    this.activeCount += 1;
-    job.status = 'processing';
-    job.startedAt = new Date();
-    this.logEvent('job_started', {
-      jobId: job.id,
-      queueDepth: this.jobOrder.length,
-      activeCount: this.activeCount,
-      useMock: job.useMock
-    });
-
+  /**
+   * 处理单个任务
+   * 任务完成后会自动触发队列继续处理
+   */
+  private async processJob(job: AnalysisJobInternal): Promise<void> {
     try {
       job.result = job.useMock
         ? await this.analysisService.analyzeMock(job.request)
         : await this.analysisService.analyzeVideos(job.request);
       job.status = 'completed';
+      job.completedAt = new Date();
+      
+      // 更新数据库状态（异步，不阻塞）
+      if (this.persistenceEnabled) {
+        this.updateJobStatusInDatabase(job.id, 'completed', {
+          completedAt: job.completedAt,
+          result: job.result
+        }).catch((error) => {
+          console.error(`[AnalysisJobQueue] Failed to update job completion ${job.id}:`, error);
+        });
+      }
+      
       this.logEvent('job_completed', {
         jobId: job.id,
         durationMs: job.startedAt && job.completedAt
@@ -151,17 +263,30 @@ export class AnalysisJobQueue {
     } catch (error) {
       job.status = 'failed';
       job.error = this.serializeError(error);
+      job.completedAt = new Date();
+      
+      // 更新数据库状态（异步，不阻塞）
+      if (this.persistenceEnabled) {
+        this.updateJobStatusInDatabase(job.id, 'failed', {
+          completedAt: job.completedAt,
+          error: job.error
+        }).catch((error) => {
+          console.error(`[AnalysisJobQueue] Failed to update job failure ${job.id}:`, error);
+        });
+      }
+      
       this.logEvent('job_failed', {
         jobId: job.id,
         error: job.error?.message,
         errorType: job.error?.type
       });
     } finally {
-      job.completedAt = new Date();
+      // 减少活跃任务计数（JavaScript 单线程中这是原子操作）
       this.activeCount -= 1;
       this.trackDuration(job);
       this.scheduleCleanup(job.id);
-      this.processQueue();
+      // 任务完成后触发队列继续处理（会加入 Promise 链，确保串行化）
+      void this.processQueue();
     }
   }
 
@@ -267,6 +392,175 @@ export class AnalysisJobQueue {
       result: job.status === 'completed' ? job.result : undefined,
       error: job.status === 'failed' ? job.error : undefined
     };
+  }
+
+  /**
+   * 将任务持久化到数据库
+   */
+  private async persistJobToDatabase(job: AnalysisJobInternal): Promise<void> {
+    try {
+      await pool.query(
+        `INSERT INTO analysis_jobs (job_id, status, request_data, use_mock, submitted_at)
+         VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT (job_id) DO UPDATE SET
+           status = EXCLUDED.status,
+           request_data = EXCLUDED.request_data,
+           use_mock = EXCLUDED.use_mock,
+           updated_at = CURRENT_TIMESTAMP`,
+        [
+          job.id,
+          job.status,
+          JSON.stringify(job.request),
+          job.useMock,
+          job.submittedAt
+        ]
+      );
+    } catch (error) {
+      // 如果数据库操作失败，记录错误但不抛出异常
+      // 这样即使数据库有问题，任务队列仍能正常工作（降级到内存模式）
+      console.error(`[AnalysisJobQueue] Database persist error for job ${job.id}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * 更新数据库中的任务状态
+   */
+  private async updateJobStatusInDatabase(
+    jobId: string,
+    status: AnalysisJobStatus,
+    updates: {
+      startedAt?: Date;
+      completedAt?: Date;
+      result?: VideoAnalysisResponse;
+      error?: AnalysisJobState['error'];
+    }
+  ): Promise<void> {
+    try {
+      const updateFields: string[] = ['status = $2', 'updated_at = CURRENT_TIMESTAMP'];
+      const values: any[] = [jobId, status];
+      let paramIndex = 3;
+
+      if (updates.startedAt) {
+        updateFields.push(`started_at = $${paramIndex}`);
+        values.push(updates.startedAt);
+        paramIndex++;
+      }
+
+      if (updates.completedAt) {
+        updateFields.push(`completed_at = $${paramIndex}`);
+        values.push(updates.completedAt);
+        paramIndex++;
+      }
+
+      if (updates.result) {
+        updateFields.push(`result_data = $${paramIndex}`);
+        values.push(JSON.stringify(updates.result));
+        paramIndex++;
+      }
+
+      if (updates.error) {
+        updateFields.push(`error_data = $${paramIndex}`);
+        values.push(JSON.stringify(updates.error));
+        paramIndex++;
+      }
+
+      await pool.query(
+        `UPDATE analysis_jobs SET ${updateFields.join(', ')} WHERE job_id = $1`,
+        values
+      );
+    } catch (error) {
+      console.error(`[AnalysisJobQueue] Database update error for job ${jobId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * 从数据库恢复未完成的任务
+   * 在服务器启动时调用
+   */
+  async recoverPendingJobs(): Promise<number> {
+    if (!this.persistenceEnabled) {
+      this.logEvent('recovery_skipped', { reason: 'persistence_disabled' });
+      return 0;
+    }
+
+    try {
+      // 查询所有未完成的任务（queued 或 processing）
+      const result = await pool.query(
+        `SELECT job_id, status, request_data, use_mock, submitted_at, started_at
+         FROM analysis_jobs
+         WHERE status IN ('queued', 'processing')
+         ORDER BY submitted_at ASC`
+      );
+
+      const recoveredCount = result.rows.length;
+      if (recoveredCount === 0) {
+        this.logEvent('recovery_completed', { recovered: 0 });
+        return 0;
+      }
+
+      this.logEvent('recovery_started', { pending: recoveredCount });
+
+      // 恢复每个任务到内存
+      for (const row of result.rows) {
+        try {
+          const job: AnalysisJobInternal = {
+            id: row.job_id,
+            request: row.request_data as VideoAnalysisRequest,
+            useMock: row.use_mock,
+            status: row.status as AnalysisJobStatus,
+            submittedAt: new Date(row.submitted_at),
+            startedAt: row.started_at ? new Date(row.started_at) : undefined
+          };
+
+          // 如果任务状态是 processing，重置为 queued（因为服务器重启了）
+          if (job.status === 'processing') {
+            job.status = 'queued';
+            job.startedAt = undefined;
+            // 更新数据库状态
+            await pool.query(
+              `UPDATE analysis_jobs SET status = 'queued', started_at = NULL, updated_at = CURRENT_TIMESTAMP
+               WHERE job_id = $1`,
+              [job.id]
+            );
+          }
+
+          this.jobs.set(job.id, job);
+          this.jobOrder.push(job.id);
+
+          this.logEvent('job_recovered', {
+            jobId: job.id,
+            originalStatus: row.status,
+            newStatus: job.status
+          });
+        } catch (error) {
+          console.error(`[AnalysisJobQueue] Failed to recover job ${row.job_id}:`, error);
+          this.logEvent('job_recovery_failed', {
+            jobId: row.job_id,
+            error: error instanceof Error ? error.message : 'Unknown error'
+          });
+        }
+      }
+
+      this.logEvent('recovery_completed', {
+        recovered: this.jobOrder.length,
+        totalPending: recoveredCount
+      });
+
+      // 恢复后触发队列处理
+      if (this.jobOrder.length > 0) {
+        void this.processQueue();
+      }
+
+      return this.jobOrder.length;
+    } catch (error) {
+      console.error('[AnalysisJobQueue] Recovery failed:', error);
+      this.logEvent('recovery_failed', {
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      return 0;
+    }
   }
 
   private logEvent(event: string, details: Record<string, unknown> = {}) {

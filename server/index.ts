@@ -20,6 +20,7 @@ import healthRouter from './routes/health.js';
 import { testConnection } from './config/database.js';
 import { testEmailService } from './services/emailService.js';
 import { testAlertSystem } from './services/alertService.js';
+import { analysisJobQueue } from './services/analysisJobQueue.js';
 import { errorHandler, AppError, ErrorType } from './utils/errors.js';
 import { setupGracefulShutdown } from './utils/gracefulShutdown.js';
 import { enableAllSecurityMiddleware } from './middleware/security.js';
@@ -157,7 +158,25 @@ const server = app.listen(PORT, async () => {
   
   // 测试数据库连接
   if (process.env.DATABASE_URL || process.env.POSTGRES_CONNECTION_STRING || process.env.DB_HOST) {
-    await testConnection();
+    const dbConnected = await testConnection();
+    
+    // 如果数据库连接成功，启用持久化并恢复未完成的任务
+    if (dbConnected) {
+      analysisJobQueue.enablePersistence();
+      
+      try {
+        const recoveredCount = await analysisJobQueue.recoverPendingJobs();
+        if (recoveredCount > 0) {
+          logger.info('queue', `Recovered ${recoveredCount} pending jobs from database`);
+        } else {
+          logger.info('queue', 'No pending jobs to recover');
+        }
+      } catch (error) {
+        logger.error('queue', 'Failed to recover pending jobs', {
+          error: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
+    }
   } else {
     logger.warn('database', 'Database configuration not set, skipping connection test');
   }
