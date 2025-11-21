@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { VideoAnalysisForm } from "@/components/VideoAnalysisForm";
 import { LoadingState } from "@/components/LoadingState";
@@ -13,6 +13,8 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { LogOut } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { ReportHistoryPanel } from "@/components/ReportHistoryPanel";
+import type { SavedReportSummary, ReportListResponse } from "@/services/api";
 
 type AppState = "form" | "loading" | "report";
 
@@ -36,9 +38,45 @@ interface JobProgressLog {
   message: string;
 }
 
+const STORAGE_KEYS = {
+  appState: "video-analysis-app-state",
+  reportData: "video-analysis-report-data",
+};
+
+const isBrowser = typeof window !== "undefined";
+
 const Index = () => {
-  const [appState, setAppState] = useState<AppState>("form");
-  const [reportData, setReportData] = useState<VideoAnalysisResponse | null>(null);
+  const [appState, setAppState] = useState<AppState>(() => {
+    if (!isBrowser) {
+      return "form";
+    }
+
+    try {
+      const storedReport = window.sessionStorage.getItem(STORAGE_KEYS.reportData);
+      const storedState = window.sessionStorage.getItem(STORAGE_KEYS.appState) as AppState | null;
+
+      if (storedState === "report" && storedReport) {
+        return "report";
+      }
+    } catch (error) {
+      console.warn("Failed to restore app state from session storage:", error);
+    }
+
+    return "form";
+  });
+  const [reportData, setReportData] = useState<VideoAnalysisResponse | null>(() => {
+    if (!isBrowser) {
+      return null;
+    }
+
+    try {
+      const storedReport = window.sessionStorage.getItem(STORAGE_KEYS.reportData);
+      return storedReport ? (JSON.parse(storedReport) as VideoAnalysisResponse) : null;
+    } catch (error) {
+      console.warn("Failed to parse stored report data:", error);
+      return null;
+    }
+  });
   const [jobState, setJobState] = useState<AnalysisJobState | null>(null);
   const [jobLogs, setJobLogs] = useState<JobProgressLog[]>([]);
   const [nextPollSeconds, setNextPollSeconds] = useState<number | null>(null);
@@ -46,6 +84,11 @@ const Index = () => {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const pollTokenRef = useRef(0);
+  const [reportHistory, setReportHistory] = useState<SavedReportSummary[]>([]);
+  const [historyPagination, setHistoryPagination] = useState<ReportListResponse["pagination"] | null>(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [historyLoadingReportId, setHistoryLoadingReportId] = useState<string | null>(null);
 
   const cancelPolling = useCallback(() => {
     pollTokenRef.current += 1;
@@ -227,6 +270,8 @@ const Index = () => {
           title: "分析完成！",
           description: "已成功生成学习报告",
         });
+
+        await fetchReportHistory();
     } catch (error) {
       console.error('❌ Analysis failed:', error);
       
@@ -264,6 +309,94 @@ const Index = () => {
     }
   };
 
+  const fetchReportHistory = useCallback(async () => {
+    if (!user?.id) {
+      setReportHistory([]);
+      setHistoryPagination(null);
+      return;
+    }
+
+    setHistoryLoading(true);
+    setHistoryError(null);
+    try {
+      const response = await videoAnalysisAPI.listReports({ page: 1, limit: 20 });
+      setReportHistory(response.data || []);
+      setHistoryPagination(response.pagination);
+    } catch (error) {
+      console.error("Failed to fetch report history:", error);
+      setHistoryError(error instanceof Error ? error.message : "无法获取历史报告");
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (user?.id) {
+      fetchReportHistory();
+    } else {
+      setReportHistory([]);
+      setHistoryPagination(null);
+      setHistoryError(null);
+    }
+  }, [fetchReportHistory, user?.id]);
+
+  const handleLoadSavedReport = async (reportId: string) => {
+    if (!reportId) {
+      return;
+    }
+
+    setHistoryLoadingReportId(reportId);
+    cancelPolling();
+    resetJobTracking();
+
+    try {
+      const savedReport = await videoAnalysisAPI.getReport(reportId);
+      setReportData(savedReport);
+      setAppState("report");
+      toast({
+        title: "已载入历史报告",
+        description: `${savedReport.studentName} 的学习报告`,
+      });
+    } catch (error) {
+      console.error("Failed to load saved report:", error);
+      toast({
+        title: "加载报告失败",
+        description: error instanceof Error ? error.message : "无法获取历史报告，请稍后再试",
+        variant: "destructive",
+      });
+    } finally {
+      setHistoryLoadingReportId(null);
+    }
+  };
+
+  useEffect(() => {
+    if (!isBrowser) {
+      return;
+    }
+
+    try {
+      window.sessionStorage.setItem(STORAGE_KEYS.appState, appState);
+    } catch (error) {
+      console.warn("Failed to persist app state:", error);
+    }
+  }, [appState]);
+
+  useEffect(() => {
+    if (!isBrowser) {
+      return;
+    }
+
+    try {
+      if (reportData) {
+        window.sessionStorage.setItem(STORAGE_KEYS.reportData, JSON.stringify(reportData));
+      } else {
+        window.sessionStorage.removeItem(STORAGE_KEYS.reportData);
+      }
+    } catch (error) {
+      console.warn("Failed to persist report data:", error);
+    }
+  }, [reportData]);
+
   const handleBackToForm = () => {
     setAppState("form");
     setReportData(null);
@@ -280,6 +413,19 @@ const Index = () => {
       // 即使登出失败，也尝试导航到登录页
       navigate("/login");
     }
+
+    if (isBrowser) {
+      try {
+        window.sessionStorage.removeItem(STORAGE_KEYS.appState);
+        window.sessionStorage.removeItem(STORAGE_KEYS.reportData);
+      } catch (storageError) {
+        console.warn("Failed to clear stored state on logout:", storageError);
+      }
+    }
+
+    setReportHistory([]);
+    setHistoryPagination(null);
+    setHistoryError(null);
   };
 
   return (
@@ -315,6 +461,17 @@ const Index = () => {
             </div>
           </div>
           <VideoAnalysisForm onSubmit={handleFormSubmit} />
+          {user && (
+            <ReportHistoryPanel
+              reports={reportHistory}
+              loading={historyLoading}
+              pagination={historyPagination || undefined}
+              error={historyError}
+              onRefresh={() => fetchReportHistory()}
+              onSelect={handleLoadSavedReport}
+              loadingReportId={historyLoadingReportId}
+            />
+          )}
         </div>
       )}
 

@@ -167,6 +167,30 @@ export interface VideoAnalysisResponse {
     };
   };
   costBreakdown?: CostBreakdown;  // 成本详情（可选）
+  reportId?: string;
+  generatedAt?: string;
+}
+
+export interface SavedReportSummary {
+  id: string;
+  studentId?: string | null;
+  studentName?: string | null;
+  grade?: string | null;
+  level?: string | null;
+  unit?: string | null;
+  costDetail?: CostBreakdown | null;
+  createdAt: string;
+}
+
+export interface ReportListResponse {
+  success: boolean;
+  data: SavedReportSummary[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
 }
 
 export class VideoAnalysisAPI {
@@ -174,6 +198,24 @@ export class VideoAnalysisAPI {
 
   constructor(baseURL: string = API_BASE_URL) {
     this.baseURL = baseURL;
+  }
+
+  private getAuthHeaders() {
+    if (typeof window === 'undefined') {
+      return {};
+    }
+
+    try {
+      const token = window.localStorage.getItem('auth_token');
+      return token
+        ? {
+            Authorization: `Bearer ${token}`,
+          }
+        : {};
+    } catch (error) {
+      console.warn('Failed to read auth token from storage:', error);
+      return {};
+    }
   }
 
   /**
@@ -352,39 +394,90 @@ export class VideoAnalysisAPI {
   /**
    * 通过 ID 获取保存的报告
    */
-  async getReport(id: string): Promise<any> {
+  async getReport(id: string): Promise<VideoAnalysisResponse> {
     try {
-      console.log('Fetching report from:', `${this.baseURL}/api/analysis/report/${id}`);
-      
-      const response = await axios.get(
+      const response = await axios.get<{
+        success: boolean;
+        data?: { report: VideoAnalysisResponse };
+      }>(
         `${this.baseURL}/api/analysis/report/${id}`,
         {
+          headers: this.getAuthHeaders(),
+          withCredentials: true,
           timeout: 10000, // 10秒超时
         }
       );
 
-      if (response.data.success && response.data.data) {
-        return response.data.data;
-      } else {
-        throw new Error('报告数据格式错误');
+      if (response.data.success && response.data.data?.report) {
+        return response.data.data.report;
       }
+
+        throw new Error('报告数据格式错误');
     } catch (error) {
       console.error('Get report request failed:', error);
-      
-      if (axios.isAxiosError(error)) {
-        const axiosError = error as AxiosError;
-        
-        if (axiosError.response?.status === 404) {
-          throw new Error('未找到该报告');
-        } else if (axiosError.response) {
-          const errorData = axiosError.response.data as { error?: string; message?: string };
-          throw new Error(errorData.error || errorData.message || '获取报告失败');
-        } else if (axiosError.request) {
-          throw new Error('服务器无响应');
+      return this.handleAxiosError(error, '获取报告失败', {
+        statusMessageOverrides: {
+          404: '未找到该报告，请确认链接是否正确',
+        },
+      });
+    }
+  }
+
+  /**
+   * 获取历史报告列表
+   */
+  async listReports(params: { page?: number; limit?: number; studentId?: string } = {}): Promise<ReportListResponse> {
+    try {
+      const response = await axios.get<ReportListResponse>(
+        `${this.baseURL}/api/analysis/reports`,
+        {
+          params,
+          headers: this.getAuthHeaders(),
+          withCredentials: true,
+          timeout: 10000,
         }
+      );
+
+      if (!response.data.success) {
+        throw new Error('获取历史报告失败');
       }
-      
-      throw new Error('获取报告时出错，请稍后重试');
+
+      return response.data;
+    } catch (error) {
+      console.error('List reports request failed:', error);
+      return this.handleAxiosError(error, '获取历史报告失败', {
+        statusMessageOverrides: {
+          401: '登录状态已失效，请重新登录后再试',
+        },
+      });
+    }
+  }
+
+  /**
+   * 更新已保存的报告内容
+   */
+  async updateReport(reportId: string, report: VideoAnalysisResponse): Promise<void> {
+    try {
+      await axios.put(
+        `${this.baseURL}/api/analysis/report/${reportId}`,
+        { report },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            ...this.getAuthHeaders(),
+          },
+          withCredentials: true,
+          timeout: 15000,
+        }
+      );
+    } catch (error) {
+      console.error(`Update report ${reportId} failed:`, error);
+      return this.handleAxiosError(error, '保存报告失败，请稍后再试', {
+        statusMessageOverrides: {
+          401: '登录状态已失效，请重新登录后再试',
+          404: '未找到报告或无权限保存该报告',
+        },
+      });
     }
   }
 }

@@ -68,7 +68,7 @@ router.get('/user-reports/:userId', async (req, res) => {
     const userId = req.params.userId;
     const limit = parseInt(req.query.limit as string) || 50;
 
-    const reports = await reportRecordService.getUserReports(userId, limit);
+    const { reports } = await reportRecordService.getUserReports(userId, { limit });
 
     res.json({
       success: true,

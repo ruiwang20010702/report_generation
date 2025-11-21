@@ -5,6 +5,7 @@ import { HttpsProxyAgent } from 'https-proxy-agent';
 import { WhisperService, TranscriptionResult } from './whisperService.js';
 import { tingwuTranscriptionService } from './tingwuTranscriptionService.js';
 import { reportRecordService } from './reportRecordService.js';
+import type { ReportRecordMeta } from './reportRecordService.js';
 import { AppError, ErrorType } from '../utils/errors.js';
 import { alertServiceError } from './alertService.js';
 
@@ -1722,6 +1723,8 @@ ${JSON.stringify(video2Analysis, null, 2)}
       console.log('✅ 整体分析完成 for:', request.studentName);
       
       // 记录报告到数据库（异步，不阻塞返回）
+      let savedReportMeta: ReportRecordMeta | null = null;
+
       if (report.costBreakdown) {
         // 合并两个视频的转录文本
         const combinedTranscript = [
@@ -1735,7 +1738,8 @@ ${JSON.stringify(video2Analysis, null, 2)}
         // 计算总音频时长（秒）
         const totalDuration = (video1Result.transcription.duration || 0) + (video2Result.transcription.duration || 0);
         
-        reportRecordService.recordReport({
+        try {
+          savedReportMeta = await reportRecordService.recordReport({
           userId: request.userId,
           studentName: request.studentName,
           studentId: request.studentId,
@@ -1746,12 +1750,21 @@ ${JSON.stringify(video2Analysis, null, 2)}
           fileUrl: request.video1, // 使用第一个视频作为主要链接
           costDetail: report.costBreakdown,
           analysisData: report // 保存完整的报告数据
-        }).catch(err => {
-          console.error('⚠️ 报告记录保存失败（不影响主流程）:', err.message);
-        });
+          });
+        } catch (err) {
+          console.error('⚠️ 报告记录保存失败（不影响主流程）:', err);
+        }
       }
       
-      return report;
+      const finalReport = savedReportMeta
+        ? {
+            ...report,
+            reportId: savedReportMeta.id,
+            generatedAt: savedReportMeta.createdAt,
+          }
+        : report;
+      
+      return finalReport;
     } catch (error) {
       console.error('❌ Error in analyzeVideos:', error);
       

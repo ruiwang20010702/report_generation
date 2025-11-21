@@ -4,8 +4,45 @@ import { tingwuTranscriptionService } from '../services/tingwuTranscriptionServi
 import { AppError, ErrorType, asyncHandler, createErrorContext } from '../utils/errors.js';
 import { isValidVideoUrl, isValidStudentName, isValidStudentId, safeSubstring } from '../utils/validation.js';
 import { analysisJobQueue } from '../services/analysisJobQueue.js';
+import { reportRecordService } from '../services/reportRecordService.js';
+import { getCurrentUser } from '../services/authService.js';
 
 const router = Router();
+
+function extractAuthToken(req: Request): string | null {
+  const headerValue = req.headers.authorization;
+  if (headerValue?.startsWith('Bearer ')) {
+    return headerValue.slice(7);
+  }
+  if (headerValue) {
+    return headerValue;
+  }
+
+  const cookies = (req as Request & { cookies?: Record<string, string> }).cookies;
+  if (cookies?.auth_token) {
+    return cookies.auth_token;
+  }
+
+  return null;
+}
+
+async function requireAuthenticatedUser(req: Request) {
+  const token = extractAuthToken(req);
+
+  if (!token) {
+    throw new AppError(
+      ErrorType.AUTHENTICATION_ERROR,
+      'Authentication required',
+      {
+        userMessage: '请先登录后再查看报告',
+        context: createErrorContext(req),
+      }
+    );
+  }
+
+  const { user } = await getCurrentUser(token);
+  return user;
+}
 
 /**
  * POST /api/analysis/transcribe-test
@@ -329,6 +366,149 @@ router.get('/quota', asyncHandler(async (req: Request, res: Response) => {
         : '¥0.00',
       description: '免费额度用完后自动切换到付费模式，无需人工干预'
     }
+  });
+}));
+
+/**
+ * GET /api/analysis/reports
+ * 获取当前用户的历史报告（支持分页和按学生筛选）
+ */
+router.get('/reports', asyncHandler(async (req: Request, res: Response) => {
+  const user = await requireAuthenticatedUser(req);
+  const page = Math.max(parseInt(String(req.query.page || '1'), 10) || 1, 1);
+  const limit = Math.min(Math.max(parseInt(String(req.query.limit || '20'), 10) || 20, 1), 100);
+  const offset = (page - 1) * limit;
+  const studentId = typeof req.query.studentId === 'string' && req.query.studentId.trim()
+    ? req.query.studentId.trim()
+    : undefined;
+
+  const history = await reportRecordService.getUserReports(user.id, {
+    limit,
+    offset,
+    studentId,
+  });
+
+  res.json({
+    success: true,
+    data: history.reports,
+    pagination: {
+      page,
+      limit,
+      total: history.total,
+      totalPages: limit > 0 ? Math.ceil(history.total / limit) : 0,
+    },
+  });
+}));
+
+/**
+ * GET /api/analysis/report/:reportId
+ * 获取指定报告的完整内容（限当前用户）
+ */
+router.get('/report/:reportId', asyncHandler(async (req: Request, res: Response) => {
+  const user = await requireAuthenticatedUser(req);
+  const reportId = req.params.reportId;
+
+  const record = await reportRecordService.getReportById(reportId, user.id);
+  if (!record) {
+    throw new AppError(
+      ErrorType.NOT_FOUND,
+      `Report ${reportId} not found`,
+      {
+        userMessage: '未找到该报告或无权限访问',
+        context: createErrorContext(req),
+      }
+    );
+  }
+
+  const rawAnalysis = record.analysisData || record.analysis;
+  let analysisData: unknown = rawAnalysis;
+
+  if (typeof rawAnalysis === 'string') {
+    try {
+      analysisData = JSON.parse(rawAnalysis);
+    } catch (error) {
+      throw new AppError(
+        ErrorType.INTERNAL_ERROR,
+        `Failed to parse analysis data for report ${reportId}`,
+        {
+          userMessage: '报告内容解析失败，请稍后重试',
+          context: createErrorContext(req),
+        }
+      );
+    }
+  }
+  if (!analysisData) {
+    throw new AppError(
+      ErrorType.NOT_FOUND,
+      `Report ${reportId} has no analysis payload`,
+      {
+        userMessage: '报告内容已过期或无法获取',
+        context: createErrorContext(req),
+      }
+    );
+  }
+
+  const isoCreatedAt = record.createdAt ? new Date(record.createdAt).toISOString() : new Date().toISOString();
+  const reportPayload: Record<string, unknown> = {
+    ...(analysisData as Record<string, unknown>),
+    reportId: record.id,
+    generatedAt: isoCreatedAt,
+  };
+
+  if (!('studentName' in reportPayload) && record.studentName) {
+    reportPayload['studentName'] = record.studentName;
+  }
+  if (!('studentId' in reportPayload) && record.studentId) {
+    reportPayload['studentId'] = record.studentId;
+  }
+
+  res.json({
+    success: true,
+    data: {
+      report: reportPayload,
+    },
+  });
+}));
+
+/**
+ * PUT /api/analysis/report/:reportId
+ * 更新报告的分析内容（限当前用户）
+ */
+router.put('/report/:reportId', asyncHandler(async (req: Request, res: Response) => {
+  const user = await requireAuthenticatedUser(req);
+  const reportId = req.params.reportId;
+  const payload = req.body && typeof req.body === 'object' ? (req.body.report ?? req.body) : null;
+
+  if (!payload || typeof payload !== 'object') {
+    throw new AppError(
+      ErrorType.VALIDATION_ERROR,
+      'Missing report payload',
+      {
+        userMessage: '请提供需要保存的报告内容',
+        context: createErrorContext(req),
+      }
+    );
+  }
+
+  const updated = await reportRecordService.updateReportAnalysis(reportId, user.id, payload);
+
+  if (!updated) {
+    throw new AppError(
+      ErrorType.NOT_FOUND,
+      `Report ${reportId} not found or unauthorized`,
+      {
+        userMessage: '未找到该报告或无权限保存',
+        context: createErrorContext(req),
+      }
+    );
+  }
+
+  res.json({
+    success: true,
+    data: {
+      reportId,
+      updatedAt: new Date().toISOString(),
+    },
   });
 }));
 
