@@ -152,8 +152,57 @@ export class AnalysisJobQueue {
     return state;
   }
 
-  getJob(jobId: string) {
-    return this.toPublicState(jobId);
+  /**
+   * 获取任务状态（从内存或数据库）
+   * 如果内存中找不到，且持久化已启用，则从数据库读取已完成的任务
+   */
+  async getJob(jobId: string): Promise<AnalysisJobState | null> {
+    // 先尝试从内存读取
+    const memoryState = this.toPublicState(jobId);
+    if (memoryState) {
+      return memoryState;
+    }
+
+    // 如果内存中没有，且持久化已启用，尝试从数据库读取
+    if (this.persistenceEnabled) {
+      try {
+        const result = await pool.query(
+          `SELECT job_id, status, request_data, use_mock, result_data, error_data,
+                  submitted_at, started_at, completed_at
+           FROM analysis_jobs
+           WHERE job_id = $1`,
+          [jobId]
+        );
+
+        if (result.rows.length > 0) {
+          const row = result.rows[0];
+          
+          // 从数据库恢复任务状态
+          const job: AnalysisJobInternal = {
+            id: row.job_id,
+            request: row.request_data as VideoAnalysisRequest,
+            useMock: row.use_mock,
+            status: row.status as AnalysisJobStatus,
+            submittedAt: new Date(row.submitted_at),
+            startedAt: row.started_at ? new Date(row.started_at) : undefined,
+            completedAt: row.completed_at ? new Date(row.completed_at) : undefined,
+            result: row.result_data as VideoAnalysisResponse | undefined,
+            error: row.error_data as AnalysisJobState['error'] | undefined
+          };
+
+          // 临时恢复到内存中（不加入队列），方便后续查询
+          this.jobs.set(job.id, job);
+
+          // 返回任务状态
+          return this.toPublicState(job.id);
+        }
+      } catch (error) {
+        console.error(`[AnalysisJobQueue] Failed to load job ${jobId} from database:`, error);
+        // 数据库查询失败不影响，返回 null
+      }
+    }
+
+    return null;
   }
 
   getQueueSize() {
@@ -419,14 +468,19 @@ export class AnalysisJobQueue {
       return null;
     }
 
+    // 对于已完成或失败的任务，position 和 estimatedWaitSeconds 应该为 0
+    const isFinished = job.status === 'completed' || job.status === 'failed';
+    const position = isFinished ? 0 : this.getPosition(job.id);
+    const estimatedWaitSeconds = isFinished ? 0 : this.getEstimatedWaitSeconds(job.id);
+
     return {
       jobId: job.id,
       status: job.status,
       submittedAt: job.submittedAt.toISOString(),
       startedAt: job.startedAt?.toISOString(),
       completedAt: job.completedAt?.toISOString(),
-      position: this.getPosition(job.id),
-      estimatedWaitSeconds: this.getEstimatedWaitSeconds(job.id),
+      position,
+      estimatedWaitSeconds,
       durationSeconds: this.getDurationSeconds(job),
       result: job.status === 'completed' ? job.result : undefined,
       error: job.status === 'failed' ? job.error : undefined

@@ -71,25 +71,37 @@ const Index = () => {
 
   const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
-  const calculateNextDelay = (job: AnalysisJobState, previousDelay: number) => {
-    if (job.status === "queued" && job.estimatedWaitSeconds > 0) {
-      return Math.min(60000, Math.max(5000, Math.round((job.estimatedWaitSeconds * 1000) / 2)));
-    }
-    if (job.status === "processing") {
-      return Math.min(60000, Math.max(7000, previousDelay * 0.9));
-    }
-    return Math.max(5000, Math.min(previousDelay * 1.1, 15000));
-  };
-
   const waitForJobCompletion = useCallback(
-    async (jobId: string, sessionToken: number, initialDelaySeconds?: number) => {
-      let delayMs = Math.max(
-        5000,
-        Math.min(60000, (initialDelaySeconds ?? 10) * 1000)
-      );
+    async (jobId: string, sessionToken: number, initialJob?: AnalysisJobState) => {
       let attempt = 0;
+      let previousStatus: string | null = initialJob?.status || null;
+      // 记录在 processing 状态下，除了第一次轮询之外的轮询次数
+      // 例如：如果第一次轮询后状态是 processing，那么下一次轮询是第1次，再下一次是第2次，以此类推
+      let processingPollCount = 0;
 
       while (pollTokenRef.current === sessionToken) {
+        // 计算下一次轮询的延迟时间
+        let delayMs: number;
+        
+        if (attempt === 0) {
+          // 第一次轮询：1秒后
+          delayMs = 1000;
+        } else if (previousStatus === "queued") {
+          // 排队中：每10秒轮询一次
+          delayMs = 10000;
+        } else if (previousStatus === "processing") {
+          // 进行中：前4次用30秒，之后用10秒
+          // processingPollCount 记录的是在 processing 状态下，除了第一次轮询之外的轮询次数
+          if (processingPollCount < 4) {
+            delayMs = 30000;
+          } else {
+            delayMs = 10000;
+          }
+        } else {
+          // 其他状态：默认10秒
+          delayMs = 10000;
+        }
+
         await wait(delayMs);
         attempt += 1;
         appendJobLog(`第 ${attempt} 次轮询任务状态（间隔 ${Math.round(delayMs / 1000)} 秒）`);
@@ -121,8 +133,46 @@ const Index = () => {
           );
         }
 
-        delayMs = calculateNextDelay(latestJob, delayMs);
-        setNextPollSeconds(Math.round(delayMs / 1000));
+        // 更新状态跟踪
+        // processingPollCount 表示：下一次轮询时，如果状态还是 processing，这将是第几次在 processing 状态下的轮询（不包括第一次轮询）
+        // 例如：
+        // - 第一次轮询后状态是 processing，下一次轮询是第1次，所以 processingPollCount = 0（因为 0 < 4，用30秒）
+        // - 第二次轮询后状态还是 processing，下一次轮询是第2次，所以 processingPollCount = 1（因为 1 < 4，用30秒）
+        // - 以此类推，直到 processingPollCount = 4，下一次轮询用10秒
+        
+        if (latestJob.status === "processing") {
+          // 如果之前不是 processing，说明刚进入 processing 状态，重置计数为 0
+          if (previousStatus !== "processing") {
+            processingPollCount = 0;
+          } else {
+            // 如果之前就是 processing，说明状态没有变化
+            // 第一次轮询（attempt === 1）后如果状态是 processing，下一次轮询是第1次，所以 processingPollCount 应该是 0
+            // 但是，如果初始状态就是 processing，第一次轮询后 attempt = 1，且 previousStatus = "processing"
+            // 这种情况下，下一次轮询是第1次，所以 processingPollCount 应该是 0
+            // 所以，只有当 attempt > 1 时，才增加计数
+            if (attempt > 1) {
+              processingPollCount += 1;
+            }
+          }
+        }
+        
+        previousStatus = latestJob.status;
+        
+        // 计算并显示下一次轮询的间隔
+        let nextDelayMs: number;
+        if (latestJob.status === "queued") {
+          nextDelayMs = 10000;
+        } else if (latestJob.status === "processing") {
+          // 下一次轮询时，如果状态还是 processing，且 processingPollCount < 4，用30秒
+          if (processingPollCount < 4) {
+            nextDelayMs = 30000;
+          } else {
+            nextDelayMs = 10000;
+          }
+        } else {
+          nextDelayMs = 10000;
+        }
+        setNextPollSeconds(Math.round(nextDelayMs / 1000));
       }
 
       throw new Error("分析任务已被取消");
@@ -166,7 +216,7 @@ const Index = () => {
         const result = await waitForJobCompletion(
           enqueueResult.job.jobId,
           sessionToken,
-          enqueueResult.pollAfterSeconds
+          enqueueResult.job
         );
         setReportData(result);
       }

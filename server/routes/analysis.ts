@@ -246,10 +246,22 @@ router.post('/analyze', asyncHandler(async (req: Request, res: Response) => {
   console.log('📬 将分析任务加入异步队列');
   const queuedJob = await analysisJobQueue.enqueue(requestData, { useMock });
 
+  // 根据任务状态设置建议的轮询间隔，与客户端轮询逻辑保持一致：
+  // - queued: 第一次轮询 1 秒后，之后每 10 秒轮询一次
+  // - processing: 第一次轮询 1 秒后，之后前 4 次用 30 秒，之后用 10 秒
+  let pollAfterSeconds: number;
+  if (queuedJob.status === 'queued') {
+    pollAfterSeconds = 10; // 第一次轮询后，每 10 秒轮询一次
+  } else if (queuedJob.status === 'processing') {
+    pollAfterSeconds = 30; // 第一次轮询后，前 4 次用 30 秒间隔
+  } else {
+    pollAfterSeconds = 10; // 其他状态默认 10 秒
+  }
+
   res.status(202).json({
     message: '分析任务已排队，稍后通过 jobId 查询结果',
     job: queuedJob,
-    pollAfterSeconds: Math.max(10, Math.min(60, Math.round((queuedJob.estimatedWaitSeconds || 30) / 3))),
+    pollAfterSeconds,
   });
 }));
 
@@ -257,21 +269,21 @@ router.post('/analyze', asyncHandler(async (req: Request, res: Response) => {
  * GET /api/analysis/jobs/:jobId
  * 查询异步任务状态
  */
-router.get('/jobs/:jobId', (req: Request, res: Response) => {
-  const job = analysisJobQueue.getJob(req.params.jobId);
+router.get('/jobs/:jobId', asyncHandler(async (req: Request, res: Response) => {
+  const job = await analysisJobQueue.getJob(req.params.jobId);
   if (!job) {
-      throw new AppError(
+    throw new AppError(
       ErrorType.NOT_FOUND,
       `Job ${req.params.jobId} not found`,
-        {
+      {
         userMessage: '未找到对应的分析任务，请确认 jobId 是否正确',
         context: createErrorContext(req),
-        }
-      );
+      }
+    );
   }
 
   res.json(job);
-});
+}));
 
 /**
  * GET /api/analysis/health

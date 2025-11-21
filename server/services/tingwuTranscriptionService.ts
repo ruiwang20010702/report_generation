@@ -68,6 +68,11 @@ class TingwuTranscriptionService {
   private client: any | null = null;
   private readonly API_ENDPOINT = 'tingwu.cn-shanghai.aliyuncs.com';
   private readonly REGION = 'cn-shanghai';
+  private readonly POLL_INTERVAL_MS = parseInt(process.env.TINGWU_POLL_INTERVAL_MS || '5000', 10);
+  private readonly MAX_WAIT_MINUTES = Math.max(
+    10,
+    parseInt(process.env.TINGWU_MAX_WAIT_MINUTES || '30', 10)
+  );
   
   // 使用量追踪
   // 通义听悟：每天免费2小时 = 120分钟/天
@@ -423,11 +428,11 @@ class TingwuTranscriptionService {
     taskId: string,
     onProgress?: (progress: TranscriptionProgress) => void
   ): Promise<any> {
-    const maxAttempts = 120; // 最多等待10分钟（每5秒查询一次）
+    const maxAttempts = Math.ceil((this.MAX_WAIT_MINUTES * 60 * 1000) / this.POLL_INTERVAL_MS);
     let attempts = 0;
 
     while (attempts < maxAttempts) {
-      await new Promise(resolve => setTimeout(resolve, 5000)); // 等待5秒
+      await new Promise(resolve => setTimeout(resolve, this.POLL_INTERVAL_MS));
 
       try {
         const result = await this.getFileTrans(taskId);
@@ -465,7 +470,7 @@ class TingwuTranscriptionService {
       if (status === 'ONGOING' || status === 'RUNNING' || status === 'QUEUED') {
         attempts++;
         const progress = Math.min(Math.round((attempts / maxAttempts) * 100), 95);
-        const elapsedSeconds = attempts * 5;
+        const elapsedSeconds = Math.round((attempts * this.POLL_INTERVAL_MS) / 1000);
         
         if (onProgress) {
           onProgress({
@@ -480,7 +485,7 @@ class TingwuTranscriptionService {
 
       // 任务成功（新API使用 COMPLETED，旧版本可能使用 SUCCESS）
       if (status === 'COMPLETED' || status === 'SUCCESS') {
-        const elapsedSeconds = attempts * 5;
+        const elapsedSeconds = Math.round((attempts * this.POLL_INTERVAL_MS) / 1000);
         const timestamp = new Date().toISOString().substring(11, 19);
         console.log(`✅ [${timestamp}] [TaskId: ${taskId.substring(0, 8)}...] 转写任务完成！总耗时: ${elapsedSeconds}秒`);
         
@@ -539,7 +544,7 @@ class TingwuTranscriptionService {
       }
     }
 
-    throw new Error('转写任务超时（10分钟）');
+    throw new Error(`转写任务超时（${this.MAX_WAIT_MINUTES}分钟）`);
   }
 
   /**

@@ -928,6 +928,7 @@ ${JSON.stringify(video2Analysis, null, 2)}
       
       // 验证并修复发音示例中的重复音标问题
       this.validateAndFixPronunciationExamples(analysisData);
+      this.validateAndFixGrammarExamples(analysisData);
       
       // 提取对比报告的 token 使用量
       const comparisonUsage = response.usage;
@@ -1045,11 +1046,11 @@ ${JSON.stringify(video2Analysis, null, 2)}
     let fixedCount = 0;
 
     // 规范化音标（移除空格和斜杠，统一比较）
-    const normalizePhonetic = (str: string) => {
-      return str.replace(/[\s\/]/g, '').toLowerCase();
-    };
+    const normalizePhonetic = (str: string) => this.normalizePhoneticString(str);
 
     for (const example of examples) {
+      const beforeIncorrect = example.incorrect;
+      const beforeCorrect = example.correct;
       const incorrectNormalized = normalizePhonetic(example.incorrect || '');
       const correctNormalized = normalizePhonetic(example.correct || '');
 
@@ -1059,7 +1060,7 @@ ${JSON.stringify(video2Analysis, null, 2)}
         if (fixed) {
           fixedCount++;
           console.log(`🔧 自动修复发音示例: ${example.word}`);
-          console.log(`   原始 → incorrect="${example.incorrect}", correct="${example.correct}"`);
+          console.log(`   原始 → incorrect="${beforeIncorrect}", correct="${beforeCorrect}"`);
           console.log(`   修复 → incorrect="${example.incorrect}", correct="${example.correct}"`);
         }
       }
@@ -1174,8 +1175,16 @@ ${JSON.stringify(video2Analysis, null, 2)}
       incorrect = this.guessIncorrectPhonetic(word, correct);
     }
 
+    // 8. 终极兜底：若还是相同，强制替换首个元音/辅音，保证不同
+    if (!incorrect || this.normalizePhoneticString(incorrect) === this.normalizePhoneticString(correct)) {
+      incorrect = this.generateFallbackIncorrect(correct);
+    }
+
     // 如果成功生成了不同的音标，更新并返回成功
-    if (incorrect && incorrect !== correct) {
+    if (
+      incorrect &&
+      this.normalizePhoneticString(incorrect) !== this.normalizePhoneticString(correct)
+    ) {
       example.incorrect = incorrect;
       return true;
     }
@@ -1218,6 +1227,312 @@ ${JSON.stringify(video2Analysis, null, 2)}
       .replace(/uː/g, 'ʊ')
       .replace(/ɑː/g, 'ʌ')
       .replace(/ɔː/g, 'ɒ');
+  }
+
+  /**
+   * 将音标字符串标准化用于比较
+   */
+  private normalizePhoneticString(str?: string): string {
+    if (!str) return '';
+    return str.replace(/[\s\/]/g, '').toLowerCase();
+  }
+
+  /**
+   * 在所有规则都无法修复时，强制替换至少一个音素，避免与正确音标完全一致
+   */
+  private generateFallbackIncorrect(correct: string): string {
+    if (!correct) {
+      return '';
+    }
+
+    const replacements: Array<{ pattern: RegExp; replace: string }> = [
+      { pattern: /θ/, replace: 's' },
+      { pattern: /ð/, replace: 'd' },
+      { pattern: /ʃ/, replace: 's' },
+      { pattern: /ʒ/, replace: 'z' },
+      { pattern: /ŋ/, replace: 'n' },
+      { pattern: /tʃ/, replace: 'ts' },
+      { pattern: /dʒ/, replace: 'dz' },
+    ];
+
+    for (const { pattern, replace } of replacements) {
+      if (pattern.test(correct)) {
+        const result = correct.replace(pattern, replace);
+        if (this.normalizePhoneticString(result) !== this.normalizePhoneticString(correct)) {
+          return result;
+        }
+      }
+    }
+
+    const vowelMap: Record<string, string> = {
+      'iː': 'ɪ',
+      'i:': 'ɪ',
+      'uː': 'ʊ',
+      'u:': 'ʊ',
+      'aɪ': 'æ',
+      'eɪ': 'e',
+      'aʊ': 'au',
+      'əʊ': 'oʊ',
+      'ɔː': 'ɒ',
+      'ɔ:': 'ɒ',
+      'ɑː': 'a',
+      'ɑ:': 'a',
+      'ɜː': 'ə',
+      'ɜ:': 'ə',
+      'æ': 'e',
+      'ɒ': 'o',
+      'ʌ': 'ɑ',
+      'ɪ': 'i',
+      'ʊ': 'u',
+    };
+
+    for (const [pattern, replacement] of Object.entries(vowelMap)) {
+      const regex = new RegExp(pattern);
+      if (regex.test(correct)) {
+        const result = correct.replace(regex, replacement);
+        if (this.normalizePhoneticString(result) !== this.normalizePhoneticString(correct)) {
+          return result;
+        }
+      }
+    }
+
+    // 最后手动替换第一个英文字母，确保至少一个字符不同
+    const fallback = correct.replace(/([a-zɑ-ʊ]+)/i, (match) => {
+      if (!match) {
+        return `s${match}`;
+      }
+      const first = match[0];
+      const swapMap: Record<string, string> = {
+        a: 'e',
+        e: 'a',
+        i: 'ɪ',
+        o: 'u',
+        u: 'o',
+        b: 'p',
+        d: 't',
+        g: 'k',
+      };
+      const replacement = swapMap[first.toLowerCase()] || 'ə';
+      const rest = match.slice(1);
+      return `${replacement}${rest}`;
+    });
+
+    if (this.normalizePhoneticString(fallback) !== this.normalizePhoneticString(correct)) {
+      return fallback;
+    }
+
+    return `${correct} (var)`;
+  }
+
+  /**
+   * 验证并修复语法示例中的错误/正确句子重复问题
+   */
+  private validateAndFixGrammarExamples(analysisData: any): void {
+    const examples = analysisData?.improvementAreas?.grammar?.examples;
+    if (!examples || examples.length === 0) {
+      return;
+    }
+
+    let fixedCount = 0;
+
+    for (const example of examples) {
+      const beforeIncorrect = example.incorrect;
+      const correctNormalized = this.normalizeSentence(example.correct);
+      const incorrectNormalized = this.normalizeSentence(example.incorrect);
+
+      if (!correctNormalized) {
+        continue;
+      }
+
+      if (!incorrectNormalized || incorrectNormalized === correctNormalized) {
+        const fixed = this.smartFixGrammarExample(example);
+        if (fixed) {
+          fixedCount++;
+          console.log(`🔁 自动修复语法示例: ${example.category || '未分类'}`);
+          console.log(`   原始 → incorrect="${beforeIncorrect}", correct="${example.correct}"`);
+          console.log(`   修复 → incorrect="${example.incorrect}"`);
+        }
+      }
+    }
+
+    if (fixedCount > 0) {
+      console.log(`✅ 语法示例验证完成: ${examples.length} 个示例，其中 ${fixedCount} 个已自动修复`);
+    } else {
+      console.log(`✅ 语法示例验证完成: 所有 ${examples.length} 个示例均有效`);
+    }
+  }
+
+  /**
+   * 根据语法错误类型智能生成一个有区别的错误句子
+   */
+  private smartFixGrammarExample(example: any): boolean {
+    const correct = (example.correct || '').trim();
+    if (!correct) {
+      return false;
+    }
+
+    const category = (example.category || '').toLowerCase();
+    const generators: Array<() => string | null> = [];
+
+    if (this.matchGrammarCategory(category, ['第三人称', 'third'])) {
+      generators.push(() => this.makeThirdPersonError(correct));
+    }
+    if (this.matchGrammarCategory(category, ['时态', 'tense', '过去', '未来', '完成'])) {
+      generators.push(() => this.makeTenseError(correct));
+    }
+    if (this.matchGrammarCategory(category, ['动词搭配', 'verb', '搭配'])) {
+      generators.push(() => this.makeVerbPatternError(correct));
+    }
+    if (this.matchGrammarCategory(category, ['介词', 'preposition'])) {
+      generators.push(() => this.makePrepositionError(correct));
+    }
+    if (this.matchGrammarCategory(category, ['冠词', 'article'])) {
+      generators.push(() => this.makeArticleError(correct));
+    }
+
+    generators.push(() => this.makeGeneralGrammarError(correct));
+
+    for (const generator of generators) {
+      const candidate = generator();
+      if (candidate && this.normalizeSentence(candidate) !== this.normalizeSentence(correct)) {
+        example.incorrect = candidate;
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  private matchGrammarCategory(category: string, keywords: string[]): boolean {
+    if (!category) {
+      return false;
+    }
+    return keywords.some(keyword => category.includes(keyword));
+  }
+
+  private makeThirdPersonError(sentence: string): string | null {
+    const regex = /\b([A-Za-z]+?)(ies|es|s)\b/;
+    const match = sentence.match(regex);
+    if (!match) {
+      return null;
+    }
+
+    const original = match[0];
+    const base = this.deInflectThirdPerson(original);
+    if (base === original) {
+      return null;
+    }
+
+    return sentence.replace(original, base);
+  }
+
+  private deInflectThirdPerson(word: string): string {
+    const lower = word.toLowerCase();
+    if (lower.endsWith('ies')) {
+      return word.slice(0, -3) + 'y';
+    }
+    if (lower.endsWith('es')) {
+      return word.slice(0, -2);
+    }
+    if (lower.endsWith('s')) {
+      return word.slice(0, -1);
+    }
+    return word;
+  }
+
+  private makeTenseError(sentence: string): string | null {
+    return this.applyGrammarReplacementRules(sentence, [
+      { pattern: /\bwent\b/i, replace: 'go' },
+      { pattern: /\bgo\b/i, replace: 'went' },
+      { pattern: /\bwas\b/i, replace: 'is' },
+      { pattern: /\bwere\b/i, replace: 'are' },
+      { pattern: /\bhad\b/i, replace: 'has' },
+      { pattern: /\bhas\b/i, replace: 'have' },
+      { pattern: /\bdid\b/i, replace: 'do' },
+      { pattern: /\bplayed\b/i, replace: 'play' },
+      { pattern: /\bfinished\b/i, replace: 'finish' }
+    ]);
+  }
+
+  private makeVerbPatternError(sentence: string): string | null {
+    const candidate = this.applyGrammarReplacementRules(sentence, [
+      { pattern: /\bto\s+([A-Za-z]+)\b/, replace: '$1' },
+      { pattern: /\b(is|are)\s+(\w+ing)\b/i, replace: '$1 to $2' },
+      { pattern: /\b(want|needs)\s+to\b/i, replace: '$1' }
+    ]);
+
+    if (candidate) {
+      return candidate;
+    }
+
+    return null;
+  }
+
+  private makePrepositionError(sentence: string): string | null {
+    return this.applyGrammarReplacementRules(sentence, [
+      { pattern: /\bon\b/i, replace: 'in' },
+      { pattern: /\bin\b/i, replace: 'on' },
+      { pattern: /\bat\b/i, replace: 'in' },
+      { pattern: /\bfor\b/i, replace: 'to' }
+    ]);
+  }
+
+  private makeArticleError(sentence: string): string | null {
+    const match = sentence.match(/\b(an?|the)\b/i);
+    if (!match) {
+      return null;
+    }
+
+    const result = sentence.replace(match[0], '').replace(/\s{2,}/g, ' ').trim();
+    return result;
+  }
+
+  private makeGeneralGrammarError(sentence: string): string | null {
+    const articleRemoved = this.makeArticleError(sentence);
+    if (articleRemoved && this.normalizeSentence(articleRemoved) !== this.normalizeSentence(sentence)) {
+      return articleRemoved;
+    }
+
+    const replacement = this.applyGrammarReplacementRules(sentence, [
+      { pattern: /\bis\b/i, replace: 'are' },
+      { pattern: /\bare\b/i, replace: 'is' },
+      { pattern: /\bhave\b/i, replace: 'has' },
+      { pattern: /\bhas\b/i, replace: 'have' }
+    ]);
+
+    if (replacement) {
+      return replacement;
+    }
+
+    // 最后兜底：重复第一个单词，制造语法问题
+    const duplicated = sentence.replace(/\b(\w+)\b/, '$1 $1');
+    if (this.normalizeSentence(duplicated) !== this.normalizeSentence(sentence)) {
+      return duplicated;
+    }
+
+    return null;
+  }
+
+  private applyGrammarReplacementRules(
+    sentence: string,
+    rules: Array<{ pattern: RegExp; replace: string | ((substring: string, ...args: any[]) => string) }>
+  ): string | null {
+    for (const rule of rules) {
+      if (rule.pattern.test(sentence)) {
+        const next = sentence.replace(rule.pattern, rule.replace as any);
+        if (this.normalizeSentence(next) !== this.normalizeSentence(sentence)) {
+          return next;
+        }
+      }
+    }
+    return null;
+  }
+
+  private normalizeSentence(str?: string): string {
+    if (!str) {
+      return '';
+    }
+    return str.replace(/[^a-z0-9]/gi, '').toLowerCase();
   }
 
   /**
