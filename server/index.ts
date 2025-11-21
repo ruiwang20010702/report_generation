@@ -156,6 +156,8 @@ const server = app.listen(PORT, async () => {
     sentryEnabled,
   });
   
+  const disableJobRecovery = process.env.DISABLE_ANALYSIS_JOB_RECOVERY === 'true';
+
   // 测试数据库连接
   if (process.env.DATABASE_URL || process.env.POSTGRES_CONNECTION_STRING || process.env.DB_HOST) {
     const dbConnected = await testConnection();
@@ -163,18 +165,25 @@ const server = app.listen(PORT, async () => {
     // 如果数据库连接成功，启用持久化并恢复未完成的任务
     if (dbConnected) {
       analysisJobQueue.enablePersistence();
-      
-      try {
-        const recoveredCount = await analysisJobQueue.recoverPendingJobs();
-        if (recoveredCount > 0) {
-          logger.info('queue', `Recovered ${recoveredCount} pending jobs from database`);
-        } else {
-          logger.info('queue', 'No pending jobs to recover');
+
+      if (disableJobRecovery) {
+        logger.warn(
+          'queue',
+          'Skipping pending job recovery because DISABLE_ANALYSIS_JOB_RECOVERY=true'
+        );
+      } else {
+        try {
+          const recoveredCount = await analysisJobQueue.recoverPendingJobs();
+          if (recoveredCount > 0) {
+            logger.info('queue', `Recovered ${recoveredCount} pending jobs from database`);
+          } else {
+            logger.info('queue', 'No pending jobs to recover');
+          }
+        } catch (error) {
+          logger.error('queue', 'Failed to recover pending jobs', {
+            error: error instanceof Error ? error.message : 'Unknown error'
+          });
         }
-      } catch (error) {
-        logger.error('queue', 'Failed to recover pending jobs', {
-          error: error instanceof Error ? error.message : 'Unknown error'
-        });
       }
     }
   } else {
