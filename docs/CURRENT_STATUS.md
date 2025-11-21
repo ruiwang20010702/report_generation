@@ -115,7 +115,7 @@ npm run dev:all
 - [ ] 本地测试 Mock 模式
 - [ ] 配置 AI 服务密钥
 - [ ] 本地测试真实分析
-- [ ] 部署到 Zeabur（可选）
+- [ ] 部署到生产环境（可选）
 
 ---
 
@@ -137,7 +137,7 @@ npm run dev:all
 | 📊 **当前状态** | `CURRENT_STATUS.md` | 3分钟 |
 | 🗄️ **数据库设置** | `database/README.md` | 10分钟 |
 | 🔧 **环境配置** | `ENVIRONMENT_SETUP_GUIDE.md` | 15分钟 |
-| ⚡ **快速部署** | `QUICKSTART_ZEABUR.md` | 10分钟 |
+| ⚡ **快速部署** | `docs/deployment/DEPLOY.md` | 参考文档 |
 | ✅ **配置检查** | `CONFIG_CHECKLIST.md` | 5分钟 |
 | 🧪 **测试指南** | `tests/README.md` | 参考 |
 | 📦 **部署检查** | `DEPLOYMENT_CHECKLIST.md` | 5分钟 |
@@ -197,7 +197,7 @@ git add .
 git commit -m "Ready for production"
 git push
 
-# 2. 按照 QUICKSTART_ZEABUR.md 部署
+# 2. 按照部署文档进行部署（参考 docs/deployment/DEPLOY.md）
 ```
 
 **总时间：约1小时完成从初始化到生产部署！**
@@ -260,7 +260,7 @@ http://localhost:8080
 |---------|---------|
 | 数据库配置 | `database/README.md` |
 | 环境配置 | `CONFIG_CHECKLIST.md` |
-| 部署问题 | `QUICKSTART_ZEABUR.md` |
+| 部署问题 | `docs/deployment/DEPLOY.md` |
 | API 接口 | `README.md` 的 API 概览 |
 | 测试相关 | `tests/README.md` |
 

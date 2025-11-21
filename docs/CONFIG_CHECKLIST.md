@@ -21,7 +21,7 @@
 - [ ] npm 已安装
 - [ ] 项目依赖已安装 (`npm install`)
 - [ ] Git 仓库已初始化
-- [ ] 代码已推送到 GitHub（如准备部署到 Zeabur）
+- [ ] 代码已推送到 GitHub（如准备部署到生产环境）
 
 **验证命令**:
 ```bash
@@ -176,25 +176,7 @@ npm run setup:db
 
 ---
 
-#### 选项B: Zeabur（推荐生产环境）
-
-- [ ] 已注册 Zeabur 账号
-- [ ] 已创建项目
-- [ ] 已添加 PostgreSQL 服务
-- [ ] 已执行 SQL 初始化脚本
-
-```bash
-# Zeabur 会自动注入 DATABASE_URL
-# 只需要在 .env 设置:
-DB_SSL=true
-DB_SSL_REJECT_UNAUTHORIZED=false
-```
-
-📝 **SQL 初始化脚本**: 参考 `QUICKSTART_ZEABUR.md` 的步骤3
-
----
-
-#### 选项C: 阿里云 RDS
+#### 选项B: 阿里云 RDS
 
 - [ ] 已购买 RDS PostgreSQL 实例
 - [ ] 已创建数据库
@@ -381,17 +363,16 @@ git push origin main
 
 #### 7.2 选择部署平台
 
-**选项A: Zeabur（推荐，最快）**
-
-- [ ] 优势：10分钟快速部署、自动数据库、自动HTTPS
-- [ ] 成本：$12-30/月（约¥86-216）
-- [ ] 文档：参考 `QUICKSTART_ZEABUR.md`
-
-**选项B: 阿里云（企业级）**
+**选项A: 阿里云（企业级）**
 
 - [ ] 优势：国内访问快、数据合规、完全控制
 - [ ] 成本：¥200-500/月
 - [ ] 文档：参考 `docs/deployment/DEPLOY.md`
+
+**选项B: Docker 容器**
+
+- [ ] 优势：跨平台、易于迁移、完全控制
+- [ ] 文档：参考项目根目录的 `Dockerfile`
 
 ---
 
@@ -429,7 +410,7 @@ ALIYUN_TINGWU_APP_KEY=你的AppKey
 
 ---
 
-### 生产环境（Zeabur）
+### 生产环境
 
 ```bash
 NODE_ENV=production
@@ -441,7 +422,13 @@ ALIYUN_ACCESS_KEY_SECRET=你的Secret
 ALIYUN_TINGWU_APP_KEY=你的AppKey
 TINGWU_LANGUAGE=en
 
-# Zeabur 自动注入 DATABASE_URL 和 PORT
+# 数据库配置（根据实际部署环境设置）
+DB_HOST=你的数据库主机
+DB_PORT=5432
+DB_NAME=数据库名
+DB_USER=数据库用户
+DB_PASSWORD=数据库密码
+
 # 可选: SMTP配置、Sentry配置
 ```
 
@@ -512,7 +499,7 @@ npm test            # 运行测试套件
 | 文档 | 用途 |
 |------|------|
 | `ENVIRONMENT_SETUP_GUIDE.md` | 详细配置指南 |
-| `QUICKSTART_ZEABUR.md` | Zeabur 10分钟部署 |
+| `docs/deployment/DEPLOY.md` | 部署指南 |
 | `DEPLOYMENT_CHECKLIST.md` | 部署清单 |
 | `env.aliyun.example` | 环境变量模板 |
 | `tests/README.md` | 测试文档 |
@@ -541,7 +528,7 @@ npm test            # 运行测试套件
 
 ### 部署准备
 - [ ] ✅ 代码已推送到 GitHub
-- [ ] ✅ 选择了部署平台（Zeabur / 阿里云）
+- [ ] ✅ 选择了部署平台（阿里云 / Docker）
 - [ ] ✅ 阅读了对应的部署文档
 - [ ] ✅ 准备好了生产环境的环境变量
 
@@ -550,8 +537,8 @@ npm test            # 运行测试套件
 ## 🚀 准备好了？
 
 **下一步**：
-1. **Zeabur 部署**：查看 `QUICKSTART_ZEABUR.md`
-2. **阿里云部署**：查看 `docs/deployment/DEPLOY.md`
+1. **阿里云部署**：查看 `docs/deployment/DEPLOY.md`
+2. **Docker 部署**：参考项目根目录的 `Dockerfile`
 3. **遇到问题**：查看 `ENVIRONMENT_SETUP_GUIDE.md`
 
 ---

@@ -181,16 +181,15 @@ npm run setup:ai        # 向导式 AI 配置检查
 - AI 模型对比：`docs/model-config/AI模型对比.md`
 - 故障排查：`docs/guides/IMMEDIATE_HELP.md`, `docs/guides/TROUBLESHOOTING.md`
 - 测试指引：`docs/guides/TESTING_GUIDE.md`
-- 部署：`docs/deployment/DEPLOY.md`, `docs/deployment/ZEABUR_DEPLOYMENT.md`
+- 部署：`docs/deployment/DEPLOY.md`
 
 ## 部署建议
 
-- **Zeabur**（推荐）：参考 `QUICKSTART_ZEABUR.md`，自动注入数据库连接串，10分钟完成部署
 - **Docker 容器**：使用项目根目录的 `Dockerfile`，支持一键容器化部署
 - **阿里云 ECS/容器**：确保配置所有环境变量，开放 3001 端口，建议配置 HTTPS
 - **Nginx 反向代理**：前端静态文件指向 `dist/`，API 请求代理到 `node build/server/index.js`
 
-> **注意**：Vercel 相关配置已归档到 `docs/deployment/vercel/`，当前不推荐使用 Vercel 部署
+> **注意**：Vercel 和 Zeabur 相关配置已归档到 `docs/deployment/vercel/` 和 `docs/archive/`，当前不推荐使用这些平台部署
 
 ## 项目结构
 
@@ -230,9 +229,6 @@ npm run setup:ai        # 向导式 AI 配置检查
 ├── build/                  # 后端构建产物
 ├── dist/                   # 前端构建产物
 ├── README.md              # 项目说明（本文件）
-├── CURRENT_STATUS.md      # 当前状态和下一步
-├── CONFIG_CHECKLIST.md    # 配置检查清单
-├── QUICKSTART_ZEABUR.md   # Zeabur 快速部署
 └── package.json           # 项目配置
 ```
 
@@ -246,7 +242,6 @@ MIT License
 
 ## 相关链接
 
-- 📊 [查看当前状态](CURRENT_STATUS.md)
-- ⚙️ [配置检查清单](CONFIG_CHECKLIST.md)
-- 🚀 [快速部署指南](QUICKSTART_ZEABUR.md)
+- 📊 [查看当前状态](docs/CURRENT_STATUS.md)
+- ⚙️ [配置检查清单](docs/CONFIG_CHECKLIST.md)
 - 🧪 [测试指南](tests/README.md)

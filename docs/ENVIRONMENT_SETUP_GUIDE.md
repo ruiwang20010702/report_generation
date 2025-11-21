@@ -2,7 +2,7 @@
 
 ## 🎯 目标
 
-配置完整的生产环境，准备部署到 Zeabur 或阿里云。
+配置完整的生产环境，准备部署到生产服务器。
 
 ---
 
@@ -47,14 +47,6 @@ DB_NAME=english_learning
 DB_USER=postgres
 DB_PASSWORD=your_password
 DB_SSL=false
-```
-
-**生产环境（Zeabur）**：
-```bash
-# Zeabur 会自动注入 DATABASE_URL，不需要手动配置
-# 只需要设置 SSL 相关配置
-DB_SSL=true
-DB_SSL_REJECT_UNAUTHORIZED=false
 ```
 
 **生产环境（阿里云 RDS）**：
@@ -275,8 +267,8 @@ npm test
 |------|----------|----------|----------|
 | **开发模式（Mock）** | 本地开发、UI测试 | DB + JWT | - |
 | **开发模式（真实）** | 集成测试、功能验证 | DB + JWT + GLM + 通义听悟 | Email |
-| **生产环境（Zeabur）** | 快速部署 | JWT + GLM + 通义听悟 | Email + Sentry |
 | **生产环境（阿里云）** | 企业部署 | 全部 | Sentry |
+| **生产环境（Docker）** | 容器部署 | 全部 | Email + Sentry |
 
 ---
 
@@ -284,30 +276,7 @@ npm test
 
 配置完成后，你可以选择以下部署方式：
 
-### 选项1：Zeabur 部署（推荐，最快）
-
-**优势**：
-- ✅ 10分钟快速部署
-- ✅ 自动 PostgreSQL 数据库
-- ✅ 自动 HTTPS 证书
-- ✅ 全球 CDN 加速
-
-**步骤**：
-```bash
-# 1. 推送代码到 GitHub
-git add .
-git commit -m "Ready for production"
-git push
-
-# 2. 按照指南操作
-参考：QUICKSTART_ZEABUR.md
-```
-
-**预计成本**：$12-30/月（约¥86-216）
-
----
-
-### 选项2：阿里云部署（适合企业）
+### 选项1：阿里云部署（适合企业）
 
 **优势**：
 - ✅ 国内访问速度快
@@ -348,8 +317,7 @@ ALIYUN_TINGWU_APP_KEY=your_tingwu_key        # ✅ 必填
 # ========================================
 # 数据库配置
 # ========================================
-# Zeabur: 自动注入 DATABASE_URL
-# 阿里云: 手动配置以下项
+# 生产环境: 手动配置以下项
 DB_HOST=your_db_host                          # 🔄 生产必填
 DB_PORT=5432                                  # 🔄 生产必填
 DB_NAME=your_db_name                          # 🔄 生产必填
@@ -427,7 +395,7 @@ npm run dev:backend
 
 ## 📚 相关文档
 
-- 📖 [快速开始 - Zeabur 部署](./QUICKSTART_ZEABUR.md)
+- 📖 [部署指南](./deployment/DEPLOY.md)
 - 📖 [部署清单](./DEPLOYMENT_CHECKLIST.md)
 - 📖 [阿里云快速开始](./docs/getting-started/ALIYUN_QUICKSTART.md)
 - 📖 [生产环境优化总结](./PRODUCTION_OPTIMIZATION_SUMMARY.md)
@@ -456,5 +424,5 @@ npm run dev:backend
 
 **预计完成时间**：30-60 分钟（取决于是否需要注册新账号）
 
-**下一步**：完成配置后，选择部署平台（Zeabur 或阿里云）并开始部署！🚀
+**下一步**：完成配置后，选择部署平台（阿里云或 Docker）并开始部署！🚀
 
