@@ -28,12 +28,13 @@ interface VideoAnalysisFormProps {
 }
 
 const GRADES = [
+  "幼儿园",
   "小学一年级", "小学二年级", "小学三年级", "小学四年级", "小学五年级", "小学六年级",
   "初中一年级", "初中二年级", "初中三年级",
   "高中一年级", "高中二年级", "高中三年级"
 ];
 
-const LEVELS = ["Level 0", "Level 1", "Level 2", "Level 3", "Level 4", "Level 5", "Level 6", "Level 7", "Level 8", "Level 9"];
+const LEVELS = ["LS", "Level 0", "Level 1", "Level 2", "Level 3", "Level 4", "Level 5", "Level 6", "Level 7", "Level 8", "Level 9"];
 
 export const VideoAnalysisForm = ({ onSubmit }: VideoAnalysisFormProps) => {
   const [formData, setFormData] = useState<FormData>({
@@ -173,7 +174,7 @@ export const VideoAnalysisForm = ({ onSubmit }: VideoAnalysisFormProps) => {
   const handleVideoInput = (field: 'video1' | 'video2', value: string) => {
     // 尝试从URL中提取日期
     const extractedDate = extractDateFromUrl(value);
-    
+
     // 同时更新视频链接和日期（如果找到）
     const updates: Partial<FormData> = { [field]: value };
     if (extractedDate) {
@@ -210,7 +211,7 @@ export const VideoAnalysisForm = ({ onSubmit }: VideoAnalysisFormProps) => {
               上传两个学习视频，让AI为您生成专业的学习分析报告
             </CardDescription>
           </div>
-          <Button 
+          <Button
             type="button"
             variant="outline"
             size="sm"
@@ -300,25 +301,25 @@ export const VideoAnalysisForm = ({ onSubmit }: VideoAnalysisFormProps) => {
                   </SelectContent>
                 </Select>
                 {errors.level && <p className="text-sm text-destructive">{errors.level}</p>}
-            </div>
+              </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="unit" className="flex items-center gap-2 text-base font-semibold">
-                <Film className="w-5 h-5 text-secondary" />
+              <div className="space-y-2">
+                <Label htmlFor="unit" className="flex items-center gap-2 text-base font-semibold">
+                  <Film className="w-5 h-5 text-secondary" />
                   单元
-              </Label>
-              <div className="flex items-center gap-2">
-                <span className="text-foreground font-medium whitespace-nowrap">Unit</span>
-                <Input
-                  id="unit"
-                  type="number"
-                  min="1"
-                  max="100"
-                  placeholder="输入数字，如 5"
-                  value={formData.unit}
+                </Label>
+                <div className="flex items-center gap-2">
+                  <span className="text-foreground font-medium whitespace-nowrap">Unit</span>
+                  <Input
+                    id="unit"
+                    type="number"
+                    min="1"
+                    max="100"
+                    placeholder="输入数字，如 5"
+                    value={formData.unit}
                     onChange={(e) => updateFormField({ unit: e.target.value })}
-                  className="h-12 flex-1"
-                />
+                    className="h-12 flex-1"
+                  />
                 </div>
                 {errors.unit && <p className="text-sm text-destructive">{errors.unit}</p>}
               </div>
@@ -344,98 +345,98 @@ export const VideoAnalysisForm = ({ onSubmit }: VideoAnalysisFormProps) => {
                 {errors.video1 && <p className="text-sm text-destructive">{errors.video1}</p>}
               </div>
 
-            <div className="space-y-2">
-              <Label className="flex items-center gap-2 text-base font-semibold">
-                <CalendarIcon className="w-5 h-5 text-secondary" />
-                筛选日期
-              </Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-full h-12 justify-start text-left font-normal",
-                      !selectedDate && "text-muted-foreground",
-                      errors.date && "border-destructive"
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {selectedDate ? format(selectedDate, "PPP") : <span>选择日期</span>}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={selectedDate}
-                    onSelect={(date) => {
-                      setSelectedDate(date);
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2 text-base font-semibold">
+                  <CalendarIcon className="w-5 h-5 text-secondary" />
+                  筛选日期
+                </Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full h-12 justify-start text-left font-normal",
+                        !selectedDate && "text-muted-foreground",
+                        errors.date && "border-destructive"
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {selectedDate ? format(selectedDate, "PPP") : <span>选择日期</span>}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={selectedDate}
+                      onSelect={(date) => {
+                        setSelectedDate(date);
                         updateFormField({ date: date ? format(date, "yyyy-MM-dd") : "" });
-                    }}
-                    initialFocus
-                    className={cn("p-3 pointer-events-auto")}
-                  />
-                </PopoverContent>
-              </Popover>
-              {errors.date && <p className="text-sm text-destructive">{errors.date}</p>}
+                      }}
+                      initialFocus
+                      className={cn("p-3 pointer-events-auto")}
+                    />
+                  </PopoverContent>
+                </Popover>
+                {errors.date && <p className="text-sm text-destructive">{errors.date}</p>}
               </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
+              <div className="space-y-2">
                 <Label htmlFor="video2" className="flex items-center gap-2 text-base font-semibold">
-                <Film className="w-5 h-5 text-secondary" />
+                  <Film className="w-5 h-5 text-secondary" />
                   第二个视频链接
-              </Label>
-              <Input
+                </Label>
+                <Input
                   id="video2"
-                type="url"
+                  type="url"
                   placeholder="https://example.com/video2"
                   value={formData.video2}
                   onChange={(e) => handleVideoInput('video2', e.target.value)}
                   className={`h-12 ${errors.video2 ? 'border-destructive' : ''}`}
-              />
+                />
                 {errors.video2 && <p className="text-sm text-destructive">{errors.video2}</p>}
-            </div>
+              </div>
 
-            <div className="space-y-2">
-              <Label className="flex items-center gap-2 text-base font-semibold">
-                <CalendarIcon className="w-5 h-5 text-secondary" />
-                筛选日期
-              </Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-full h-12 justify-start text-left font-normal",
-                      !selectedDate2 && "text-muted-foreground",
-                      errors.date2 && "border-destructive"
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {selectedDate2 ? format(selectedDate2, "PPP") : <span>选择日期</span>}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={selectedDate2}
-                    onSelect={(date) => {
-                      setSelectedDate2(date);
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2 text-base font-semibold">
+                  <CalendarIcon className="w-5 h-5 text-secondary" />
+                  筛选日期
+                </Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full h-12 justify-start text-left font-normal",
+                        !selectedDate2 && "text-muted-foreground",
+                        errors.date2 && "border-destructive"
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {selectedDate2 ? format(selectedDate2, "PPP") : <span>选择日期</span>}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={selectedDate2}
+                      onSelect={(date) => {
+                        setSelectedDate2(date);
                         updateFormField({ date2: date ? format(date, "yyyy-MM-dd") : "" });
-                    }}
-                    initialFocus
-                    className={cn("p-3 pointer-events-auto")}
-                  />
-                </PopoverContent>
-              </Popover>
-              {errors.date2 && <p className="text-sm text-destructive">{errors.date2}</p>}
-            </div>
+                      }}
+                      initialFocus
+                      className={cn("p-3 pointer-events-auto")}
+                    />
+                  </PopoverContent>
+                </Popover>
+                {errors.date2 && <p className="text-sm text-destructive">{errors.date2}</p>}
+              </div>
             </div>
           </div>
 
-          <Button 
-            type="submit" 
+          <Button
+            type="submit"
             size="lg"
             className="w-full h-14 text-lg font-bold bg-primary hover:bg-primary/90 text-primary-foreground shadow-md hover:shadow-lg transition-all"
           >
