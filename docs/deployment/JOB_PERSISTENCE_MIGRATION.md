@@ -6,7 +6,7 @@
 
 **主要改进：**
 - ✅ 所有任务状态持久化到 PostgreSQL 数据库
-- ✅ 服务器重启后自动恢复未完成的任务
+- ✅ 服务器重启后自动恢复未完成的任务（默认恢复 2 小时内的任务）
 - ✅ 支持降级到内存模式（数据库不可用时）
 - ✅ 生产环境就绪
 
@@ -100,15 +100,17 @@ npm start
 ✅ 数据库连接成功: ...
 📊 [AnalysisJobQueue] {"event":"queue_initialized",...}
 📊 [AnalysisJobQueue] {"event":"persistence_enabled",...}
-📊 [AnalysisJobQueue] {"event":"recovery_completed","recovered":0}
+📊 [AnalysisJobQueue] {"event":"recovery_completed","recovered":0,"timeWindowHours":2}
+ℹ️  No pending jobs to recover (within 2 hours)
 ```
 
 如果有未完成的任务，会看到：
 
 ```
-📊 [AnalysisJobQueue] {"event":"recovery_started","pending":N}
+📊 [AnalysisJobQueue] {"event":"recovery_started","pending":N,"timeWindowHours":2}
 📊 [AnalysisJobQueue] {"event":"job_recovered","jobId":"...",...}
-📊 [AnalysisJobQueue] {"event":"recovery_completed","recovered":N}
+📊 [AnalysisJobQueue] {"event":"recovery_completed","recovered":N,"totalPending":N,"timeWindowHours":2}
+ℹ️  Recovered N pending jobs from database (within 2 hours)
 ```
 
 ### 3. 测试任务持久化
@@ -157,6 +159,34 @@ npm start
 | `completed_at` | TIMESTAMP | 任务完成时间 |
 | `created_at` | TIMESTAMP | 记录创建时间 |
 | `updated_at` | TIMESTAMP | 记录更新时间（自动更新） |
+
+## ⚙️ 环境变量配置
+
+任务恢复功能支持以下环境变量：
+
+| 环境变量 | 默认值 | 说明 |
+|---------|--------|------|
+| `DISABLE_ANALYSIS_JOB_RECOVERY` | `false` | 设为 `true` 可完全禁用任务恢复功能 |
+| `JOB_RECOVERY_TIME_WINDOW_HOURS` | `2` | 恢复多少小时内的未完成任务（避免恢复太旧的任务） |
+
+**示例配置：**
+
+```bash
+# .env 文件
+
+# 只恢复最近 4 小时内的任务
+JOB_RECOVERY_TIME_WINDOW_HOURS=4
+
+# 完全禁用任务恢复（不推荐）
+# DISABLE_ANALYSIS_JOB_RECOVERY=true
+```
+
+**使用场景：**
+
+- **默认（2小时）：** 适合大多数场景，避免恢复太旧的任务
+- **较长时间窗口（4-8小时）：** 适合任务处理时间较长的场景
+- **较短时间窗口（1小时）：** 适合快速迭代开发环境
+- **禁用恢复：** 仅用于测试或调试，不推荐生产环境使用
 
 ## 🔧 故障排查
 

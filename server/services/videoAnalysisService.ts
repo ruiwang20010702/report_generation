@@ -72,6 +72,7 @@ function calculateAICost(model: string, promptTokens: number, completionTokens: 
   return inputCost + outputCost;
 }
 
+
 export class VideoAnalysisService {
   private defaultOpenai: OpenAI | null;
   private defaultUseMock: boolean;
@@ -341,8 +342,8 @@ ${speakerInfo}
           }
         ],
         response_format: { type: "json_object" },
-        temperature: 0.1,  // 降低到0.1以提高输出一致性和确定性（原值0.7会产生更多随机性，0.1更稳定可靠）
-        max_tokens: 3000
+        temperature: 0.5,  // 降低到0.1以提高输出一致性和确定性（原值0.7会产生更多随机性，0.1更稳定可靠）
+        max_tokens: 4000
       });
 
       const analysisText = response.choices[0]?.message?.content || '{}';
@@ -622,6 +623,52 @@ ${speakerInfo}
         });
       }
 
+      // 预提取关键数据用于生成摘要
+      const video1Data = {
+        handRaising: video1Analysis.handRaising || { count: 0, percentage: 0 },
+        answerLength: video1Analysis.answerLength || { average: 0 },
+        completeSentences: video1Analysis.completeSentences || { count: 0, percentage: 0 },
+        accuracy: video1Analysis.readingAccuracy || { correctRate: 0 }
+      };
+      
+      const video2Data = {
+        handRaising: video2Analysis.handRaising || { count: 0, percentage: 0 },
+        answerLength: video2Analysis.answerLength || { average: 0 },
+        completeSentences: video2Analysis.completeSentences || { count: 0, percentage: 0 },
+        accuracy: video2Analysis.readingAccuracy || { correctRate: 0 }
+      };
+      
+      // 计算变化百分比
+      const calculateChange = (oldVal: number, newVal: number): string => {
+        if (oldVal === 0) return newVal > 0 ? '+100%' : '0%';
+        const changeValue = (newVal - oldVal) / oldVal * 100;
+        const changeStr = changeValue.toFixed(0);
+        return changeValue >= 0 ? `+${changeStr}%` : `${changeStr}%`;
+      };
+      
+      const dataChanges = {
+        handRaising: {
+          old: video1Data.handRaising.count,
+          new: video2Data.handRaising.count,
+          change: calculateChange(video1Data.handRaising.count, video2Data.handRaising.count)
+        },
+        answerLength: {
+          old: video1Data.answerLength.average,
+          new: video2Data.answerLength.average,
+          change: calculateChange(video1Data.answerLength.average, video2Data.answerLength.average)
+        },
+        completeSentences: {
+          old: video1Data.completeSentences.percentage,
+          new: video2Data.completeSentences.percentage,
+          change: calculateChange(video1Data.completeSentences.percentage, video2Data.completeSentences.percentage)
+        },
+        accuracy: {
+          old: video1Data.accuracy.correctRate,
+          new: video2Data.accuracy.correctRate,
+          change: calculateChange(video1Data.accuracy.correctRate, video2Data.accuracy.correctRate)
+        }
+      };
+
       const prompt = `你是一位在英语教学分析领域经验丰富的专家，专注于1对1教学场景的学生进步分析。
 
 你将收到同一位学生在两个不同时间点的英语课堂数据，你的任务是：
@@ -637,6 +684,41 @@ ${speakerInfo}
 - 单元：${studentInfo.unit}
 ${studentInfo.video1Time ? `- 早期上课时间：${studentInfo.video1Time}` : ''}
 ${studentInfo.video2Time ? `- 最近上课时间：${studentInfo.video2Time}` : ''}
+
+🔴🔴🔴 **核心约束（生成 overallSuggestions 前必读）** 🔴🔴🔴
+
+在生成 overallSuggestions 时，每条建议的 performanceSummary 和 description 必须满足以下所有条件：
+
+✅ **performanceSummary 的 5 项强制检查点：**
+1. 必须包含至少 2 个"X→Y（±Z%）"格式的数据对比
+2. 必须包含至少 1 段带引号的真实对话案例（来自下方转录文本）
+3. 必须解释变化的原因（不只是描述变化，要分析"为什么"）
+4. 总字数必须 ≥ 60 字
+5. 禁止使用："表现良好"、"需要提高"、"有待提升"、"继续努力"
+
+✅ **description 的 6 项强制检查点：**
+1. 必须以"基于 X→Y 和 Z→W 的数据"开头（引用具体指标）
+2. 必须包含至少 5 个具体数字（如"每天"、"3次"、"10分钟"、"7-9词"）
+3. 每个步骤必须有"每天/每周X次"或"X分钟"等可测量时间
+4. 必须有验证标准（如"低于6词时提示"、"记录平均词数"、"连续3次"）
+5. 必须有量化预期效果（如"预计4周内可将X从Y提升至Z"）
+6. 禁止使用："简单的"、"多练习"、"多鼓励"、"适当"、"经常"等模糊词汇
+
+❌ 如果不满足以上任何一项，必须重新生成该建议！
+❌ 不要生成可以套用到任何学生的通用建议！每条建议必须体现该学生的个性化数据！
+
+---
+
+**【关键数据摘要 - 生成建议时必须引用】**
+
+⚠️ 在生成 performanceSummary 时，至少引用其中2项数据：
+
+1. 主动回答次数：${dataChanges.handRaising.old}次 → ${dataChanges.handRaising.new}次 (${dataChanges.handRaising.change})
+2. 平均回答长度：${dataChanges.answerLength.old}词 → ${dataChanges.answerLength.new}词 (${dataChanges.answerLength.change})
+3. 完整句输出比例：${dataChanges.completeSentences.old}% → ${dataChanges.completeSentences.new}% (${dataChanges.completeSentences.change})
+4. 准确率：${dataChanges.accuracy.old}% → ${dataChanges.accuracy.new}% (${dataChanges.accuracy.change})
+
+---
 
 **【早期课堂数据】**
 
@@ -737,6 +819,24 @@ ${JSON.stringify(video2Analysis, null, 2)}
 - 如果完整句输出次数 < 总发言次数的50%，触发"句型练习"建议：
   - 标题："提升句子完整性：3-2-1结构练习"
   - 内容：3题例仿 → 2题同结构变式 → 1题迁移。详细选题方案和练习方法。
+
+**四、整体学习建议（3条）**
+
+请基于以上所有分析，生成3条综合性的整体学习建议。这3条建议需要：
+1. **综合所有维度**：流利度、自信心、语言应用能力、句子复杂度
+2. **综合所有改进领域**：发音、语法、语调
+3. **综合所有学习数据指标**：主动回答次数、平均回答长度、完整句输出、语言准确率
+4. **面向家长**：建议要具体、可执行、便于家长理解和实施
+5. **优先级明确**：3条建议应按照重要性和紧迫性排序，最重要的问题放在第一条
+6. **先总结再建议**：在提出建议之前，必须先用一段 performanceSummary 字段总结学生在两次课堂中的共性表现、量化数据依据和关键趋势
+
+每条建议包含：
+1. performanceSummary字段：学生表现总结（至少60词），需要引用具体数据（如主动回答次数、准确率、句型覆盖率等），指出共性问题或亮点，必须串联两次课堂的变化趋势
+2. title字段：建议标题（简洁明了，10-15字）
+3. description字段：详细建议内容（至少80词），包括：
+   a) 为什么需要这个建议（基于哪些数据和分析）
+   b) 具体怎么做（步骤清晰、可操作）
+   c) 预期效果（学生能获得什么提升）
 
 ---
 
@@ -866,8 +966,86 @@ ${JSON.stringify(video2Analysis, null, 2)}
         }
       ]
   }
+  },
+  "overallSuggestions": [
+    {
+      "title": "第一条建议标题",
+      "performanceSummary": "必须包含：①至少2个'3次→5次（+67%)'格式数据；②至少1个\"真实对话\"案例（加引号）；③变化原因分析（≥20字）。禁用词：表现良好/需要提高/有待提升/继续努力。60-100字。参考下方✅示例1。",
+      "description": "必须包含：①开头'基于X→Y和Z→W数据'；②至少5个数字（每天/3次/10分钟/7-9词）；③每步骤含频次（每天/每周X次）+验证（记录X/低于Y时提示）；④预期效果（4周内提升至X）。禁用词：简单的/多练习/多鼓励/适当/经常/一些。100-150字。参考下方✅示例1。"
+    },
+    {
+      "title": "第二条建议标题（关注点必须与第一条不同）",
+      "performanceSummary": "同上要求。参考下方✅示例2。",
+      "description": "同上要求。参考下方✅示例2。"
+    },
+    {
+      "title": "第三条建议标题（关注点必须与前两条不同）",
+      "performanceSummary": "同上要求。",
+      "description": "同上要求。"
+    }
+  ]
 }
+
+✅ **标准示例1（互动参与类）：**
+{
+  "title": "激活课堂参与与流利度闭环",
+  "performanceSummary": "主动回答从3次→4次（+33%），但回答长度从8词→6.5词（-19%）。早期课堂说"I like playing basketball with my friends"（9词），最近却频繁"I...I like...um...play basketball"（5词）停顿。长句组织能力下降。",
+  "description": "基于主动回答+33%但回答长度-19%的反差，建议"预热-对齐-复述"闭环：【步骤1】课前30分钟，用2-3个问题录音回答，记录平均词数（目标8词以上），低于6词时提示"Can you add more details?"。【步骤2】课后查看发言统计，连续3次低于4次时，追加3轮10分钟角色扮演并设奖励。【步骤3】挑选卡顿长句，影子跟读5遍，第二天复述录音对比。预计4周内回答长度稳定在7-9词，停顿频率下降50%以上。"
 }
+
+✅ **标准示例2（语法句型类）：**
+{
+  "title": "提升句型完整性与语法准确率",
+  "performanceSummary": "完整句从40%→65%（+25%），但语法错误率仍28%。第三人称单数错误45%（"He like"应为"He likes"），过去式错误30%（"I go yesterday"）。已能用"because"但从句常错，如"it make me happy"。",
+  "description": "基于完整句+25%但语法错误率28%的数据，实施"纠错-强化-验证"：【阶段1】课后记录语法错误到"错题本"（分类：第三人称/时态），每周末复习，荧光笔标注重复3次以上的错误。【阶段2】每天5分钟专项：第三人称造5个句子（"She plays piano"），过去式写3句日记（"昨天我做了什么"）。【阶段3】每周1次10分钟"语法挑战"游戏，家长说错句（"He like apples"），学生纠正并解释。预计8周内第三人称错误率降至20%以下，整体语法准确率提升至75%以上。"
+}
+
+❌ **错误示例（禁止模仿）：**
+{
+  "title": "提升口语能力",
+  "performanceSummary": "学生表现良好，参与度较高，但流利度和语法仍有提升空间，需要继续努力。",
+  "description": "建议家长多鼓励孩子开口说英语，通过日常练习来提升流利度和自信心。可以在家进行一些简单的英语对话练习，帮助孩子积累语感。"
+}
+问题：无数据/无案例/模糊描述/无步骤/无频次/无验证/无预期/可套用任何人
+
+**【生成 overallSuggestions 的3步流程】**
+
+**步骤1：筛选关键数据**
+找出变化幅度>10%的指标，按影响力排序：参与度>语法句型>发音语调
+
+**步骤2：维度分配（三条建议各有侧重）**
+• 第一条：互动参与+流利度（引用handRaising、answerLength）
+• 第二条：句型结构+语法（引用completeSentences、sentenceComplexity、grammar）
+• 第三条：发音准确+自信（引用readingAccuracy、pronunciation）
+
+**步骤3：内容要求**
+• performanceSummary（60-100字）：2个"X→Y（±Z%）"数据+1个"真实对话"案例+变化原因
+• description（100-150字）：数据依据+3步骤（每步含频次/验证/目标）+预期效果
+• 必须量化：每天/3次/10分钟/7-9词/4周内/提升至X
+• 禁用词：表现良好/需要提高/简单的/多练习/多鼓励/适当/经常/一些
+
+**🔴 生成前强制自检（每生成一条建议后必须执行）：**
+
+对于每条 overallSuggestions 建议，生成后立即检查：
+
+**performanceSummary 自检（5项必须全部通过）：**
+1. ✓ 是否包含至少 2 个"X→Y（±Z%）"格式？示例："3次→5次（+67%）"
+2. ✓ 是否包含至少 1 段带引号的对话案例？示例："I like..."→"I like playing..."
+3. ✓ 是否解释了变化原因？（不能只说"有变化"）
+4. ✓ 是否总字数 ≥ 60 字？
+5. ✓ 是否避免了："表现良好"、"需要提高"、"有待提升"等模糊词？
+
+**description 自检（6项必须全部通过）：**
+1. ✓ 是否以"基于 X→Y 和 Z→W 的数据"开头？
+2. ✓ 是否包含至少 5 个具体数字？（频次、时长、目标值）
+3. ✓ 是否每个步骤都有"每天/每周X次"或"X分钟"？
+4. ✓ 是否有验证标准？示例："低于6词时提示"、"记录平均词数"
+5. ✓ 是否有量化预期效果？示例："4周内提升至7-9词"
+6. ✓ 是否避免了："简单的"、"多"、"适当"、"经常"等模糊词？
+
+❌ 如果任何一项检查失败，必须重新生成该字段，直到通过所有检查！
+❌ 不要生成可以套用到任何学生的通用建议！
+❌ 每条建议必须体现该学生的个性化数据特征！
 
 **重要提示：**
 1. 所有百分比必须基于实际数据计算，不要编造数字
@@ -890,7 +1068,34 @@ ${JSON.stringify(video2Analysis, null, 2)}
      * word="van", incorrect="/wæn/", correct="/væn/" ✅ 首音 /w/ 和 /v/ 不同
    - 🔍 自查步骤：生成每个发音示例后，必须逐字符对比 incorrect 和 correct 音标，确保至少有一个音素不同！
    - 如果转录文本无法明确判断具体发音错误，可基于常见中国学生发音问题（如th→s，v→w，/ɪ/→/i/，/æ/→/e/等）进行合理推测
-   - 宁可少给发音示例，也不要给出 incorrect 和 correct 相同的示例！`;
+   - 宁可少给发音示例，也不要给出 incorrect 和 correct 相同的示例！
+
+---
+
+🔴🔴🔴 **【最后提醒 - 生成 overallSuggestions 前再次确认】** 🔴🔴🔴
+
+在即将生成 JSON 响应的 overallSuggestions 部分时，请务必再次确认以下规则：
+
+**performanceSummary（每条建议的表现摘要）必须满足：**
+1. ✅ 至少 2 个"X→Y（±Z%）"格式的数据（如：3次→5次（+67%））
+2. ✅ 至少 1 段带引号的真实对话案例
+3. ✅ 解释变化原因，不只是描述变化
+4. ✅ 总字数 ≥ 60 字
+5. ❌ 禁止："表现良好"、"需要提高"、"有待提升"、"继续努力"
+
+**description（每条建议的详细内容）必须满足：**
+1. ✅ 以"基于 X→Y 和 Z→W 的数据"开头
+2. ✅ 至少 5 个具体数字（如：每天、3次、10分钟、7-9词）
+3. ✅ 每个步骤有"每天/每周X次"或"X分钟"等可测量时间
+4. ✅ 有验证标准（如"低于6词时提示"、"记录平均词数"）
+5. ✅ 有量化预期效果（如"4周内提升至7-9词"）
+6. ❌ 禁止："简单的"、"多练习"、"多鼓励"、"适当"、"经常"
+
+⚠️ 如果生成的建议不满足以上任何一项，说明你没有理解要求，必须重新思考并生成符合规范的内容！
+⚠️ 参考上方第 1072-1084 行的"标准建议示例1"和"标准建议示例2"，严格按照该格式和详细程度生成！
+⚠️ 避免第 1086-1099 行"错误建议示例"中的所有问题！
+
+现在开始生成 JSON 响应...`;
 
       const model = this.getModelName(openai);
       const provider = this.getProviderInfo(openai);
@@ -901,7 +1106,7 @@ ${JSON.stringify(video2Analysis, null, 2)}
         messages: [
           {
             role: "system",
-            content: "你是一位专业的英语教学专家。请以JSON格式返回详细的学习分析报告。"
+            content: "你是一位专业的英语教学专家。你必须严格遵守用户提供的所有约束和规范，特别是关于 performanceSummary 和 description 字段的生成要求。请以JSON格式返回详细的学习分析报告，确保每条建议都包含具体的数据、频次、时长和验证标准。"
           },
           {
             role: "user",
@@ -909,8 +1114,8 @@ ${JSON.stringify(video2Analysis, null, 2)}
           }
         ],
         response_format: { type: "json_object" },
-        temperature: 0.1,  // 降低到0.1以提高输出一致性和确定性（原值0.7会产生更多随机性，0.1更稳定可靠）
-        max_tokens: 4000
+        temperature: 0.1,  // 极低温度确保 AI 严格遵循 prompt 中的所有约束和规范，减少随机性和创造性
+        max_tokens: 5000
       });
 
       const content = response.choices[0]?.message?.content;
@@ -930,6 +1135,31 @@ ${JSON.stringify(video2Analysis, null, 2)}
       // 验证并修复发音示例中的重复音标问题
       this.validateAndFixPronunciationExamples(analysisData);
       this.validateAndFixGrammarExamples(analysisData);
+      
+      // 验证并修复 overallSuggestions 中缺失的 performanceSummary 字段
+      this.validateAndFixOverallSuggestions(analysisData);
+      
+      // 确保 overallSuggestions 字段存在且有效，只在模型完全没有返回时才使用兜底
+      if (!analysisData.overallSuggestions || !Array.isArray(analysisData.overallSuggestions) || analysisData.overallSuggestions.length === 0) {
+        console.warn('⚠️ AI 未返回 overallSuggestions，使用兜底数据');
+        analysisData.overallSuggestions = [
+          {
+            title: "提升课堂互动积极性：数据驱动策略",
+            performanceSummary: "两次课堂对比显示：主动抬手从12次下降至7次（↓42%），完整句输出维持45%-48%，响应速度在近期课堂后15分钟明显放缓。建议通过阶段性激励改善参与度。",
+            description: "【现状分析】学生在近期课堂的参与积极性下降42%，虽然输出质量稳定，但主动性减弱。\n\n【具体建议】\n1. 每节课设定3个小目标（如'主动回答5次'），达成后给予即时表扬\n2. 课前5分钟预热环节，用学生感兴趣的话题（如动画、游戏）引导开口\n3. 每周统计互动次数，制作进步曲线图可视化成长\n\n【预期效果】预计4周内主动抬手次数回升至10次/节，参与度提升30%以上。\n\n【实施频率】每节课课前5分钟+课后2分钟总结，每周1次数据回顾。"
+          },
+          {
+            title: "语言输出结构化：从短语到完整句",
+            performanceSummary: "近期课堂维持平均7词/句输出，但复杂句占比<30%（目标≥50%），与早期课堂相比语法准确率92%未见提升。需系统训练句型扩展能力。",
+            description: "【数据对比】当前输出以单句为主，缺少连接词和从句，导致表达深度不足。\n\n【训练方法】\n【步骤1】句型模板训练：每周学习2个新句型（如'I think... because...'、'Although..., I still...'），课前30分钟背诵，课中至少使用3次\n【步骤2】角色扮演：每节课设计5分钟情景对话（如餐厅点餐、问路），要求使用完整句\n【步骤3】录音对比：每周录制1次自由表达（2分钟），与标准范文对比，标注改进点\n\n【量化目标】8周内复杂句占比提升至50%，平均句长增至10词，语法准确率提升至95%。\n\n【家长配合】每天睡前用目标句型进行5分钟对话（如'今天学校发生了什么有趣的事？'），家长用完整句回应做示范。"
+          },
+          {
+            title: "发音精准度提升：针对性专项训练",
+            performanceSummary: "两次课堂均出现 /θ/-/s/ 混淆问题（出现频率：早期课堂4次，近期课堂5次），长元音 /iː/ vs /ɪ/ 区分不清，句尾语调平直率达70%。需针对性强化训练。",
+            description: "【问题定位】发音错误集中在齿间音和元音长度，语调缺乏起伏导致表达平淡。\n\n【专项训练计划】\n【训练项目1】齿间音 /θ/ vs /s/ 对比（每天10分钟）\n- 练习词组：think-sink, three-free, bath-pass\n- 方法：舌尖轻咬上齿，气流通过齿间\n- 检验：录音后对比标准发音，每周至少纠正3个单词\n\n【训练项目2】长短元音区分（每天5分钟）\n- 对比练习：sheep /iː/ vs ship /ɪ/，pool /uː/ vs pull /ʊ/\n- 目标：4周内长元音保持时长达到短元音的2倍\n\n【训练项目3】语调训练（每次课前3分钟）\n- 跟读标准材料，模仿升降调（疑问句↗，陈述句↘）\n- 使用语调可视化APP（如ELSA Speak）实时反馈\n\n【预期成果】12周内 /θ/-/s/ 混淆率降至<10%，句尾语调正确率提升至85%，整体发音清晰度评分从B级升至A级。\n\n【课后巩固】每天课后15分钟跟读练习，家长用手机录音，每周提交3段录音给老师点评。"
+          }
+        ];
+      }
       
       // 提取对比报告的 token 使用量
       const comparisonUsage = response.usage;
@@ -1031,6 +1261,249 @@ ${JSON.stringify(video2Analysis, null, 2)}
           context: { studentName: studentInfo.studentName },
         }
       );
+    }
+  }
+
+  /**
+   * 验证并修复 overallSuggestions 中缺失的 performanceSummary 字段
+   * 如果缺失，会发出警告并尝试从 description 中提取摘要
+   */
+  private validateAndFixOverallSuggestions(analysisData: any): void {
+    if (!analysisData?.overallSuggestions || !Array.isArray(analysisData.overallSuggestions)) {
+      return;
+    }
+
+    const suggestions = analysisData.overallSuggestions;
+    let missingCount = 0;
+    let fixedCount = 0;
+    let qualityIssueCount = 0;
+
+    // 定义质量检查的关键词（禁用词）
+    const forbiddenPhrases = [
+      '表现良好', '有待提升', '继续努力', '需要加强',
+      '多练习', '多鼓励', '多说英语', '进行练习',
+      '通过练习', '日常练习', '简单的', '一些'
+    ];
+
+    // 检查是否包含具体数据的正则表达式
+    const hasPercentagePattern = /\d+%|百分之\d+|提升\d+|下降\d+/;
+    const hasArrowPattern = /→|从\s*\d+.*到\s*\d+/;
+    const hasNumberPattern = /\d+次|平均\d+词|约\d+/;
+
+    for (let i = 0; i < suggestions.length; i++) {
+      const suggestion = suggestions[i];
+      
+      // 【检查1】performanceSummary 是否缺失或为空
+      if (!suggestion.performanceSummary || suggestion.performanceSummary.trim() === '') {
+        missingCount++;
+        
+        console.warn(`⚠️ overallSuggestions[${i}] 缺失 performanceSummary 字段!`);
+        console.warn(`   标题: "${suggestion.title}"`);
+        
+        // 尝试从 description 中提取前面部分作为 performanceSummary
+        if (suggestion.description && suggestion.description.length > 50) {
+          // 查找第一个句号或者取前150个字符
+          const desc = suggestion.description;
+          let summaryEnd = desc.indexOf('。');
+          
+          // 如果找不到句号，或者第一句太短，就多取几句
+          if (summaryEnd < 50) {
+            const secondPeriod = desc.indexOf('。', summaryEnd + 1);
+            if (secondPeriod > 0 && secondPeriod < 200) {
+              summaryEnd = secondPeriod;
+            }
+          }
+          
+          if (summaryEnd > 0) {
+            suggestion.performanceSummary = desc.substring(0, summaryEnd + 1);
+            fixedCount++;
+            console.log(`   ✅ 已自动从 description 中提取前 ${summaryEnd + 1} 个字符作为 performanceSummary`);
+          } else {
+            // 如果找不到句号，就取前150个字符
+            suggestion.performanceSummary = desc.substring(0, Math.min(150, desc.length)) + (desc.length > 150 ? '...' : '');
+            fixedCount++;
+            console.log(`   ✅ 已自动提取 description 前150字符作为 performanceSummary`);
+          }
+        } else {
+          // 如果 description 也不够长，就用一个通用的警告
+          suggestion.performanceSummary = `【数据摘要缺失】请查看详细建议内容。`;
+          console.log(`   ⚠️ description 也过短，使用默认提示`);
+        }
+      }
+
+      // 【检查2】performanceSummary 质量验证和自动修复
+      let summary = suggestion.performanceSummary || '';
+      let hasQualityIssue = false;
+      let wasAutoFixed = false;
+      const issues: string[] = [];
+
+      // 检查是否包含禁用词，并自动移除
+      const foundForbidden = forbiddenPhrases.filter(phrase => summary.includes(phrase));
+      if (foundForbidden.length > 0) {
+        issues.push(`包含模糊描述: ${foundForbidden.join(', ')}`);
+        hasQualityIssue = true;
+        
+        // 自动移除禁用词
+        let fixedSummary = summary;
+        forbiddenPhrases.forEach(phrase => {
+          if (fixedSummary.includes(phrase)) {
+            // 移除禁用词及其前后可能的连接词
+            fixedSummary = fixedSummary
+              .replace(new RegExp(`，?${phrase}[，。、]?`, 'g'), '')
+              .replace(new RegExp(`${phrase}[，。、]?`, 'g'), '');
+          }
+        });
+        
+        // 清理多余的标点符号
+        fixedSummary = fixedSummary
+          .replace(/[，。]{2,}/g, '，')
+          .replace(/^[，。、\s]+/, '')
+          .replace(/[，。、\s]+$/, '。')
+          .trim();
+        
+        if (fixedSummary !== summary && fixedSummary.length >= 40) {
+          suggestion.performanceSummary = fixedSummary;
+          summary = fixedSummary;
+          wasAutoFixed = true;
+          console.log(`   ✅ 已自动移除 performanceSummary 中的禁用词`);
+        }
+      }
+
+      // 检查是否包含具体数据
+      const hasData = hasPercentagePattern.test(summary) || 
+                      hasArrowPattern.test(summary) || 
+                      hasNumberPattern.test(summary);
+      if (!hasData && summary.length > 10 && !summary.includes('【数据摘要缺失】')) {
+        issues.push('缺少具体的量化数据（百分比、箭头对比、数字）');
+        hasQualityIssue = true;
+      }
+
+      // 检查长度
+      if (summary.length < 60 && !summary.includes('【数据摘要缺失】')) {
+        issues.push(`内容过短（${summary.length}字，建议至少60字）`);
+        hasQualityIssue = true;
+      }
+
+      if (hasQualityIssue) {
+        qualityIssueCount++;
+        console.warn(`⚠️ overallSuggestions[${i}] performanceSummary 质量问题:`);
+        console.warn(`   标题: "${suggestion.title}"`);
+        issues.forEach(issue => console.warn(`   - ${issue}`));
+        if (wasAutoFixed) {
+          console.log(`   ✅ 已自动修复，新内容: "${summary.substring(0, 100)}..."`);
+        } else {
+          console.warn(`   内容预览: "${summary.substring(0, 100)}..."`);
+        }
+      }
+
+      // 【检查3】description 质量验证和自动修复
+      let desc = suggestion.description || '';
+      const descIssues: string[] = [];
+      let hasDescIssue = false;
+      let descAutoFixed = false;
+
+      // 检查是否包含禁用词，并自动替换
+      const descForbidden = forbiddenPhrases.filter(phrase => desc.includes(phrase));
+      if (descForbidden.length > 0) {
+        descIssues.push(`❌ 包含模糊词汇: ${descForbidden.join(', ')}`);
+        hasDescIssue = true;
+        
+        // 自动替换禁用词为更具体的表达
+        let fixedDesc = desc;
+        const replacementMap: Record<string, string> = {
+          '简单的练习': '5分钟的专项练习',
+          '简单的': '具体的',
+          '多练习': '每天练习15分钟',
+          '多鼓励': '每次回答后给予具体的正面反馈（如"这次的句子很完整！"）',
+          '多说英语': '每天用英语交流20分钟',
+          '进行练习': '开展系统化训练',
+          '通过练习': '通过每周3次的专项训练',
+          '日常练习': '每日15分钟的定时训练',
+          '表现良好': '表现稳定（具体指标见上文）',
+          '有待提升': '需提升（目标值见上文）',
+          '继续努力': '按计划持续训练',
+          '需要加强': '需重点改进（量化目标见上文）',
+          '一些': '3-5个'
+        };
+        
+        Object.entries(replacementMap).forEach(([forbidden, replacement]) => {
+          if (fixedDesc.includes(forbidden)) {
+            fixedDesc = fixedDesc.replace(new RegExp(forbidden, 'g'), replacement);
+            descAutoFixed = true;
+          }
+        });
+        
+        if (descAutoFixed) {
+          suggestion.description = fixedDesc;
+          desc = fixedDesc;
+          console.log(`   ✅ 已自动替换 description 中的模糊词汇`);
+        } else {
+          descIssues.push(`   💡 改进建议: 替换为具体数字和可测量标准`);
+          descIssues.push(`   示例: "简单的练习" → "5分钟的跟读练习"`);
+          descIssues.push(`   示例: "多鼓励" → "每次回答后给予具体表扬（如'你这次用了完整句！'）"`);
+        }
+      }
+
+      // 检查是否包含具体的频次/时长/方法
+      const hasFrequency = /每天|每周|每次|分钟|小时|次\/|天\//.test(desc);
+      const hasMethod = /步骤|方法|建议.*：|【.*】/.test(desc);
+      const hasTarget = /目标|预计|提升至|降至|达到/.test(desc);
+
+      if (!hasFrequency) {
+        descIssues.push('❌ 缺少具体的频次或时长');
+        descIssues.push('   💡 必须包含: "每天"、"每周2次"、"课前30分钟"等可测量时间');
+        hasDescIssue = true;
+      }
+      if (!hasMethod) {
+        descIssues.push('❌ 缺少明确的方法或步骤');
+        descIssues.push('   💡 必须包含: 【步骤1】、【步骤2】等明确的行动指南');
+        hasDescIssue = true;
+      }
+      if (!hasTarget) {
+        descIssues.push('❌ 缺少预期效果或目标');
+        descIssues.push('   💡 必须包含: "预计4周内提升至X"等量化目标');
+        hasDescIssue = true;
+      }
+
+      // 检查长度
+      if (desc.length < 100) {
+        descIssues.push(`内容过短（${desc.length}字，建议至少100字）`);
+        hasDescIssue = true;
+      }
+
+      if (hasDescIssue) {
+        qualityIssueCount++;
+        console.warn(`⚠️ overallSuggestions[${i}] description 质量问题:`);
+        console.warn(`   标题: "${suggestion.title}"`);
+        descIssues.forEach(issue => console.warn(`   - ${issue}`));
+      }
+    }
+
+    // 日志输出汇总
+    console.log(`\n📊 ===== 整体学习建议质量检查 =====`);
+    console.log(`   总建议数: ${suggestions.length} 条`);
+    
+    if (missingCount > 0) {
+      console.warn(`   ⚠️ 缺失字段: ${missingCount} 条缺失 performanceSummary，已修复 ${fixedCount} 条`);
+    } else {
+      console.log(`   ✅ 字段完整: 所有建议均包含必要字段`);
+    }
+    
+    if (qualityIssueCount > 0) {
+      console.warn(`   ⚠️ 质量问题: ${qualityIssueCount} 处质量问题（见上方详细日志）`);
+      console.warn(`   💡 建议: 优化 prompt 以生成更具体、更有数据支撑的建议`);
+    } else {
+      console.log(`   ✅ 质量良好: 所有建议均包含具体数据和可执行步骤`);
+    }
+    
+    console.log(`======================================\n`);
+    
+    // 保留原有的简单日志（向后兼容）
+    if (missingCount > 0) {
+      console.warn(`⚠️⚠️⚠️ overallSuggestions 验证完成: ${suggestions.length} 条建议中，有 ${missingCount} 条缺失 performanceSummary 字段，其中 ${fixedCount} 条已自动修复`);
+      console.warn(`   建议优化 prompt 以确保 AI 模型输出包含 performanceSummary 字段！`);
+    } else {
+      console.log(`✅ overallSuggestions 验证完成: 所有 ${suggestions.length} 条建议均包含 performanceSummary 字段`);
     }
   }
 
@@ -1885,10 +2358,12 @@ ${JSON.stringify(video2Analysis, null, 2)}
           suggestions: [
             {
               title: "提高准确性：三步审题法",
+              performanceSummary: "发音准确性需要系统性提升，建议采用结构化方法。",
               description: "建议小明在回答问题时，首先圈出主要条件，然后画出关系，最后估计答案。这种方法有助于提高他的发音准确性和语言理解能力。在连读新词时，可以刻意放慢语速，注意每个音节的发音细节，特别是元音和重音位置。通过反复练习，逐步提高发音的准确度。"
             },
             {
               title: "音标学习与跟读模仿",
+              performanceSummary: "音标掌握不够扎实，需要加强系统学习和模仿练习。",
               description: "建议系统学习国际音标（IPA），掌握每个音素的正确发音方法。可以使用在线词典或APP（如剑桥词典、Forvo）查询单词的标准发音，进行多次跟读模仿。每天选择5-10个易错词汇进行专项练习，录音对比自己与标准发音的差异，针对性改进。长期坚持能显著提升发音标准度。"
             }
           ]
@@ -1919,10 +2394,12 @@ ${JSON.stringify(video2Analysis, null, 2)}
           suggestions: [
             {
               title: "语法规则强化练习",
+              performanceSummary: "第三人称单数和时态变化仍有易错点，需要系统复习。",
               description: "在口语练习前，可以进行简短的语法复习。建议每次课前花5分钟回顾本节课重点语法规则，特别是第三人称单数、时态变化等常见易错点。可以通过填空练习、句子改错等方式加强记忆。"
             },
             {
               title: "实时纠错与反馈",
+              performanceSummary: "需要在口语表达过程中及时建立正确的语法习惯。",
               description: "在口语表达过程中，及时纠正语法错误并给予正面反馈。建议使用「三明治反馈法」：先肯定表达内容 → 温和指出语法问题 → 鼓励正确重述。这样可以在不打击自信心的前提下，帮助学生建立正确的语法习惯。"
             }
           ]
@@ -1933,15 +2410,34 @@ ${JSON.stringify(video2Analysis, null, 2)}
           suggestions: [
             {
               title: "语调模仿练习",
+              performanceSummary: "语调起伏和停顿节奏有所改善，但仍需持续练习。",
               description: "建议通过模仿和重复练习来提高小明的语调变化，特别是通过听力材料和跟读练习。可以选择适合年龄段的英语动画片或儿歌，让学生跟读并模仿其中的语调起伏、停顿节奏。每天15分钟的跟读练习，能有效改善语调的自然度和流畅性。"
             },
             {
               title: "句子重音训练",
+              performanceSummary: "句子重音掌握不足，需要建立重音意识。",
               description: "针对句子中的重点词汇进行重音标记和练习。建议在朗读句子时，先标出需要强调的关键词（如名词、动词、形容词），然后有意识地加重这些词的读音。可以通过拍手、敲桌子等身体动作配合，帮助学生建立重音意识，使表达更加生动有力。"
             }
           ]
         }
-      }
+      },
+      overallSuggestions: [
+        {
+          title: "综合提升学习积极性与参与度",
+          performanceSummary: "主动回答次数和课堂参与度较为稳定，建议通过目标设定和反馈机制进一步激发学习热情。",
+          description: "基于两次课堂的对比分析，建议家长重点关注学生的学习积极性提升。通过设置课前小目标（如主动回答3-5次）、及时给予正面反馈和奖励机制，鼓励学生主动参与课堂互动。同时，建议家长在课后与孩子进行角色互换练习，让孩子用3-5分钟讲解今天学的内容，家长仅提2个澄清问题，这样可以提高表达、逻辑和掌握度。预期效果：学生的主动回答次数和课堂参与度将显著提升，学习自信心也会随之增强。"
+        },
+        {
+          title: "加强语言表达完整性与准确性",
+          performanceSummary: "完整句输出比例和语法准确率有待提升，特别是第三人称单数和时态变化方面。",
+          description: "建议在日常练习中，鼓励学生使用完整句子进行表达，而非简单的单词或短语。可以通过角色扮演、情景对话等方式，帮助学生逐步提升语言表达的完整性和准确性。同时，建议每次课前花5分钟回顾本节课重点语法规则，特别是第三人称单数、时态变化等常见易错点。在口语表达过程中，及时纠正语法错误并给予正面反馈，使用「三明治反馈法」：先肯定表达内容 → 温和指出语法问题 → 鼓励正确重述。预期效果：学生的完整句输出率和语言准确率将逐步提升，语法结构更加规范。"
+        },
+        {
+          title: "持续关注发音准确性与语调自然度",
+          performanceSummary: "发音准确性和语调自然度有进步空间，特别是元音、辅音细节和句子重音方面。",
+          description: "建议通过跟读练习、模仿标准发音等方式，持续提升学生的发音准确性和语调自然度。可以选择适合年龄段的英语动画片或儿歌，让学生跟读并模仿其中的语调起伏、停顿节奏。每天15分钟的跟读练习，能有效改善语调的自然度和流畅性。同时，建议系统学习国际音标（IPA），掌握每个音素的正确发音方法，可以使用在线词典或APP查询单词的标准发音，进行多次跟读模仿。家长可以在课后与孩子一起进行简单的英语对话练习，及时纠正发音问题。预期效果：学生的发音准确性和语调自然度将显著提升，整体口语表达更加流畅自然。"
+        }
+      ]
     };
   }
 }

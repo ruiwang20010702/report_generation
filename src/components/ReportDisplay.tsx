@@ -942,6 +942,92 @@ export const ReportDisplay = ({ data: initialData, onBack }: ReportDisplayProps)
           </CardContent>
         </Card>
 
+        {/* Overall Learning Suggestions */}
+        {data.overallSuggestions && data.overallSuggestions.length > 0 && (
+          <Card className="w-full shadow-elevated border-none rounded-3xl overflow-hidden">
+            <CardHeader className="bg-gradient-hero relative">
+              <CardTitle className="text-3xl font-bold text-primary-foreground flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-white flex items-center justify-center shadow-lg flex-shrink-0">
+                  <Target className="w-7 h-7 text-secondary" />
+                </div>
+                <span className="flex-shrink-0">整体学习建议</span>
+              </CardTitle>
+              <p className="text-base text-primary-foreground/90 mt-2 font-medium">
+                基于所有维度的综合分析，为您提供3条可直接告知家长的学习建议
+              </p>
+            </CardHeader>
+            <CardContent className="pt-6">
+              <div className="space-y-6">
+                {data.overallSuggestions.map((suggestion, idx) => {
+                  const summaryText = suggestion.performanceSummary?.trim() || "";
+                  const actionText = suggestion.description?.trim() || "";
+                  const combinedText = [summaryText, actionText].filter(Boolean).join("");
+                  const fallbackCombinedText =
+                    "总结该生在两次课堂中的共性表现、量化数据与显著变化。通过阅读和词汇卡片游戏，帮助学生扩大词汇量。鼓励家长在家中配合练习，并记录成效。";
+
+                  return (
+                    <div
+                      key={idx}
+                      className="p-6 rounded-2xl bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/20 shadow-md hover:shadow-lg transition-all"
+                    >
+                      <div className="flex gap-4 items-start">
+                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary to-primary/80 text-primary-foreground flex items-center justify-center flex-shrink-0 font-bold text-xl shadow-sm">
+                          {idx + 1}
+                        </div>
+                        <div className="flex-1 min-w-0 space-y-4">
+                          <EditableText
+                            value={suggestion.title}
+                            onChange={(newValue) => handleFieldChange(["overallSuggestions", idx, "title"], newValue)}
+                            isEditing={isEditing}
+                            as="h3"
+                            className="font-bold text-primary text-xl"
+                            placeholder="请为该条建议添加聚焦主题"
+                          />
+
+                          <div className="rounded-2xl border border-white/60 bg-white/90 p-5 shadow-inner">
+                            {isEditing ? (
+                              <div className="space-y-4">
+                                <EditableText
+                                  value={summaryText}
+                                  onChange={(newValue) =>
+                                    handleFieldChange(["overallSuggestions", idx, "performanceSummary"], newValue)
+                                  }
+                                  isEditing={isEditing}
+                                  multiline
+                                  rows={4}
+                                  as="p"
+                                  className="text-base text-foreground leading-relaxed"
+                                  editingClassName="text-base leading-relaxed min-h-[120px] w-full"
+                                  placeholder="总结该生在两次课堂中的共性表现、量化数据与显著变化。"
+                                />
+                                <EditableText
+                                  value={actionText}
+                                  onChange={(newValue) => handleFieldChange(["overallSuggestions", idx, "description"], newValue)}
+                                  isEditing={isEditing}
+                                  multiline
+                                  rows={6}
+                                  as="p"
+                                  className="text-base text-muted-foreground leading-relaxed"
+                                  editingClassName="text-base text-muted-foreground leading-relaxed min-h-[160px] w-full"
+                                  placeholder="通过阅读和词汇卡片游戏，帮助学生扩大词汇量，并列出家长可执行的频次、方法和预期效果。"
+                                />
+                              </div>
+                            ) : (
+                              <p className="text-base text-foreground leading-relaxed whitespace-pre-line">
+                                {combinedText || fallbackCombinedText}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Action Buttons */}
         <div id="action-buttons" className="flex flex-col lg:flex-row gap-4 justify-between items-start lg:items-center mt-8 flex-wrap">
           <div className="flex flex-col sm:flex-row gap-4 flex-wrap">

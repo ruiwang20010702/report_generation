@@ -707,29 +707,40 @@ export class AnalysisJobQueue {
   /**
    * 从数据库恢复未完成的任务
    * 在服务器启动时调用
+   * @param timeWindowHours 只恢复指定小时数内的任务，默认 2 小时
    */
-  async recoverPendingJobs(): Promise<number> {
+  async recoverPendingJobs(timeWindowHours: number = 2): Promise<number> {
     if (!this.persistenceEnabled) {
       this.logEvent('recovery_skipped', { reason: 'persistence_disabled' });
       return 0;
     }
 
     try {
-      // 查询所有未完成的任务（queued 或 processing）
+      // 验证时间窗口参数（防止注入）
+      const safeTimeWindowHours = Math.max(0, Math.floor(Number(timeWindowHours) || 2));
+      
+      // 查询指定时间窗口内未完成的任务（queued 或 processing）
       const result = await pool.query(
         `SELECT job_id, status, request_data, use_mock, submitted_at, started_at
          FROM analysis_jobs
          WHERE status IN ('queued', 'processing')
+           AND submitted_at > NOW() - INTERVAL '${safeTimeWindowHours} hours'
          ORDER BY submitted_at ASC`
       );
 
       const recoveredCount = result.rows.length;
       if (recoveredCount === 0) {
-        this.logEvent('recovery_completed', { recovered: 0 });
+        this.logEvent('recovery_completed', { 
+          recovered: 0, 
+          timeWindowHours 
+        });
         return 0;
       }
 
-      this.logEvent('recovery_started', { pending: recoveredCount });
+      this.logEvent('recovery_started', { 
+        pending: recoveredCount,
+        timeWindowHours
+      });
 
       // 恢复每个任务到内存
       for (const row of result.rows) {
@@ -774,7 +785,8 @@ export class AnalysisJobQueue {
 
       this.logEvent('recovery_completed', {
         recovered: this.jobOrder.length,
-        totalPending: recoveredCount
+        totalPending: recoveredCount,
+        timeWindowHours
       });
 
       // 恢复后触发队列处理

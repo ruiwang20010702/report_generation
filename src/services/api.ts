@@ -80,6 +80,7 @@ export interface GrammarExample {
 export interface Suggestion {
   title: string;
   description: string;
+  performanceSummary?: string;
 }
 
 export interface CostBreakdown {
@@ -166,6 +167,7 @@ export interface VideoAnalysisResponse {
       suggestions: Suggestion[];
     };
   };
+  overallSuggestions: Suggestion[];  // 3条综合性的整体学习建议
   costBreakdown?: CostBreakdown;  // 成本详情（可选）
   reportId?: string;
   generatedAt?: string;

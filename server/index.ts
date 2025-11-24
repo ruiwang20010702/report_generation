@@ -157,6 +157,7 @@ const server = app.listen(PORT, async () => {
   });
   
   const disableJobRecovery = process.env.DISABLE_ANALYSIS_JOB_RECOVERY === 'true';
+  const jobRecoveryTimeWindowHours = parseInt(process.env.JOB_RECOVERY_TIME_WINDOW_HOURS || '2', 10);
 
   // 测试数据库连接
   if (process.env.DATABASE_URL || process.env.POSTGRES_CONNECTION_STRING || process.env.DB_HOST) {
@@ -173,11 +174,11 @@ const server = app.listen(PORT, async () => {
         );
       } else {
         try {
-          const recoveredCount = await analysisJobQueue.recoverPendingJobs();
+          const recoveredCount = await analysisJobQueue.recoverPendingJobs(jobRecoveryTimeWindowHours);
           if (recoveredCount > 0) {
-            logger.info('queue', `Recovered ${recoveredCount} pending jobs from database`);
+            logger.info('queue', `Recovered ${recoveredCount} pending jobs from database (within ${jobRecoveryTimeWindowHours} hours)`);
           } else {
-            logger.info('queue', 'No pending jobs to recover');
+            logger.info('queue', `No pending jobs to recover (within ${jobRecoveryTimeWindowHours} hours)`);
           }
         } catch (error) {
           logger.error('queue', 'Failed to recover pending jobs', {

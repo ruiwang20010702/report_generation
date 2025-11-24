@@ -49,6 +49,7 @@ export interface IntonationExample {
 export interface Suggestion {
   title: string;
   description: string;
+  performanceSummary: string;  // 必填字段：表现数据摘要，用于给家长展示量化指标
 }
 
 export interface CostBreakdown {
@@ -135,6 +136,7 @@ export interface VideoAnalysisResponse {
       suggestions: Suggestion[];
     };
   };
+  overallSuggestions: Suggestion[];  // 3条综合性的整体学习建议
   costBreakdown?: CostBreakdown;  // 成本详情（可选）
 }
 
