@@ -350,40 +350,17 @@ export const ReportDisplay = ({ data: initialData, onBack }: ReportDisplayProps)
       description: "请稍候，正在将报告转换为图片",
     });
 
-    let reportElement: HTMLElement | null = null;
-    let buttonsElement: HTMLElement | null = null;
-    let originalBodyHadClass = false;
-    let originalWidthStyle = '';
-    let originalMaxWidthStyle = '';
-    let originalExportWidthVar = '';
-    let computedWidth = 0;
-    let computedHeight = 0;
-
     try {
       // 获取要截图的元素
-      reportElement = document.getElementById('report-content');
+      const reportElement = document.getElementById('report-content');
       if (!reportElement) {
         throw new Error('找不到报告内容');
       }
 
-      originalBodyHadClass = document.body.classList.contains('report-exporting');
-      originalWidthStyle = reportElement.style.width;
-      originalMaxWidthStyle = reportElement.style.maxWidth;
-      originalExportWidthVar = reportElement.style.getPropertyValue('--report-export-width');
-      computedWidth = Math.ceil(reportElement.getBoundingClientRect().width);
-      computedHeight = Math.ceil(reportElement.scrollHeight);
-
-      // 临时隐藏按钮区域
-      buttonsElement = document.getElementById('action-buttons');
-      if (buttonsElement) {
-        buttonsElement.style.display = 'none';
-      }
-
-      // 锁定宽度并应用导出样式，防止响应式断点发生变化
-      reportElement.style.width = `${computedWidth}px`;
-      reportElement.style.maxWidth = `${computedWidth}px`;
-      reportElement.style.setProperty('--report-export-width', `${computedWidth}px`);
-      document.body.classList.add('report-exporting');
+      // 1. 强制设定一个理想的导出宽度 (例如 1024px)，保证双列/三列布局完美展示
+      // 这样无论用户当前窗口是宽是窄，导出的图片排版都是统一的
+      const EXPORT_WIDTH = 1400; 
+      const computedHeight = Math.ceil(reportElement.scrollHeight);
 
       // 使用 html2canvas 生成高质量截图
       const canvas = await html2canvas(reportElement, {
@@ -392,27 +369,38 @@ export const ReportDisplay = ({ data: initialData, onBack }: ReportDisplayProps)
         allowTaint: true,
         backgroundColor: '#f5f5f5',
         logging: false,
-        width: computedWidth,
+        width: EXPORT_WIDTH,      // 强制宽度
+        windowWidth: EXPORT_WIDTH, // 模拟窗口宽度
         height: computedHeight,
-        windowWidth: computedWidth,
         windowHeight: computedHeight,
         onclone: (clonedDoc) => {
-          // 确保克隆的文档中所有元素都渲染完成
           const clonedElement = clonedDoc.getElementById('report-content');
           if (clonedElement) {
-            // 强制所有 flex 容器使用固定布局
-            clonedElement.style.width = `${computedWidth}px`;
-            clonedElement.style.maxWidth = `${computedWidth}px`;
-            clonedElement.style.setProperty('--report-export-width', `${computedWidth}px`);
+            // 锁定克隆元素的宽度，确保布局响应式规则按 1024px 执行
+            clonedElement.style.width = `${EXPORT_WIDTH}px`;
+            clonedElement.style.maxWidth = `${EXPORT_WIDTH}px`;
+            clonedElement.style.margin = '0 auto'; // 居中
+            clonedElement.style.setProperty('--report-export-width', `${EXPORT_WIDTH}px`);
+            
+            // 优化：在导出模式下，强制所有卡片高度拉伸，避免参差不齐
+            const cards = clonedElement.querySelectorAll('.grid > div');
+            cards.forEach((card) => {
+                if (card instanceof HTMLElement) {
+                    card.style.height = '100%';
+                }
+            });
           }
+          
+          // 给克隆的 body 添加导出类名
           clonedDoc.body.classList.add('report-exporting');
+
+          // 在克隆的文档中隐藏按钮区域
+          const buttonsElement = clonedDoc.getElementById('action-buttons');
+          if (buttonsElement) {
+            buttonsElement.style.display = 'none';
+          }
         },
       });
-
-      // 恢复按钮显示
-      if (buttonsElement) {
-        buttonsElement.style.display = '';
-      }
 
       // 将 canvas 转换为图片并下载
       const blob = await new Promise<Blob>((resolve, reject) => {
@@ -449,21 +437,6 @@ export const ReportDisplay = ({ data: initialData, onBack }: ReportDisplayProps)
         variant: "destructive",
       });
     } finally {
-      if (reportElement) {
-        reportElement.style.width = originalWidthStyle;
-        reportElement.style.maxWidth = originalMaxWidthStyle;
-        if (originalExportWidthVar) {
-          reportElement.style.setProperty('--report-export-width', originalExportWidthVar);
-        } else {
-          reportElement.style.removeProperty('--report-export-width');
-        }
-      }
-      if (!originalBodyHadClass) {
-        document.body.classList.remove('report-exporting');
-      }
-      if (buttonsElement) {
-        buttonsElement.style.display = '';
-      }
       setIsDownloading(false);
     }
   };
@@ -597,7 +570,7 @@ export const ReportDisplay = ({ data: initialData, onBack }: ReportDisplayProps)
 
                 return (
                   <div key={key} className={`rounded-2xl border-none shadow-md ${item.bgColor} overflow-hidden transition-transform hover:scale-[1.02]`}>
-                    <div className="flex flex-row items-stretch h-full">
+                    <div className="flex flex-row items-stretch h-full min-h-[180px]">
                       {/* Left side - Information */}
                       <div className="flex-1 p-5 flex flex-col justify-center">
                         <div className="flex items-center gap-3 mb-3">
@@ -1080,7 +1053,7 @@ export const ReportDisplay = ({ data: initialData, onBack }: ReportDisplayProps)
                                   multiline
                                   rows={4}
                                   as="p"
-                                  className="text-base text-foreground leading-relaxed"
+                                  className="text-lg text-foreground leading-8"
                                   editingClassName="text-base leading-relaxed min-h-[120px] w-full"
                                   placeholder="总结该生在两次课堂中的共性表现、量化数据与显著变化。"
                                 />
@@ -1091,13 +1064,13 @@ export const ReportDisplay = ({ data: initialData, onBack }: ReportDisplayProps)
                                   multiline
                                   rows={6}
                                   as="p"
-                                  className="text-base text-muted-foreground leading-relaxed"
+                                  className="text-lg text-muted-foreground leading-8 mt-4"
                                   editingClassName="text-base text-muted-foreground leading-relaxed min-h-[160px] w-full"
                                   placeholder="通过阅读和词汇卡片游戏，帮助学生扩大词汇量，并列出家长可执行的频次、方法和预期效果。"
                                 />
                               </div>
                             ) : (
-                              <p className="text-base text-foreground leading-relaxed whitespace-pre-line">
+                              <p className="text-lg text-foreground leading-8 whitespace-pre-line tracking-wide">
                                 {combinedText || fallbackCombinedText}
                               </p>
                             )}
