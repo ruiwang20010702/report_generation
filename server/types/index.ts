@@ -83,6 +83,13 @@ export interface CostBreakdown {
       totalTokens: number;
       cost: number;
     };
+    postProcessing?: {         // 后处理 AI 调用成本（可选，用于修复数据不一致等）
+      promptTokens: number;
+      completionTokens: number;
+      totalTokens: number;
+      cost: number;
+      callCount: number;       // 后处理 AI 调用次数
+    };
     totalTokens: number;       // 总token数
     totalCost: number;         // AI分析总成本（元）
     currency: string;          // 货币单位

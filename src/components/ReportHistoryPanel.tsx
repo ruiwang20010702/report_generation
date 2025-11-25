@@ -99,7 +99,7 @@ export const ReportHistoryPanel = ({
           </div>
         )}
 
-        <ScrollArea className="max-h-80 pr-2">
+        <ScrollArea className="h-[400px] pr-3 [&>div>div]:!block">
           {loading ? (
             <div className="space-y-3">
               {Array.from({ length: 3 }).map((_, index) => (
@@ -113,11 +113,11 @@ export const ReportHistoryPanel = ({
                 : "暂未找到历史报告记录。生成分析后会自动保存到这里"}
             </div>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-3 pb-2">
               {filteredReports.map((report) => (
                 <div
                   key={report.id}
-                  className="flex flex-col gap-3 rounded-lg border border-border px-3 py-3 sm:flex-row sm:items-center sm:justify-between"
+                  className="flex flex-col gap-3 rounded-lg border border-border px-3 py-3 sm:flex-row sm:items-center sm:justify-between hover:bg-muted/50 transition-colors"
                 >
                   <div className="space-y-1">
                     <div className="font-medium text-sm sm:text-base">

@@ -8,6 +8,13 @@ import { reportRecordService } from './reportRecordService.js';
 import type { ReportRecordMeta } from './reportRecordService.js';
 import { AppError, ErrorType } from '../utils/errors.js';
 import { alertServiceError } from './alertService.js';
+import { 
+  withRetry, 
+  safeJSONParse, 
+  createFallbackAnalysisResponse,
+  createFallbackComparisonResponse,
+  type AICallConfig 
+} from '../utils/aiServiceWrapper.js';
 
 /**
  * 📝 报告字数配置
@@ -70,6 +77,17 @@ function calculateAICost(model: string, promptTokens: number, completionTokens: 
   const inputCost = (promptTokens / 1000) * pricing.input;
   const outputCost = (completionTokens / 1000) * pricing.output;
   return inputCost + outputCost;
+}
+
+/**
+ * 📊 后处理 AI 调用的使用量统计
+ */
+interface PostProcessingUsage {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  cost: number;
+  callCount: number;  // 实际调用次数
 }
 
 
@@ -279,7 +297,17 @@ export class VideoAnalysisService {
       const model = this.getModelName(openai);
       const provider = this.getProviderInfo(openai);
       console.log(`${provider} 正在分析 ${videoLabel}，模型: ${model}`);
-      const response = await openai.chat.completions.create({
+      
+      // 使用重试机制调用 AI
+      const aiCallConfig: AICallConfig = {
+        maxRetries: 3,
+        retryDelayBase: 2000,
+        timeout: 120000, // 2分钟超时
+        operationLabel: `单视频分析(${videoLabel})`,
+      };
+      
+      const response = await withRetry(
+        () => openai.chat.completions.create({
         model: model,
         messages: [
           {
@@ -406,7 +434,9 @@ ${speakerInfo}
         response_format: { type: "json_object" },
         temperature: 0.1,  // 极低温度确保 AI 严格遵守 JSON schema，特别是 handRaising/answerLength/completeSentences/readingAccuracy 等关键数字字段
         max_tokens: 4000
-      });
+      }),
+        aiCallConfig
+      );
 
       const analysisText = response.choices[0]?.message?.content || '{}';
       
@@ -1194,22 +1224,33 @@ ${JSON.stringify(video2Analysis, null, 2)}
       const provider = this.getProviderInfo(openai);
       console.log(`${provider} 正在生成对比报告，模型: ${model}`);
 
-      const response = await openai.chat.completions.create({
-        model: model,
-        messages: [
-          {
-            role: "system",
-            content: "你是一位专业的英语教学专家。你必须严格遵守用户提供的所有约束和规范，特别是关于 performanceSummary 和 description 字段的生成要求。请以JSON格式返回详细的学习分析报告，确保每条建议都包含具体的数据、频次、时长和验证标准。"
-          },
-          {
-            role: "user",
-            content: prompt
-          }
-        ],
-        response_format: { type: "json_object" },
-        temperature: 0.1,  // 极低温度确保 AI 严格遵循 prompt 中的所有约束和规范，减少随机性和创造性
-        max_tokens: 5000
-      });
+      // 使用重试机制调用 AI
+      const aiCallConfig: AICallConfig = {
+        maxRetries: 3,
+        retryDelayBase: 2000,
+        timeout: 180000, // 3分钟超时（对比报告更复杂）
+        operationLabel: `对比报告生成(${studentInfo.studentName})`,
+      };
+
+      const response = await withRetry(
+        () => openai.chat.completions.create({
+          model: model,
+          messages: [
+            {
+              role: "system",
+              content: "你是一位专业的英语教学专家。你必须严格遵守用户提供的所有约束和规范，特别是关于 performanceSummary 和 description 字段的生成要求。请以JSON格式返回详细的学习分析报告，确保每条建议都包含具体的数据、频次、时长和验证标准。"
+            },
+            {
+              role: "user",
+              content: prompt
+            }
+          ],
+          response_format: { type: "json_object" },
+          temperature: 0.1,  // 极低温度确保 AI 严格遵循 prompt 中的所有约束和规范，减少随机性和创造性
+          max_tokens: 5000
+        }),
+        aiCallConfig
+      );
 
       const content = response.choices[0]?.message?.content;
       if (!content) {
@@ -1287,8 +1328,35 @@ ${JSON.stringify(video2Analysis, null, 2)}
       // 验证并修复 overallSuggestions 中缺失的 performanceSummary 字段
       this.validateAndFixOverallSuggestions(analysisData);
       
+      // 后处理 AI 调用使用量累加器
+      let postProcessingUsage: PostProcessingUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0, cost: 0, callCount: 0 };
+      
       // 验证并修复负值百分比（低于 0% 的调整为 +5%，并重新生成分析文字）
-      await this.validateAndFixNegativePercentages(analysisData, openai, model);
+      // ⚠️ 必须先修复 learningData，再检查 overallSuggestions 的数据一致性
+      const negativeFixUsage = await this.validateAndFixNegativePercentages(analysisData, openai, model);
+      postProcessingUsage.promptTokens += negativeFixUsage.promptTokens;
+      postProcessingUsage.completionTokens += negativeFixUsage.completionTokens;
+      postProcessingUsage.totalTokens += negativeFixUsage.totalTokens;
+      postProcessingUsage.cost += negativeFixUsage.cost;
+      postProcessingUsage.callCount += negativeFixUsage.callCount;
+      
+      // 验证并修复 overallSuggestions 中引用的数据与 learningData 不一致的问题
+      // ⚠️ 放在负值修复之后，确保用修复后的正确数据来校验一致性
+      const consistencyFixUsage = await this.validateAndFixDataConsistency(analysisData, openai, model);
+      postProcessingUsage.promptTokens += consistencyFixUsage.promptTokens;
+      postProcessingUsage.completionTokens += consistencyFixUsage.completionTokens;
+      postProcessingUsage.totalTokens += consistencyFixUsage.totalTokens;
+      postProcessingUsage.cost += consistencyFixUsage.cost;
+      postProcessingUsage.callCount += consistencyFixUsage.callCount;
+      
+      // 输出后处理 AI 调用总使用量
+      if (postProcessingUsage.callCount > 0) {
+        console.log(`\n💰 ===== 后处理 AI 调用总使用量 =====`);
+        console.log(`   调用次数: ${postProcessingUsage.callCount}`);
+        console.log(`   Token 使用: ${postProcessingUsage.promptTokens} input + ${postProcessingUsage.completionTokens} output = ${postProcessingUsage.totalTokens} total`);
+        console.log(`   成本: ¥${postProcessingUsage.cost.toFixed(4)}`);
+        console.log(`======================================\n`);
+      }
       
       // 确保 overallSuggestions 字段存在且有效，只在模型完全没有返回时才使用兜底
       if (!analysisData.overallSuggestions || !Array.isArray(analysisData.overallSuggestions) || analysisData.overallSuggestions.length === 0) {
@@ -1324,12 +1392,12 @@ ${JSON.stringify(video2Analysis, null, 2)}
       console.log(`💰 对比报告 Token 使用量: ${comparisonPromptTokens} input + ${comparisonCompletionTokens} output = ${comparisonTotalTokens} total`);
       console.log(`💰 对比报告成本: ¥${comparisonCost.toFixed(4)}`);
       
-      // 汇总所有成本
+      // 汇总所有成本（包括后处理 AI 调用）
       const video1Usage = video1Result.usage || { promptTokens: 0, completionTokens: 0, totalTokens: 0, cost: 0 };
       const video2Usage = video2Result.usage || { promptTokens: 0, completionTokens: 0, totalTokens: 0, cost: 0 };
       
-      const totalAITokens = video1Usage.totalTokens + video2Usage.totalTokens + comparisonTotalTokens;
-      const totalAICost = video1Usage.cost + video2Usage.cost + comparisonCost;
+      const totalAITokens = video1Usage.totalTokens + video2Usage.totalTokens + comparisonTotalTokens + postProcessingUsage.totalTokens;
+      const totalAICost = video1Usage.cost + video2Usage.cost + comparisonCost + postProcessingUsage.cost;
       
       // 转录成本
       const video1TranscriptionCost = video1Result.transcription.cost?.totalCost || 0;
@@ -1343,6 +1411,11 @@ ${JSON.stringify(video2Analysis, null, 2)}
       console.log(`\n💰 ===== 成本汇总 =====`);
       console.log(`   转录成本: ¥${totalTranscriptionCost.toFixed(2)} (${totalTranscriptionMinutes}分钟)`);
       console.log(`   AI分析成本: ¥${totalAICost.toFixed(4)} (${totalAITokens} tokens)`);
+      if (postProcessingUsage.callCount > 0) {
+        console.log(`     ├─ 视频分析: ¥${(video1Usage.cost + video2Usage.cost).toFixed(4)}`);
+        console.log(`     ├─ 对比报告: ¥${comparisonCost.toFixed(4)}`);
+        console.log(`     └─ 后处理修复: ¥${postProcessingUsage.cost.toFixed(4)} (${postProcessingUsage.callCount}次调用)`);
+      }
       console.log(`   总成本: ¥${totalCost.toFixed(4)}`);
       console.log(`======================\n`);
       
@@ -1378,6 +1451,13 @@ ${JSON.stringify(video2Analysis, null, 2)}
             totalTokens: comparisonTotalTokens,
             cost: comparisonCost
           },
+          postProcessing: postProcessingUsage.callCount > 0 ? {
+            promptTokens: postProcessingUsage.promptTokens,
+            completionTokens: postProcessingUsage.completionTokens,
+            totalTokens: postProcessingUsage.totalTokens,
+            cost: postProcessingUsage.cost,
+            callCount: postProcessingUsage.callCount
+          } : undefined,
           totalTokens: totalAITokens,
           totalCost: totalAICost,
           currency: 'CNY'
@@ -1659,19 +1739,315 @@ ${JSON.stringify(video2Analysis, null, 2)}
   }
 
   /**
+   * 验证并修复 overallSuggestions 中引用的数据与 learningData 不一致的问题
+   * 确保建议中引用的百分比数据与 learningData 卡片中显示的数据一致
+   */
+  private async validateAndFixDataConsistency(
+    analysisData: any,
+    openai: OpenAI,
+    model: string
+  ): Promise<PostProcessingUsage> {
+    const emptyUsage: PostProcessingUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0, cost: 0, callCount: 0 };
+    
+    if (!analysisData?.learningData || !analysisData?.overallSuggestions) {
+      return emptyUsage;
+    }
+
+    const learningData = analysisData.learningData;
+    const suggestions = analysisData.overallSuggestions;
+
+    // 提取 learningData 中的真实数据
+    const realData: Record<string, { percentage: string; label: string }> = {};
+    const metricLabels: Record<string, string> = {
+      handRaising: '主动发言次数|主动回答',
+      answerLength: '回答长度|平均回答长度',
+      completeSentences: '完整句子率|完整句输出|完整句',
+      readingAccuracy: '阅读准确率|阅读准确'
+    };
+
+    for (const [key, labelPattern] of Object.entries(metricLabels)) {
+      const metric = learningData[key];
+      if (metric?.percentage) {
+        realData[key] = {
+          percentage: metric.percentage,
+          label: labelPattern
+        };
+      }
+    }
+
+    console.log(`\n🔍 ===== 数据一致性检查 =====`);
+    console.log(`   learningData 中的真实数据:`);
+    for (const [key, data] of Object.entries(realData)) {
+      console.log(`   - ${key}: ${data.percentage}`);
+    }
+
+    // 检查每条建议中引用的数据是否与 learningData 一致
+    const inconsistencies: Array<{
+      suggestionIndex: number;
+      field: 'performanceSummary' | 'description';
+      foundValue: string;
+      expectedKey: string;
+      expectedValue: string;
+      context: string;
+    }> = [];
+
+    // 常见的百分比模式：93%、+5%、-10%、从75%提升至80%、93%→98%
+    const percentagePattern = /(\d+(?:\.\d+)?)\s*%\s*(?:→|提升至|到|变为)?\s*(\d+(?:\.\d+)?)\s*%?\s*[（(]?\s*([+-]?\d+(?:\.\d+)?)\s*%/g;
+    const simplePercentagePattern = /[（(]?\s*([+-]?\d+(?:\.\d+)?)\s*%\s*[）)]/g;
+
+    for (let i = 0; i < suggestions.length; i++) {
+      const suggestion = suggestions[i];
+      const fieldsToCheck = ['performanceSummary', 'description'] as const;
+
+      for (const field of fieldsToCheck) {
+        const text = suggestion[field] || '';
+        
+        // 检查文本中是否包含与 learningData 不一致的百分比
+        for (const [key, data] of Object.entries(realData)) {
+          const labelPatterns = data.label.split('|');
+          
+          for (const labelPattern of labelPatterns) {
+            // 检查文本是否提到了这个指标
+            if (text.includes(labelPattern)) {
+              // 提取文本中关于这个指标的百分比
+              const labelIndex = text.indexOf(labelPattern);
+              const contextStart = Math.max(0, labelIndex - 10);
+              const contextEnd = Math.min(text.length, labelIndex + labelPattern.length + 50);
+              const context = text.substring(contextStart, contextEnd);
+              
+              // 从上下文中提取百分比变化值
+              const changeMatch = context.match(/[（(]\s*([+-]?\d+(?:\.\d+)?)\s*%\s*[）)]/);
+              if (changeMatch) {
+                const foundPercentage = changeMatch[1].startsWith('+') || changeMatch[1].startsWith('-') 
+                  ? changeMatch[1] + '%' 
+                  : (parseFloat(changeMatch[1]) >= 0 ? '+' + changeMatch[1] + '%' : changeMatch[1] + '%');
+                
+                // 标准化 learningData 中的百分比格式
+                const expectedPercentage = data.percentage.includes('%') ? data.percentage : data.percentage + '%';
+                
+                // 提取数值进行比较
+                const foundValue = parseFloat(changeMatch[1]);
+                const expectedValue = parseFloat(data.percentage.replace(/[^\d.-]/g, ''));
+                
+                // 如果差异超过1%，认为不一致
+                if (Math.abs(foundValue - expectedValue) > 1) {
+                  inconsistencies.push({
+                    suggestionIndex: i,
+                    field,
+                    foundValue: foundPercentage,
+                    expectedKey: key,
+                    expectedValue: expectedPercentage,
+                    context
+                  });
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    if (inconsistencies.length === 0) {
+      console.log(`   ✅ 数据一致性检查通过: overallSuggestions 中的数据与 learningData 一致`);
+      console.log(`======================================\n`);
+      return emptyUsage;
+    }
+
+    console.log(`   ⚠️ 发现 ${inconsistencies.length} 处数据不一致:`);
+    inconsistencies.forEach((inc, idx) => {
+      console.log(`   ${idx + 1}. 建议[${inc.suggestionIndex}].${inc.field}:`);
+      console.log(`      - 引用值: ${inc.foundValue}`);
+      console.log(`      - 期望值 (${inc.expectedKey}): ${inc.expectedValue}`);
+      console.log(`      - 上下文: "${inc.context.substring(0, 80)}..."`);
+    });
+
+    // 调用 AI 重新生成 overallSuggestions，确保数据一致
+    console.log(`\n   🔄 调用 AI 修复数据不一致...`);
+
+    try {
+      const prompt = `你是一位英语教学分析专家。请修复以下学习建议中的数据不一致问题。
+
+**问题说明**：
+overallSuggestions 中引用的学习数据与 learningData 卡片中显示的数据不一致。
+请确保建议中引用的所有百分比数据与下方提供的真实数据完全一致。
+
+**真实的 learningData 数据（必须使用这些数值）**：
+- 主动发言次数: ${realData.handRaising?.percentage || 'N/A'}
+- 回答长度: ${realData.answerLength?.percentage || 'N/A'}
+- 完整句子率: ${realData.completeSentences?.percentage || 'N/A'}
+- 阅读准确率: ${realData.readingAccuracy?.percentage || 'N/A'}
+
+**发现的不一致问题**：
+${inconsistencies.map((inc, idx) => 
+  `${idx + 1}. 建议[${inc.suggestionIndex}] 的 ${inc.field} 中引用了 "${inc.foundValue}"，但 ${inc.expectedKey} 的真实值是 "${inc.expectedValue}"`
+).join('\n')}
+
+**原始的 overallSuggestions**：
+${JSON.stringify(suggestions, null, 2)}
+
+**修复要求**：
+1. 保持建议的结构和主题不变
+2. 将所有引用的百分比数据替换为 learningData 中的真实数值
+3. 如果某个建议引用了错误的指标（如"发音建议"引用了"阅读准确率"），请修正为该建议应该引用的正确指标
+4. 第一条建议应引用: 主动发言次数、回答长度
+5. 第二条建议应引用: 完整句子率
+6. 第三条建议应引用: 阅读准确率（注意：这是"阅读"准确率，不是"发音"准确率）
+7. 确保所有数据格式为 "X→Y（±Z%）" 或 "从X提升/下降至Y（±Z%）"
+
+请以 JSON 格式返回修复后的 overallSuggestions：
+{
+  "overallSuggestions": [
+    {
+      "title": "建议标题",
+      "performanceSummary": "修复后的表现摘要（使用真实数据）",
+      "description": "修复后的详细建议（使用真实数据）"
+    },
+    ...
+  ]
+}`;
+
+      const aiCallConfig: AICallConfig = {
+        maxRetries: 2,
+        retryDelayBase: 1000,
+        timeout: 90000,
+        operationLabel: '数据一致性修复AI调用',
+      };
+
+      const response = await withRetry(
+        () => openai.chat.completions.create({
+          model,
+          messages: [
+            {
+              role: 'system',
+              content: '你是一位专业的英语教学分析专家。请确保修复后的建议中引用的数据与提供的真实数据完全一致。'
+            },
+            {
+              role: 'user',
+              content: prompt
+            }
+          ],
+          response_format: { type: 'json_object' },
+          temperature: 0.2,
+          max_tokens: 2500
+        }),
+        aiCallConfig
+      );
+
+      const content = response.choices[0]?.message?.content;
+      if (!content) {
+        throw new Error('AI 未返回内容');
+      }
+
+      const result = JSON.parse(content);
+      
+      // 提取 AI 调用的使用量
+      const usage = response.usage;
+      const promptTokens = usage?.prompt_tokens || 0;
+      const completionTokens = usage?.completion_tokens || 0;
+      const totalTokens = usage?.total_tokens || 0;
+      const cost = calculateAICost(model, promptTokens, completionTokens);
+      
+      console.log(`💰 数据一致性修复 AI 调用: ${promptTokens} input + ${completionTokens} output = ${totalTokens} tokens, ¥${cost.toFixed(4)}`);
+
+      if (result.overallSuggestions && Array.isArray(result.overallSuggestions) && result.overallSuggestions.length > 0) {
+        analysisData.overallSuggestions = result.overallSuggestions;
+        console.log(`   ✅ 数据一致性修复完成`);
+        console.log(`   📊 已更新 ${result.overallSuggestions.length} 条建议`);
+      } else {
+        console.warn(`   ⚠️ AI 返回的数据无效，尝试降级修复`);
+        this.fallbackFixDataConsistency(analysisData, inconsistencies, realData);
+      }
+
+      console.log(`======================================\n`);
+      
+      return {
+        promptTokens,
+        completionTokens,
+        totalTokens,
+        cost,
+        callCount: 1
+      };
+
+    } catch (error) {
+      console.error(`   ❌ AI 修复数据一致性失败:`, error);
+      console.log(`   ⚠️ 尝试降级修复...`);
+      this.fallbackFixDataConsistency(analysisData, inconsistencies, realData);
+      
+      console.log(`======================================\n`);
+      
+      return emptyUsage;
+    }
+  }
+
+  /**
+   * 降级修复数据一致性 - 使用简单的文本替换
+   */
+  private fallbackFixDataConsistency(
+    analysisData: any,
+    inconsistencies: Array<{
+      suggestionIndex: number;
+      field: 'performanceSummary' | 'description';
+      foundValue: string;
+      expectedKey: string;
+      expectedValue: string;
+      context: string;
+    }>,
+    realData: Record<string, { percentage: string; label: string }>
+  ): void {
+    const suggestions = analysisData.overallSuggestions;
+    let fixedCount = 0;
+
+    for (const inc of inconsistencies) {
+      const suggestion = suggestions[inc.suggestionIndex];
+      if (!suggestion) continue;
+
+      let text = suggestion[inc.field] || '';
+      
+      // 尝试替换不正确的百分比
+      // 查找类似 "(+93%)" 或 "（+93%）" 的模式并替换为正确值
+      const patterns = [
+        new RegExp(`[（(]\\s*${inc.foundValue.replace(/[+\-]/g, '[+-]?').replace('%', '\\s*%')}\\s*[）)]`, 'g'),
+        new RegExp(`${inc.foundValue.replace(/[+\-]/g, '[+-]?').replace('%', '\\s*%')}`, 'g')
+      ];
+
+      for (const pattern of patterns) {
+        if (pattern.test(text)) {
+          const formattedExpected = inc.expectedValue.startsWith('+') || inc.expectedValue.startsWith('-')
+            ? `（${inc.expectedValue}）`
+            : `（${parseFloat(inc.expectedValue) >= 0 ? '+' : ''}${inc.expectedValue}）`;
+          
+          text = text.replace(pattern, formattedExpected);
+          suggestion[inc.field] = text;
+          fixedCount++;
+          break;
+        }
+      }
+    }
+
+    if (fixedCount > 0) {
+      console.log(`   ✅ 降级修复完成: 替换了 ${fixedCount} 处不一致的数据`);
+    } else {
+      console.log(`   ⚠️ 降级修复未能替换任何数据，建议手动检查报告`);
+    }
+  }
+
+  /**
    * 验证并修复负值百分比数据
    * 当 learningData 中的百分比为负值（低于 0%）时：
    * 1. 将百分比调整为 +5%
    * 2. 将 trend 调整为 "提升"
    * 3. 调用 AI 重新生成符合新数据的 analysis 文字
+   * @returns 后处理 AI 调用的使用量统计
    */
   private async validateAndFixNegativePercentages(
     analysisData: any,
     openai: OpenAI,
     model: string
-  ): Promise<void> {
+  ): Promise<PostProcessingUsage> {
+    const emptyUsage: PostProcessingUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0, cost: 0, callCount: 0 };
+    
     if (!analysisData?.learningData) {
-      return;
+      return emptyUsage;
     }
 
     const learningData = analysisData.learningData;
@@ -1713,7 +2089,7 @@ ${JSON.stringify(video2Analysis, null, 2)}
 
     if (metricsToFix.length === 0) {
       console.log('✅ 学习数据百分比验证完成: 无需修复');
-      return;
+      return emptyUsage;
     }
 
     const isProduction = process.env.NODE_ENV === 'production';
@@ -1769,22 +2145,33 @@ ${fieldsToRegenerate.map(f => `
   "${fieldsToRegenerate.map(f => f.key).join('": "新的分析文字",\n  "')}": "新的分析文字"
 }`;
 
-      const response = await openai.chat.completions.create({
-        model,
-        messages: [
-          {
-            role: 'system',
-            content: '你是一位专业的英语教学分析专家，擅长撰写学生学习进步报告。'
-          },
-          {
-            role: 'user',
-            content: prompt
-          }
-        ],
-        response_format: { type: 'json_object' },
-        temperature: 0.3,
-        max_tokens: 1000
-      });
+      // 使用重试机制调用 AI
+      const aiCallConfig: AICallConfig = {
+        maxRetries: 2,
+        retryDelayBase: 1000,
+        timeout: 60000, // 1分钟超时
+        operationLabel: '负百分比修复AI调用',
+      };
+
+      const response = await withRetry(
+        () => openai.chat.completions.create({
+          model,
+          messages: [
+            {
+              role: 'system',
+              content: '你是一位专业的英语教学分析专家，擅长撰写学生学习进步报告。'
+            },
+            {
+              role: 'user',
+              content: prompt
+            }
+          ],
+          response_format: { type: 'json_object' },
+          temperature: 0.3,
+          max_tokens: 1000
+        }),
+        aiCallConfig
+      );
 
       const content = response.choices[0]?.message?.content;
       if (!content) {
@@ -1847,8 +2234,26 @@ ${fieldsToRegenerate.map(f => `
 
       console.log(`======================================\n`);
 
+      // 提取本次 AI 调用的使用量
+      const usage = response.usage;
+      const promptTokens = usage?.prompt_tokens || 0;
+      const completionTokens = usage?.completion_tokens || 0;
+      const totalTokens = usage?.total_tokens || 0;
+      const cost = calculateAICost(model, promptTokens, completionTokens);
+      
+      console.log(`💰 负值修复 AI 调用: ${promptTokens} input + ${completionTokens} output = ${totalTokens} tokens, ¥${cost.toFixed(4)}`);
+
       // 🔄 同步更新 overallSuggestions 中引用的数据
-      await this.syncOverallSuggestionsWithFixedData(analysisData, metricsToFix, openai, model);
+      const syncUsage = await this.syncOverallSuggestionsWithFixedData(analysisData, metricsToFix, openai, model);
+
+      // 合并使用量
+      return {
+        promptTokens: promptTokens + syncUsage.promptTokens,
+        completionTokens: completionTokens + syncUsage.completionTokens,
+        totalTokens: totalTokens + syncUsage.totalTokens,
+        cost: cost + syncUsage.cost,
+        callCount: 1 + syncUsage.callCount
+      };
 
     } catch (error) {
       console.error('❌ AI 重新生成分析文字失败:', error);
@@ -1898,13 +2303,17 @@ ${fieldsToRegenerate.map(f => `
       }
       
       // 🔄 同步更新 overallSuggestions 中引用的数据（降级模式）
-      await this.syncOverallSuggestionsWithFixedData(analysisData, metricsToFix, openai, model);
+      const syncUsage = await this.syncOverallSuggestionsWithFixedData(analysisData, metricsToFix, openai, model);
+      
+      // 降级模式下只返回 sync 的使用量（因为主调用失败了）
+      return syncUsage;
     }
   }
 
   /**
    * 同步更新 overallSuggestions 中引用的修复后数据
    * 当 learningData 中的负值百分比被修复后，需要同步更新 overallSuggestions 中引用这些数据的内容
+   * @returns 后处理 AI 调用的使用量统计
    */
   private async syncOverallSuggestionsWithFixedData(
     analysisData: any,
@@ -1917,9 +2326,11 @@ ${fieldsToRegenerate.map(f => `
     }>,
     openai: OpenAI,
     model: string
-  ): Promise<void> {
+  ): Promise<PostProcessingUsage> {
+    const emptyUsage: PostProcessingUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0, cost: 0, callCount: 0 };
+    
     if (!analysisData?.overallSuggestions || !Array.isArray(analysisData.overallSuggestions) || metricsToFix.length === 0) {
-      return;
+      return emptyUsage;
     }
 
     console.log(`\n🔄 ===== 同步更新 overallSuggestions =====`);
@@ -1983,22 +2394,33 @@ ${JSON.stringify(analysisData.overallSuggestions, null, 2)}
   ]
 }`;
 
-      const response = await openai.chat.completions.create({
-        model,
-        messages: [
-          {
-            role: 'system',
-            content: '你是一位专业的英语教学分析专家，擅长撰写学生学习进步报告。请确保建议内容与提供的数据完全一致。'
-          },
-          {
-            role: 'user',
-            content: prompt
-          }
-        ],
-        response_format: { type: 'json_object' },
-        temperature: 0.3,
-        max_tokens: 2000
-      });
+      // 使用重试机制调用 AI
+      const aiCallConfig: AICallConfig = {
+        maxRetries: 2,
+        retryDelayBase: 1000,
+        timeout: 90000, // 1.5分钟超时
+        operationLabel: 'overallSuggestions同步AI调用',
+      };
+
+      const response = await withRetry(
+        () => openai.chat.completions.create({
+          model,
+          messages: [
+            {
+              role: 'system',
+              content: '你是一位专业的英语教学分析专家，擅长撰写学生学习进步报告。请确保建议内容与提供的数据完全一致。'
+            },
+            {
+              role: 'user',
+              content: prompt
+            }
+          ],
+          response_format: { type: 'json_object' },
+          temperature: 0.3,
+          max_tokens: 2000
+        }),
+        aiCallConfig
+      );
 
       const content = response.choices[0]?.message?.content;
       if (!content) {
@@ -2007,6 +2429,15 @@ ${JSON.stringify(analysisData.overallSuggestions, null, 2)}
 
       const result = JSON.parse(content);
       
+      // 提取 AI 调用的使用量
+      const usage = response.usage;
+      const promptTokens = usage?.prompt_tokens || 0;
+      const completionTokens = usage?.completion_tokens || 0;
+      const totalTokens = usage?.total_tokens || 0;
+      const cost = calculateAICost(model, promptTokens, completionTokens);
+      
+      console.log(`💰 同步建议 AI 调用: ${promptTokens} input + ${completionTokens} output = ${totalTokens} tokens, ¥${cost.toFixed(4)}`);
+
       if (result.overallSuggestions && Array.isArray(result.overallSuggestions) && result.overallSuggestions.length > 0) {
         // 验证并更新
         const oldSuggestions = JSON.stringify(analysisData.overallSuggestions);
@@ -2030,15 +2461,27 @@ ${JSON.stringify(analysisData.overallSuggestions, null, 2)}
         console.warn(`   ⚠️ AI 返回的 overallSuggestions 无效，保持原样`);
       }
 
+      console.log(`======================================\n`);
+      
+      return {
+        promptTokens,
+        completionTokens,
+        totalTokens,
+        cost,
+        callCount: 1
+      };
+
     } catch (error) {
       console.error(`   ❌ 同步 overallSuggestions 失败:`, error);
       console.log(`   ⚠️ overallSuggestions 保持原样，但数据可能不一致`);
       
       // 降级处理：尝试简单的文本替换
       this.fallbackFixOverallSuggestions(analysisData, metricsToFix);
+      
+      console.log(`======================================\n`);
+      
+      return emptyUsage;
     }
-
-    console.log(`======================================\n`);
   }
 
   /**
