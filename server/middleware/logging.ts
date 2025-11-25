@@ -1,10 +1,32 @@
 /**
  * 结构化日志中间件
  * 提供 requestId 追踪、性能监控、关键操作记录
+ * 
+ * 日志格式（通过 LOG_FORMAT 环境变量控制）：
+ * - json: 结构化 JSON（适合日志聚合系统）
+ * - pretty: 彩色可读格式（适合开发环境）
+ * - compact: 简洁可读格式（适合生产环境人工查看，默认）
  */
 
 import { Request, Response, NextFunction } from 'express';
 import { v4 as uuidv4 } from 'uuid';
+
+/**
+ * 日志格式类型
+ */
+type LogFormat = 'json' | 'pretty' | 'compact';
+
+/**
+ * 获取当前日志格式
+ */
+function getLogFormat(): LogFormat {
+  const format = process.env.LOG_FORMAT?.toLowerCase();
+  if (format === 'json' || format === 'pretty' || format === 'compact') {
+    return format;
+  }
+  // 默认：生产环境用 compact，开发环境用 pretty
+  return process.env.NODE_ENV === 'production' ? 'compact' : 'pretty';
+}
 
 // 扩展 Express Request 类型以包含 requestId
 declare global {
@@ -41,44 +63,172 @@ interface LogEntry {
 }
 
 /**
+ * 日志颜色（ANSI escape codes）
+ */
+const colors = {
+  reset: '\x1b[0m',
+  dim: '\x1b[2m',
+  bold: '\x1b[1m',
+  // 前景色
+  green: '\x1b[32m',
+  yellow: '\x1b[33m',
+  blue: '\x1b[34m',
+  magenta: '\x1b[35m',
+  cyan: '\x1b[36m',
+  red: '\x1b[31m',
+  gray: '\x1b[90m',
+  white: '\x1b[37m',
+};
+
+/**
+ * 状态码颜色
+ */
+function getStatusColor(status: number): string {
+  if (status >= 500) return colors.red;
+  if (status >= 400) return colors.yellow;
+  if (status >= 300) return colors.cyan;
+  if (status >= 200) return colors.green;
+  return colors.white;
+}
+
+/**
+ * 方法颜色
+ */
+function getMethodColor(method: string): string {
+  switch (method) {
+    case 'GET': return colors.green;
+    case 'POST': return colors.blue;
+    case 'PUT': return colors.yellow;
+    case 'DELETE': return colors.red;
+    case 'PATCH': return colors.magenta;
+    case 'OPTIONS': return colors.gray;
+    default: return colors.white;
+  }
+}
+
+/**
  * 结构化日志器类
  */
 class StructuredLogger {
-  private isDevelopment: boolean;
+  private logFormat: LogFormat;
   
   constructor() {
-    this.isDevelopment = process.env.NODE_ENV !== 'production';
+    this.logFormat = getLogFormat();
+  }
+  
+  /**
+   * 格式化时间为简短格式 HH:MM:SS
+   */
+  private formatTime(isoString: string): string {
+    const date = new Date(isoString);
+    return date.toLocaleTimeString('en-US', { hour12: false });
   }
   
   /**
    * 格式化日志输出
    */
   private formatLog(entry: LogEntry): string {
-    if (this.isDevelopment) {
-      // 开发环境：人类可读格式
-      const { timestamp, level, requestId, type, message, duration, ...rest } = entry;
-      let output = `[${timestamp}] [${level.toUpperCase()}]`;
-      
-      if (requestId) {
-        output += ` [${requestId.substring(0, 8)}]`;
-      }
-      
-      output += ` [${type}] ${message}`;
-      
-      if (duration !== undefined) {
-        output += ` (${duration}ms)`;
-      }
-      
-      // 添加额外的上下文信息
-      if (Object.keys(rest).length > 0) {
-        output += ` ${JSON.stringify(rest)}`;
-      }
-      
-      return output;
-    } else {
-      // 生产环境：JSON格式（便于日志聚合系统解析）
+    const format = this.logFormat;
+    const { timestamp, level, requestId, type, message, duration, statusCode, method, ...rest } = entry;
+    const time = this.formatTime(timestamp);
+    
+    if (format === 'json') {
+      // JSON 格式：适合日志聚合系统
       return JSON.stringify(entry);
     }
+    
+    if (format === 'compact') {
+      // Compact 格式：简洁的单行输出，适合生产环境人工查看
+      // 格式: HH:MM:SS LEVEL [type] message key=value
+      const levelTag = level.toUpperCase().padEnd(5);
+      const levelColors: Record<string, string> = {
+        debug: colors.gray,
+        info: colors.blue,
+        warn: colors.yellow,
+        error: colors.red,
+        critical: colors.red + colors.bold,
+      };
+      const levelColor = levelColors[level] || colors.white;
+      
+      // HTTP 请求/响应使用简化格式
+      if (type === 'http_request') {
+        const m = method || '';
+        return `${colors.dim}${time}${colors.reset} ${getMethodColor(m)}→${colors.reset} ${m.padEnd(6)} ${colors.cyan}${rest.path || message}${colors.reset}`;
+      }
+      
+      if (type === 'http_response') {
+        const m = method || '';
+        const status = statusCode || 200;
+        const statusColor = getStatusColor(status);
+        const durationStr = duration !== undefined ? ` ${colors.dim}${duration}ms${colors.reset}` : '';
+        return `${colors.dim}${time}${colors.reset} ${getMethodColor(m)}←${colors.reset} ${m.padEnd(6)} ${colors.cyan}${rest.path || ''}${colors.reset} ${statusColor}${status}${colors.reset}${durationStr}`;
+      }
+      
+      // 其他日志类型
+      let line = `${colors.dim}${time}${colors.reset} ${levelColor}${levelTag}${colors.reset} ${colors.magenta}[${type}]${colors.reset} ${message}`;
+      
+      if (duration !== undefined) {
+        line += ` ${colors.dim}${duration}ms${colors.reset}`;
+      }
+      
+      // 添加重要的 key=value 对
+      const importantKeys = Object.keys(rest).filter(k => 
+        !['ip', 'userAgent', 'path', 'operation', 'success'].includes(k)
+      );
+      if (importantKeys.length > 0) {
+        const kvPairs = importantKeys.map(k => {
+          const v = typeof rest[k] === 'object' ? JSON.stringify(rest[k]) : String(rest[k]);
+          const truncated = v.length > 50 ? v.substring(0, 50) + '...' : v;
+          return `${k}=${truncated}`;
+        }).join(' ');
+        line += ` ${colors.dim}${kvPairs}${colors.reset}`;
+      }
+      
+      return line;
+    }
+    
+    // Pretty 格式：开发环境彩色格式
+    // HTTP 请求/响应使用特殊格式
+    if (type === 'http_request') {
+      const m = method || '';
+      return `${colors.dim}${time}${colors.reset} ${getMethodColor(m)}→ ${m}${colors.reset} ${colors.cyan}${rest.path || message}${colors.reset}`;
+    }
+    
+    if (type === 'http_response') {
+      const m = method || '';
+      const status = statusCode || 200;
+      const statusColor = getStatusColor(status);
+      const durationStr = duration !== undefined ? `${colors.dim}${duration}ms${colors.reset}` : '';
+      return `${colors.dim}${time}${colors.reset} ${getMethodColor(m)}← ${m}${colors.reset} ${colors.cyan}${rest.path || ''}${colors.reset} ${statusColor}${status}${colors.reset} ${durationStr}`;
+    }
+    
+    // 其他日志类型
+    const levelColors: Record<string, string> = {
+      debug: colors.gray,
+      info: colors.blue,
+      warn: colors.yellow,
+      error: colors.red,
+      critical: colors.red + colors.bold,
+    };
+    const levelColor = levelColors[level] || colors.white;
+    const levelTag = level.toUpperCase().padEnd(5);
+    
+    let output = `${colors.dim}${time}${colors.reset} ${levelColor}${levelTag}${colors.reset} ${colors.magenta}[${type}]${colors.reset} ${message}`;
+    
+    if (duration !== undefined) {
+      output += ` ${colors.dim}(${duration}ms)${colors.reset}`;
+    }
+    
+    // 只在有重要额外信息时显示
+    const importantKeys = Object.keys(rest).filter(k => 
+      !['ip', 'userAgent', 'path', 'operation', 'success'].includes(k)
+    );
+    if (importantKeys.length > 0) {
+      const importantRest = Object.fromEntries(importantKeys.map(k => [k, rest[k]]));
+      output += ` ${colors.dim}${JSON.stringify(importantRest)}${colors.reset}`;
+    }
+    
+    return output;
   }
   
   /**
@@ -226,16 +376,32 @@ export function requestIdMiddleware(req: Request, res: Response, next: NextFunct
 }
 
 /**
+ * 需要过滤的路径（不打印日志）
+ */
+const QUIET_PATHS = [
+  '/api/health',
+  '/health',
+  '/favicon.ico',
+];
+
+/**
  * HTTP 请求日志中间件
  */
 export function httpLoggingMiddleware(req: Request, res: Response, next: NextFunction) {
-  // 记录请求开始
-  logger.httpRequest(req);
+  // 跳过 OPTIONS 请求（CORS 预检）和健康检查
+  const isQuiet = req.method === 'OPTIONS' || QUIET_PATHS.some(p => req.path.startsWith(p));
+  
+  if (!isQuiet) {
+    // 记录请求开始
+    logger.httpRequest(req);
+  }
   
   // 记录响应完成
   res.on('finish', () => {
-    const duration = req.startTime ? Date.now() - req.startTime : 0;
-    logger.httpResponse(req, res, duration);
+    if (!isQuiet) {
+      const duration = req.startTime ? Date.now() - req.startTime : 0;
+      logger.httpResponse(req, res, duration);
+    }
   });
   
   next();

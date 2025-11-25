@@ -9,6 +9,11 @@ import { fileURLToPath } from 'url';
 // 因为 tingwuTranscriptionService 等服务在模块加载时就会初始化
 dotenv.config();
 
+// 安装日志控制包装器（必须在其他模块导入之前）
+// 生产环境会自动过滤调试日志，减少日志噪音
+import { installConsoleWrapper } from './utils/logger.js';
+installConsoleWrapper();
+
 // 初始化 Sentry（必须在其他导入之前）
 import { initSentry, sentryRequestHandler, sentryTracingHandler, sentryErrorHandler } from './config/sentry.js';
 const sentryEnabled = initSentry();

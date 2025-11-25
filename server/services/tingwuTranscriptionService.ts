@@ -25,6 +25,10 @@ import * as $OpenApi from '@alicloud/openapi-client';
 import https from 'https';
 import { HttpsProxyAgent } from 'https-proxy-agent';
 import { alertQuotaWarning } from './alertService.js';
+import { createLogger } from '../utils/logger.js';
+
+// 创建模块专用日志器
+const log = createLogger('Tingwu');
 
 export interface TranscriptionResult {
   text: string;

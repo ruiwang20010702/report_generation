@@ -15,6 +15,10 @@ import {
   createFallbackComparisonResponse,
   type AICallConfig 
 } from '../utils/aiServiceWrapper.js';
+import { createLogger, LogLevel, getLogLevel } from '../utils/logger.js';
+
+// 创建模块专用日志器
+const log = createLogger('VideoAnalysis');
 
 /**
  * 📝 报告字数配置
@@ -397,7 +401,8 @@ ${speakerInfo}
       "student": "学生的回答",
       "analysis": "这段对话体现了什么能力或问题"
     }
-  ]
+  ],
+  "pronunciationWords": ["word1", "word2", "word3"]
 }
 
 🔴🔴🔴 **强制要求（必须遵守）：** 🔴🔴🔴
@@ -427,6 +432,17 @@ ${speakerInfo}
 ❌ 如果你返回 handRaising.count=0、answerLength.average=0、readingAccuracy.correctRate=0，这意味着学生完全没有发言，这在正常课堂中是不可能的！
 ✅ 即使无法精确计算，也必须根据对话内容给出合理估算值
 ✅ 例如：如果对话中有 10 个问答回合，学生至少回答了 10 次，平均每次 2-3 词
+
+**四、pronunciationWords 字段（必须提供3个单词）：**
+- 从学生的发言中提取 **3个英文单词**，优先选择你认为学生可能发音有问题的单词
+- 选择标准（按优先级）：
+  1. 包含 th 音的单词（如 think, this, that, three, with）
+  2. 包含 v/w 音的单词（如 very, van, video, want, what）
+  3. 包含 r/l 音的单词（如 really, little, read, look）
+  4. 包含复杂元音的单词（如 found, about, teacher）
+  5. 其他学生实际说过的名词或动词
+- 这些单词必须是学生在对话中**实际说过**的词！
+- 如果找不到发音难点词，就选择学生说过的常见名词或动词，但不要使用示例中的单词。
 
 ⚠️ 这些数据将用于后续的对比分析，是生成个性化学习建议的关键依据！返回全 0 会导致整个报告失败！`
           }
@@ -728,6 +744,121 @@ ${speakerInfo}
         });
       }
 
+      // 🔍 提取学生说过的所有英文单词（用于发音示例验证）
+      const extractStudentWords = (utterances: any[] | undefined): string[] => {
+        if (!utterances) return [];
+        const studentWords = new Set<string>();
+        
+        // 检查是否只有1个speaker（或没有明确区分speaker）
+        const speakers = new Set(utterances.map(u => u.speaker).filter(Boolean));
+        const hasSingleSpeaker = speakers.size <= 1;
+        
+        if (hasSingleSpeaker) {
+          // 🔍 只有1个speaker时，从所有文本中提取名词
+          console.log('📝 [发音分析] 检测到单一speaker，启用名词提取模式');
+          
+          // 常见英语名词列表（教育场景常用）
+          const commonNouns = new Set([
+            // 动物
+            'cat', 'dog', 'bird', 'fish', 'rabbit', 'mouse', 'elephant', 'lion', 'tiger', 'bear',
+            'monkey', 'horse', 'cow', 'pig', 'sheep', 'chicken', 'duck', 'frog', 'snake', 'turtle',
+            'butterfly', 'bee', 'ant', 'spider', 'whale', 'dolphin', 'shark', 'penguin', 'panda', 'giraffe',
+            // 食物
+            'apple', 'banana', 'orange', 'grape', 'strawberry', 'watermelon', 'mango', 'peach', 'pear', 'lemon',
+            'bread', 'rice', 'noodle', 'cake', 'cookie', 'candy', 'chocolate', 'pizza', 'burger', 'sandwich',
+            'egg', 'milk', 'juice', 'water', 'tea', 'coffee', 'soup', 'salad', 'cheese', 'butter',
+            'meat', 'chicken', 'fish', 'vegetable', 'carrot', 'tomato', 'potato', 'onion', 'corn', 'bean',
+            // 家庭/人物
+            'mother', 'father', 'mom', 'dad', 'sister', 'brother', 'grandmother', 'grandfather', 'grandma', 'grandpa',
+            'baby', 'child', 'children', 'boy', 'girl', 'man', 'woman', 'friend', 'teacher', 'student',
+            'doctor', 'nurse', 'police', 'fireman', 'driver', 'farmer', 'chef', 'singer', 'dancer', 'artist',
+            // 身体部位
+            'head', 'hair', 'face', 'eye', 'eyes', 'nose', 'mouth', 'ear', 'ears', 'hand', 'hands',
+            'arm', 'arms', 'leg', 'legs', 'foot', 'feet', 'finger', 'fingers', 'toe', 'toes',
+            // 物品/日常用品
+            'book', 'pen', 'pencil', 'paper', 'bag', 'desk', 'chair', 'table', 'door', 'window',
+            'bed', 'lamp', 'clock', 'phone', 'computer', 'television', 'camera', 'ball', 'toy', 'game',
+            'car', 'bus', 'train', 'plane', 'bike', 'boat', 'ship', 'truck', 'taxi', 'subway',
+            'house', 'home', 'room', 'kitchen', 'bathroom', 'bedroom', 'garden', 'park', 'school', 'hospital',
+            // 衣物
+            'shirt', 'pants', 'dress', 'skirt', 'jacket', 'coat', 'hat', 'cap', 'shoes', 'socks',
+            'gloves', 'scarf', 'glasses', 'watch', 'ring', 'necklace', 'bag', 'umbrella',
+            // 自然/天气
+            'sun', 'moon', 'star', 'cloud', 'rain', 'snow', 'wind', 'sky', 'tree', 'flower',
+            'grass', 'leaf', 'river', 'lake', 'sea', 'ocean', 'mountain', 'hill', 'forest', 'beach',
+            // 颜色（作为名词使用时）
+            'color', 'red', 'blue', 'green', 'yellow', 'orange', 'purple', 'pink', 'black', 'white', 'brown', 'gray',
+            // 数字/时间相关
+            'number', 'time', 'day', 'week', 'month', 'year', 'morning', 'afternoon', 'evening', 'night',
+            'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday',
+            'january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december',
+            // 学校相关
+            'class', 'lesson', 'homework', 'test', 'exam', 'question', 'answer', 'word', 'sentence', 'story',
+            'picture', 'drawing', 'music', 'song', 'dance', 'sport', 'game', 'playground',
+            // 其他常见名词
+            'thing', 'place', 'way', 'world', 'country', 'city', 'town', 'street', 'road',
+            'idea', 'problem', 'example', 'reason', 'fact', 'information', 'news', 'weather',
+            'family', 'group', 'team', 'party', 'meeting', 'birthday', 'holiday', 'vacation', 'trip', 'adventure',
+            // 抽象名词
+            'love', 'happiness', 'fun', 'joy', 'hope', 'dream', 'wish', 'surprise', 'secret', 'magic',
+          ]);
+          
+          // 从所有utterances中提取名词
+          utterances.forEach(utterance => {
+            const text = (utterance.text || '').toLowerCase();
+            // 提取所有英文单词（至少2个字母）
+            const words = text.match(/[a-zA-Z]{2,}/g) || [];
+            words.forEach((word: string) => {
+              const wordLower = word.toLowerCase();
+              // 只保留名词
+              if (commonNouns.has(wordLower)) {
+                studentWords.add(wordLower);
+              }
+            });
+          });
+          
+          console.log(`   从转录文本中提取了 ${studentWords.size} 个名词`);
+        } else {
+          // 多个speaker时，只提取学生的发言（排除老师）
+          utterances.forEach(utterance => {
+            if (utterance.speaker === 'Student' || utterance.speaker === '学生') {
+              // 提取所有英文单词（至少2个字母）
+              const words = (utterance.text || '').match(/[a-zA-Z]{2,}/g) || [];
+              words.forEach((word: string) => studentWords.add(word.toLowerCase()));
+            }
+          });
+        }
+        
+        return Array.from(studentWords).sort();
+      };
+      
+      // 优先使用 AI 分析结果中提取的发音单词
+      const video1AIWords = Array.isArray(video1Analysis.pronunciationWords) ? video1Analysis.pronunciationWords : [];
+      const video2AIWords = Array.isArray(video2Analysis.pronunciationWords) ? video2Analysis.pronunciationWords : [];
+      
+      // 如果 AI 提取了单词，使用 AI 的结果；否则回退到从转录文本提取
+      const video1StudentWords = video1AIWords.length > 0 
+        ? video1AIWords.map((w: string) => w.toLowerCase())
+        : extractStudentWords(video1Result.transcription.utterances);
+      const video2StudentWords = video2AIWords.length > 0 
+        ? video2AIWords.map((w: string) => w.toLowerCase())
+        : extractStudentWords(video2Result.transcription.utterances);
+      
+      // 合并两次课堂学生说过的所有单词
+      const allStudentWords = [...new Set([...video1StudentWords, ...video2StudentWords])].sort();
+      
+      // 🔍 调试日志
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('📝 [发音分析] 学生单词来源:');
+        console.log('  早期课堂:', video1AIWords.length > 0 
+          ? `AI提取(${video1AIWords.join(', ')})` 
+          : `规则提取(${video1StudentWords.length}个): ${video1StudentWords.slice(0, 10).join(', ')}${video1StudentWords.length > 10 ? '...' : ''}`);
+        console.log('  最近课堂:', video2AIWords.length > 0 
+          ? `AI提取(${video2AIWords.join(', ')})` 
+          : `规则提取(${video2StudentWords.length}个): ${video2StudentWords.slice(0, 10).join(', ')}${video2StudentWords.length > 10 ? '...' : ''}`);
+        console.log('  总计:', allStudentWords.length, '个不重复单词');
+      }
+
       // 预提取关键数据用于生成摘要
       const video1Data = {
         handRaising: video1Analysis.handRaising || { count: 0, percentage: 0 },
@@ -1012,19 +1143,19 @@ ${JSON.stringify(video2Analysis, null, 2)}
       "details": "详细的发音问题深度分析。这部分要在overview的基础上进一步展开，包含：1) 具体分析两次课堂中发音问题的类型、频率和严重程度；2) 对比早期课堂和最近课堂的发音表现差异；3) 分析发音问题对整体表达流利度的影响；4) 提供具体的观察细节和案例背景。字数要求：至少${REPORT_WORD_COUNT.improvementAreas.details}词，内容要比overview更加深入和具体。",
       "examples": [
         {
-          "word": "从学生实际对话中找出的第1个发音错误的单词（必须是转录文本中真实出现的单词）",
+          "word": "🔴必须从上方【学生说过的单词列表】中选择🔴 第1个发音错误的单词",
           "incorrect": "学生实际发出的错误发音的IPA音标（⚠️ 必须是错误的、不标准的音标，例如如果学生把big读成/bɪg/是错误的，那么这里应该填写/bɪg/；如果学生把/θ/读成/s/，那么这里应该填写含有/s/的错误音标）",
           "correct": "该单词的标准正确发音的IPA音标（⚠️ 必须是正确的、标准的音标，必须与incorrect字段不同！例如big的正确发音是/bɪɡ/，如果学生读错了，那么correct应该是/bɪɡ/，而incorrect应该是学生实际读出的错误音标）",
           "type": "问题类型（如：元音不准确、重音问题、辅音发音、/θ/和/s/混淆、/v/和/w/混淆等具体的发音错误类型）"
         },
         {
-          "word": "从学生实际对话中找出的第2个发音错误的单词（必须是转录文本中真实出现的单词）",
+          "word": "🔴必须从上方【学生说过的单词列表】中选择🔴 第2个发音错误的单词",
           "incorrect": "学生实际发出的错误发音的IPA音标（⚠️ 必须是错误的、不标准的音标，必须与correct字段的值不同）",
           "correct": "该单词的标准正确发音的IPA音标（⚠️ 必须是正确的、标准的音标，必须与incorrect字段的值不同）",
           "type": "问题类型（如：元音不准确、重音问题、辅音发音、/θ/和/s/混淆、/v/和/w/混淆等具体的发音错误类型）"
         },
         {
-          "word": "从学生实际对话中找出的第3个发音错误的单词（必须是转录文本中真实出现的单词）",
+          "word": "🔴必须从上方【学生说过的单词列表】中选择🔴 第3个发音错误的单词",
           "incorrect": "学生实际发出的错误发音的IPA音标（⚠️ 必须是错误的、不标准的音标，必须与correct字段的值不同）",
           "correct": "该单词的标准正确发音的IPA音标（⚠️ 必须是正确的、标准的音标，必须与incorrect字段的值不同）",
           "type": "问题类型（如：元音不准确、重音问题、辅音发音、/θ/和/s/混淆、/v/和/w/混淆等具体的发音错误类型）"
@@ -1177,8 +1308,15 @@ ${JSON.stringify(video2Analysis, null, 2)}
 4. 基于阈值触发规则，在suggestions中智能添加相应建议
 5. 确保返回有效的JSON格式，不要包含注释
 6. 所有文字描述要详实、具体、有数据支撑
-7. ⚠️⚠️⚠️ 【关键】发音示例（pronunciation.examples）的音标要求：
-   - 单词：必须从学生实际转录对话中找出（不要使用示例单词如 nine、bag、fine 等）
+7. ⚠️⚠️⚠️ 【关键】发音示例（pronunciation.examples）的单词和音标要求：
+
+   🔴🔴🔴 **【单词必须从以下列表中选择】** 🔴🔴🔴
+   以下是学生在两次课堂中实际说过的所有单词（共${allStudentWords.length}个）：
+   ${allStudentWords.slice(0, 100).join(', ')}${allStudentWords.length > 100 ? '...(仅显示前100个)' : ''}
+   
+   ❌ 严禁使用不在上述列表中的单词！
+   ❌ 严禁编造单词！如果列表中没有合适的单词，宁可少给示例！
+   
    - incorrect字段：必须填写学生实际发出的【错误】音标（例如：如果学生把/bɪɡ/读成/bɪg/，这里应该填/bɪg/；如果学生把think读成sink，这里应该填/sɪŋk/）
    - correct字段：必须填写该单词的【标准正确】音标（例如：big的标准音标是/bɪɡ/，think的标准音标是/θɪŋk/）
    - ❌❌❌ 严重错误示例（绝对禁止）：
@@ -1321,8 +1459,8 @@ ${JSON.stringify(video2Analysis, null, 2)}
         }
       }
       
-      // 验证并修复发音示例中的重复音标问题
-      this.validateAndFixPronunciationExamples(analysisData);
+      // 验证并修复发音示例中的重复音标问题和单词来源
+      this.validateAndFixPronunciationExamples(analysisData, allStudentWords);
       this.validateAndFixGrammarExamples(analysisData);
       
       // 验证并修复 overallSuggestions 中缺失的 performanceSummary 字段
@@ -2567,21 +2705,36 @@ ${JSON.stringify(analysisData.overallSuggestions, null, 2)}
   }
 
   /**
-   * 验证并修复发音示例中的重复音标问题
-   * 如果 incorrect 和 correct 音标相同，则智能修复音标使其有意义
+   * 验证并修复发音示例中的重复音标问题和单词来源
+   * 1. 如果 incorrect 和 correct 音标相同，则智能修复音标使其有意义
+   * 2. 如果单词不在学生说过的单词列表中，标记并警告
    */
-  private validateAndFixPronunciationExamples(analysisData: any): void {
+  private validateAndFixPronunciationExamples(analysisData: any, studentWords: string[] = []): void {
     if (!analysisData?.improvementAreas?.pronunciation?.examples) {
       return;
     }
 
     const examples = analysisData.improvementAreas.pronunciation.examples;
     let fixedCount = 0;
+    let invalidWordCount = 0;
+    const studentWordsSet = new Set(studentWords.map(w => w.toLowerCase()));
 
     // 规范化音标（移除空格和斜杠，统一比较）
     const normalizePhonetic = (str: string) => this.normalizePhoneticString(str);
 
+    // 过滤掉不在学生单词列表中的示例
+    const validExamples: any[] = [];
+    
     for (const example of examples) {
+      const word = (example.word || '').toLowerCase().trim();
+      
+      // 🔍 验证单词是否在学生说过的单词列表中
+      if (studentWordsSet.size > 0 && !studentWordsSet.has(word)) {
+        invalidWordCount++;
+        console.log(`⚠️ 发音示例单词 "${example.word}" 不在学生说过的单词列表中，将被移除`);
+        continue; // 跳过这个示例，不加入有效列表
+      }
+      
       const beforeIncorrect = example.incorrect;
       const beforeCorrect = example.correct;
       const incorrectNormalized = normalizePhonetic(example.incorrect || '');
@@ -2597,13 +2750,21 @@ ${JSON.stringify(analysisData.overallSuggestions, null, 2)}
           console.log(`   修复 → incorrect="${example.incorrect}", correct="${example.correct}"`);
         }
       }
+      
+      validExamples.push(example);
+    }
+
+    // 更新为过滤后的有效示例
+    if (invalidWordCount > 0) {
+      analysisData.improvementAreas.pronunciation.examples = validExamples;
+      console.log(`🔴 移除了 ${invalidWordCount} 个不在学生单词列表中的发音示例`);
     }
 
     // 日志输出
     if (fixedCount > 0) {
-      console.log(`✅ 发音示例验证完成: ${examples.length} 个示例，其中 ${fixedCount} 个已自动修复`);
+      console.log(`✅ 发音示例验证完成: ${validExamples.length} 个有效示例，其中 ${fixedCount} 个音标已自动修复`);
     } else {
-      console.log(`✅ 发音示例验证完成: 所有 ${examples.length} 个示例均有效`);
+      console.log(`✅ 发音示例验证完成: 所有 ${validExamples.length} 个示例均有效`);
     }
   }
 

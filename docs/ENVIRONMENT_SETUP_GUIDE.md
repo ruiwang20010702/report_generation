@@ -210,6 +210,38 @@ NODE_ENV=production
 USE_MOCK_ANALYSIS=false  # 使用真实AI分析
 ```
 
+#### 3.3 日志配置（可选）
+
+```bash
+# 日志级别控制（生产环境默认 INFO，开发环境默认 DEBUG）
+# 可选值：SILENT, ERROR, WARN, INFO, DEBUG, VERBOSE
+LOG_LEVEL=INFO
+
+# 日志格式
+# compact - 简洁可读格式（生产环境默认，人工查看友好）
+# json - 结构化 JSON 格式（适合日志聚合系统如 ELK、Datadog）
+# pretty - 彩色可读格式（开发环境默认）
+LOG_FORMAT=compact
+```
+
+💡 **日志格式说明**：
+
+| 格式 | 示例输出 | 适用场景 |
+|------|----------|----------|
+| `compact` | `11:01:36 INFO  [http] ← GET /api/auth/me 304 55ms` | **推荐生产配置**，人工查看 |
+| `json` | `{"timestamp":"...","level":"info",...}` | 日志聚合系统（ELK等） |
+| `pretty` | `11:01:36 ℹ️ [HTTP] ← GET /api/auth/me 304` | 开发环境 |
+
+💡 **日志级别说明**：
+| 级别 | 说明 | 适用场景 |
+|------|------|----------|
+| `SILENT` | 完全静默 | 特殊测试场景 |
+| `ERROR` | 仅错误 | 极简生产日志 |
+| `WARN` | 警告+错误 | 保守生产配置 |
+| `INFO` | 信息+警告+错误 | **推荐生产配置** |
+| `DEBUG` | 调试信息 | 开发环境/问题排查 |
+| `VERBOSE` | 详细信息 | 深度调试 |
+
 ---
 
 ## ✅ 验证配置

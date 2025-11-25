@@ -4,6 +4,10 @@ import { AppError, ErrorType } from '../utils/errors.js';
 import { VideoAnalysisService } from './videoAnalysisService.js';
 import { pool } from '../config/database.js';
 import { alertDatabaseError } from './alertService.js';
+import { createLogger } from '../utils/logger.js';
+
+// 创建模块专用日志器
+const log = createLogger('JobQueue');
 
 export type AnalysisJobStatus = 'queued' | 'processing' | 'completed' | 'failed';
 
