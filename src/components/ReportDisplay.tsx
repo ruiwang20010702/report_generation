@@ -48,8 +48,64 @@ const TrendBadge = ({ trend }: { trend: string }) => {
 type DataPath = Array<string | number>;
 
 const cloneData = <T,>(value: T): T => JSON.parse(JSON.stringify(value));
+
+// 深度合并函数：将 source 的新字段合并到 target 中，保留 target 已有的值
+const deepMerge = <T,>(target: T, source: T): T => {
+  const merge = (targetObj: unknown, sourceObj: unknown): unknown => {
+    if (sourceObj === null || sourceObj === undefined) return targetObj;
+    if (targetObj === null || targetObj === undefined) return cloneData(sourceObj);
+    
+    // 如果都是数组，按索引合并
+    if (Array.isArray(targetObj) && Array.isArray(sourceObj)) {
+      // 如果 source 数组更长，扩展 target 数组
+      const merged = [...targetObj];
+      for (let i = 0; i < sourceObj.length; i++) {
+        if (i < merged.length) {
+          // 如果是对象，递归合并
+          if (typeof merged[i] === 'object' && typeof sourceObj[i] === 'object') {
+            merged[i] = merge(merged[i], sourceObj[i]);
+          }
+          // 否则保留 target 的值
+        } else {
+          // target 数组没有这个索引，使用 source 的值
+          merged.push(cloneData(sourceObj[i]));
+        }
+      }
+      return merged;
+    }
+    
+    // 如果都是对象，递归合并
+    if (typeof targetObj === 'object' && typeof sourceObj === 'object') {
+      const merged = { ...(targetObj as Record<string, unknown>) };
+      for (const key of Object.keys(sourceObj as Record<string, unknown>)) {
+        if (!(key in merged)) {
+          // target 没有这个字段，从 source 复制
+          merged[key] = cloneData((sourceObj as Record<string, unknown>)[key]);
+        } else if (typeof merged[key] === 'object' && typeof (sourceObj as Record<string, unknown>)[key] === 'object') {
+          // 两边都有且都是对象，递归合并
+          merged[key] = merge(merged[key], (sourceObj as Record<string, unknown>)[key]);
+        }
+        // 如果 target 已有该字段且不是对象，保留 target 的值
+      }
+      return merged;
+    }
+    
+    // 其他情况返回 target 的值
+    return targetObj;
+  };
+  
+  return merge(cloneData(target), source) as T;
+};
 const STORAGE_KEY_PREFIX = "report-display-data";
-const getStorageKey = (studentId?: string) => `${STORAGE_KEY_PREFIX}:${studentId || "default"}`;
+const MAX_CACHE_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 天过期
+
+interface CachedReport {
+  data: ReportData;
+  savedAt: number;
+}
+
+// 改为按 reportId 存储，每份报告独立缓存
+const getStorageKey = (reportId?: string) => `${STORAGE_KEY_PREFIX}:${reportId || "default"}`;
 
 const parsePercentageValue = (percentage?: string): number | null => {
   if (!percentage) return null;
@@ -148,17 +204,37 @@ export const ReportDisplay = ({ data: initialData, onBack }: ReportDisplayProps)
   const [editableData, setEditableData] = useState<ReportData>(initialData);
   const [serverData, setServerData] = useState<ReportData>(initialData);
   const [aiBaselineData, setAiBaselineData] = useState<ReportData>(initialData);
-  const storageKey = useMemo(() => getStorageKey(initialData.studentId), [initialData.studentId]);
   const reportId = useMemo(() => initialData.reportId || editableData.reportId, [initialData.reportId, editableData.reportId]);
+  // 改为按 reportId 存储，而不是 studentId
+  const storageKey = useMemo(() => getStorageKey(reportId), [reportId]);
 
   const loadFromLocalStorage = useCallback(() => {
     if (typeof window === "undefined") return null;
     const storedValue = localStorage.getItem(storageKey);
     if (!storedValue) return null;
     try {
-      return JSON.parse(storedValue) as ReportData;
+      const parsed = JSON.parse(storedValue);
+      
+      // 兼容旧格式：如果没有 savedAt 字段，说明是旧格式数据，直接丢弃
+      if (!parsed.savedAt) {
+        console.log("检测到旧格式缓存数据，已清除");
+        localStorage.removeItem(storageKey);
+        return null;
+      }
+      
+      const cached = parsed as CachedReport;
+      
+      // 检查是否过期（7 天）
+      if (Date.now() - cached.savedAt > MAX_CACHE_AGE_MS) {
+        console.log("缓存数据已过期，已清除");
+        localStorage.removeItem(storageKey);
+        return null;
+      }
+      
+      return cached.data;
     } catch (error) {
       console.error("解析本地保存的报告数据失败:", error);
+      localStorage.removeItem(storageKey);
       return null;
     }
   }, [storageKey]);
@@ -166,7 +242,11 @@ export const ReportDisplay = ({ data: initialData, onBack }: ReportDisplayProps)
   const saveToLocalStorage = useCallback((dataToSave: ReportData) => {
     if (typeof window === "undefined") return;
     try {
-      localStorage.setItem(storageKey, JSON.stringify(dataToSave));
+      const cached: CachedReport = {
+        data: dataToSave,
+        savedAt: Date.now(),
+      };
+      localStorage.setItem(storageKey, JSON.stringify(cached));
     } catch (error) {
       console.error("保存报告数据到本地失败:", error);
     }
@@ -182,11 +262,15 @@ export const ReportDisplay = ({ data: initialData, onBack }: ReportDisplayProps)
     setServerData(initialData);
     const stored = loadFromLocalStorage();
     if (stored) {
-      setEditableData(stored);
+      // 智能合并：保留用户编辑的值，同时添加新数据中的新字段
+      const merged = deepMerge(stored, initialData);
+      setEditableData(merged);
+      // 同时更新 localStorage 中的数据
+      saveToLocalStorage(merged);
     } else {
       setEditableData(initialData);
     }
-  }, [initialData, loadFromLocalStorage]);
+  }, [initialData, loadFromLocalStorage, saveToLocalStorage]);
 
   const data = editableData;
 
@@ -968,7 +1052,7 @@ export const ReportDisplay = ({ data: initialData, onBack }: ReportDisplayProps)
                   return (
                     <div
                       key={idx}
-                      className="p-6 rounded-2xl bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/20 shadow-md hover:shadow-lg transition-all"
+                      className="p-6 rounded-2xl bg-gradient-to-br from-primary/20 to-primary/10 border-2 border-primary/20 shadow-md hover:shadow-lg transition-all"
                     >
                       <div className="flex gap-4 items-start">
                         <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary to-primary/80 text-primary-foreground flex items-center justify-center flex-shrink-0 font-bold text-xl shadow-sm">
@@ -980,11 +1064,11 @@ export const ReportDisplay = ({ data: initialData, onBack }: ReportDisplayProps)
                             onChange={(newValue) => handleFieldChange(["overallSuggestions", idx, "title"], newValue)}
                             isEditing={isEditing}
                             as="h3"
-                            className="font-bold text-primary text-xl"
+                            className="font-bold text-primary-foreground text-xl drop-shadow-sm"
                             placeholder="请为该条建议添加聚焦主题"
                           />
 
-                          <div className="rounded-2xl border border-white/60 bg-white/90 p-5 shadow-inner">
+                          <div className="rounded-2xl border border-primary/20 bg-primary/10 p-5 shadow-md hover:shadow-lg transition-shadow">
                             {isEditing ? (
                               <div className="space-y-4">
                                 <EditableText

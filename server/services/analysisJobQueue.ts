@@ -334,12 +334,20 @@ export class AnalysisJobQueue {
         });
       }
       
+      const durationMs = job.startedAt && job.completedAt
+        ? job.completedAt.getTime() - job.startedAt.getTime()
+        : undefined;
+      const durationFormatted = durationMs !== undefined
+        ? this.formatDuration(durationMs)
+        : undefined;
+      
       this.logEvent('job_completed', {
         jobId: job.id,
-        durationMs: job.startedAt && job.completedAt
-          ? job.completedAt.getTime() - job.startedAt.getTime()
-          : undefined
+        durationMs,
+        durationFormatted
       });
+      
+      console.log(`✅ [AnalysisJobQueue] 报告生成完成！总用时: ${durationFormatted || '未知'} (jobId: ${job.id})`);
     } catch (error) {
       job.status = 'failed';
       job.error = this.serializeError(error);
@@ -814,6 +822,20 @@ export class AnalysisJobQueue {
       ...details
     };
     console.log(`📊 [AnalysisJobQueue] ${JSON.stringify(payload)}`);
+  }
+
+  /**
+   * 格式化时长为人类可读格式
+   */
+  private formatDuration(ms: number): string {
+    const seconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    
+    if (minutes > 0) {
+      return `${minutes}分${remainingSeconds}秒`;
+    }
+    return `${seconds}秒`;
   }
 }
 

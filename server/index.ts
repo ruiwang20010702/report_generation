@@ -48,16 +48,14 @@ app.use(enableStructuredLogging());
 // 性能指标收集中间件
 app.use(metricsMiddleware);
 
-// 安全中间件
-app.use(enableAllSecurityMiddleware());
-
-// 中间件
+// CORS 中间件（必须在安全中间件和其他中间件之前，以正确处理预检请求）
 app.use(cors({
-  origin: process.env.NODE_ENV === 'production' 
-    ? process.env.ALLOWED_ORIGINS?.split(',') || false 
-    : true, // 生产环境限制CORS，开发环境允许所有来源
+  origin: true, // 允许所有来源（如需限制，可改为具体域名数组如 ['https://yourdomain.com']）
   credentials: true
 }));
+
+// 安全中间件
+app.use(enableAllSecurityMiddleware());
 app.use(cookieParser());
 app.use(express.json({ limit: '10mb' })); // 限制请求体大小
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));

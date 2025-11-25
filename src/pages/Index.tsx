@@ -133,12 +133,12 @@ const Index = () => {
           // 排队中：每10秒轮询一次
           delayMs = 10000;
         } else if (previousStatus === "processing") {
-          // 进行中：前4次用30秒，之后用10秒
+          // 进行中：前6次用30秒，之后用15秒
           // processingPollCount 记录的是在 processing 状态下，除了第一次轮询之外的轮询次数
-          if (processingPollCount < 4) {
+          if (processingPollCount < 6) {
             delayMs = 30000;
           } else {
-            delayMs = 10000;
+            delayMs = 15000;
           }
         } else {
           // 其他状态：默认10秒
@@ -206,11 +206,11 @@ const Index = () => {
         if (latestJob.status === "queued") {
           nextDelayMs = 10000;
         } else if (latestJob.status === "processing") {
-          // 下一次轮询时，如果状态还是 processing，且 processingPollCount < 4，用30秒
-          if (processingPollCount < 4) {
+          // 下一次轮询时，如果状态还是 processing，且 processingPollCount < 6，用30秒
+          if (processingPollCount < 6) {
             nextDelayMs = 30000;
           } else {
-            nextDelayMs = 10000;
+            nextDelayMs = 15000;
           }
         } else {
           nextDelayMs = 10000;
