@@ -286,7 +286,9 @@ export class VideoAnalysisService {
             role: "system",
             content: `你是一位专业的英语教学专家，擅长分析1对1教学场景中学生的英语学习表现。
 你会收到一段英语学习课堂的语音转录文本（包含老师和学生的对话），请详细分析学生的英语能力和表现。
-重点分析：学生的发言内容、主动性、语言能力等，而非老师的教学内容。`
+重点分析：学生的发言内容、主动性、语言能力等，而非老师的教学内容。
+
+🔴 关键要求：你必须返回包含 handRaising、answerLength、completeSentences、readingAccuracy 字段的完整 JSON 对象，这些字段必须包含准确的数字数据，不能为空或缺失。这些数据是后续对比分析和生成个性化建议的核心依据。`
           },
           {
             role: "user",
@@ -354,15 +356,47 @@ ${speakerInfo}
   ]
 }
 
-⚠️ 请确保 handRaising, answerLength, completeSentences, readingAccuracy 字段必须包含准确的数字，这些数据将用于后续的对比分析。`
+🔴🔴🔴 **强制要求（必须遵守）：** 🔴🔴🔴
+
+1. **handRaising 字段是强制的，必须包含：**
+   - count：整数（学生主动回答或发言的次数，包括简单的Yes/No和跟读，不能为空或undefined）
+   - percentage：0-100之间的数字（学生发言占比，不能为空或undefined）
+
+2. **answerLength 字段是强制的，必须包含：**
+   - average：数字（学生平均每次回答的词数，保留1位小数，不能为空或undefined）
+
+3. **completeSentences 字段是强制的，必须包含：**
+   - count：整数（学生说出完整句子的次数，不能为空或undefined）
+   - percentage：0-100之间的数字（完整句占比，不能为空或undefined）
+
+4. **readingAccuracy 字段是强制的，必须包含：**
+   - correctRate：0-100之间的数字（学生准确率，不能为空或undefined）
+
+❌ 如果这4个字段中的任何一个缺失、为空或为undefined，整个分析将无效！
+✅ 即使无法准确计算，也必须根据转录文本给出合理的估算值（例如：如果学生回答了5次，每次平均3词，那么 answerLength.average 应该是 3.0）
+
+⚠️ 这些数据将用于后续的对比分析，是生成个性化学习建议的关键依据！`
           }
         ],
         response_format: { type: "json_object" },
-        temperature: 0.5,  // 降低到0.1以提高输出一致性和确定性（原值0.7会产生更多随机性，0.1更稳定可靠）
+        temperature: 0.1,  // 极低温度确保 AI 严格遵守 JSON schema，特别是 handRaising/answerLength/completeSentences/readingAccuracy 等关键数字字段
         max_tokens: 4000
       });
 
       const analysisText = response.choices[0]?.message?.content || '{}';
+      
+      // 🔍 调试日志：查看单视频分析返回的原始数据
+      try {
+        const parsedAnalysis = JSON.parse(analysisText);
+        console.log(`🔍 [单视频分析] ${videoLabel} 返回的关键字段:`, {
+          handRaising: parsedAnalysis.handRaising,
+          answerLength: parsedAnalysis.answerLength,
+          completeSentences: parsedAnalysis.completeSentences,
+          readingAccuracy: parsedAnalysis.readingAccuracy
+        });
+      } catch (e) {
+        console.error(`❌ [单视频分析] ${videoLabel} 返回的JSON解析失败`);
+      }
       
       // 提取 token 使用量
       const usage = response.usage;
@@ -654,6 +688,13 @@ ${speakerInfo}
         accuracy: video2Analysis.readingAccuracy || { correctRate: 0 }
       };
       
+      // 🔍 调试日志：查看提取的关键数据
+      console.log('📊 [对比分析] 提取的关键数据:');
+      console.log('  早期课堂 (video1):', JSON.stringify(video1Data, null, 2));
+      console.log('  最近课堂 (video2):', JSON.stringify(video2Data, null, 2));
+      console.log('  原始分析 video1Analysis:', JSON.stringify(video1Analysis, null, 2).substring(0, 500));
+      console.log('  原始分析 video2Analysis:', JSON.stringify(video2Analysis, null, 2).substring(0, 500));
+      
       // 计算变化百分比
       const calculateChange = (oldVal: number, newVal: number): string => {
         if (oldVal === 0) return newVal > 0 ? '+100%' : '0%';
@@ -684,6 +725,13 @@ ${speakerInfo}
           change: calculateChange(video1Data.accuracy.correctRate, video2Data.accuracy.correctRate)
         }
       };
+      
+      // 🔍 调试日志：查看传递给 AI 的对比数据
+      console.log('📈 [对比分析] 传递给AI的数据对比:');
+      console.log('  主动回答次数：', `${dataChanges.handRaising.old}次 → ${dataChanges.handRaising.new}次 (${dataChanges.handRaising.change})`);
+      console.log('  平均回答长度：', `${dataChanges.answerLength.old}词 → ${dataChanges.answerLength.new}词 (${dataChanges.answerLength.change})`);
+      console.log('  完整句输出比例：', `${dataChanges.completeSentences.old}% → ${dataChanges.completeSentences.new}% (${dataChanges.completeSentences.change})`);
+      console.log('  准确率：', `${dataChanges.accuracy.old}% → ${dataChanges.accuracy.new}% (${dataChanges.accuracy.change})`);
 
       const prompt = `你是一位在英语教学分析领域经验丰富的专家，专注于1对1教学场景的学生进步分析。
 
