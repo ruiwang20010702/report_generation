@@ -41,9 +41,29 @@ export class ReportRecordService {
    */
   async recordReport(record: ReportRecord): Promise<ReportRecordMeta | null> {
     try {
+      // 如果有 userId，查询用户的 email
+      let userEmail: string | null = null;
+      if (record.userId) {
+        try {
+          const userResult = await pool.query(
+            'SELECT email FROM users WHERE id = $1',
+            [record.userId]
+          );
+          if (userResult.rows.length > 0) {
+            userEmail = userResult.rows[0].email;
+          }
+        } catch (err) {
+          console.warn('⚠️ 查询用户email失败（不影响报告保存）:', err);
+        }
+      }
+
+      // 从 costDetail 中提取 total_cost
+      const totalCost = record.costDetail?.total?.cost ?? null;
+
       const query = `
         INSERT INTO reports (
           user_id,
+          user_email,
           student_id,
           student_name,
           video_url,
@@ -52,15 +72,17 @@ export class ReportRecordService {
           file_name,
           file_url,
           cost_detail,
+          total_cost,
           analysis,
           analysis_data,
           created_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW())
         RETURNING id, created_at
       `;
 
       const values = [
         record.userId || null,
+        userEmail,
         record.studentId || null,
         record.studentName || null,
         record.videoUrl || null,
@@ -69,6 +91,7 @@ export class ReportRecordService {
         record.fileName || null,
         record.fileUrl || null,
         JSON.stringify(record.costDetail),
+        totalCost,
         record.analysisData ? JSON.stringify(record.analysisData) : null,
         record.analysisData ? JSON.stringify(record.analysisData) : null
       ];
@@ -81,6 +104,7 @@ export class ReportRecordService {
       console.log(`   报告ID: ${reportId}`);
       console.log(`   学生姓名: ${record.studentName}`);
       if (record.studentId) console.log(`   学生ID: ${record.studentId}`);
+      if (userEmail) console.log(`   用户邮箱: ${userEmail}`);
       console.log(`   生成时间: ${createdAt}`);
       console.log(`   总成本: ¥${record.costDetail.total.cost.toFixed(4)}`);
 
