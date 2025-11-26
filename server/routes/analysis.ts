@@ -515,11 +515,17 @@ router.put('/report/:reportId', asyncHandler(async (req: Request, res: Response)
  /**
  * POST /api/analysis/generate-interpretation
  * 通过 GLM API 生成销售解读版内容
+ * 支持缓存：如果 reportId 存在且有缓存数据，直接返回缓存
+ * 可通过 forceRegenerate: true 强制重新生成
+ * 
+ * 花费统计：生成解读版会产生 AI 调用花费，会自动计入报告的总花费中
  */
 router.post('/generate-interpretation', asyncHandler(async (req: Request, res: Response) => {
   const context = createErrorContext(req);
   
   const reportData = req.body?.reportData;
+  const reportId = req.body?.reportId;
+  const forceRegenerate = req.body?.forceRegenerate === true;
   
   if (!reportData || typeof reportData !== 'object') {
     throw new AppError(
@@ -544,18 +550,85 @@ router.post('/generate-interpretation', asyncHandler(async (req: Request, res: R
   }
   
   console.log(`\n📝 收到解读版生成请求 - 学生: ${reportData.studentName}`);
+  if (reportId) {
+    console.log(`   报告ID: ${reportId}`);
+  }
+  if (forceRegenerate) {
+    console.log(`   强制重新生成: 是`);
+  }
+  
+  // 如果有 reportId 且不是强制重新生成，尝试从缓存读取
+  if (reportId && !forceRegenerate) {
+    const cachedInterpretation = await reportRecordService.getInterpretation(reportId);
+    if (cachedInterpretation) {
+      console.log(`✅ 使用缓存的解读版数据`);
+      return res.json({
+        success: true,
+        data: {
+          interpretation: cachedInterpretation,
+          fromCache: true,
+        },
+      });
+    }
+    console.log(`   未找到缓存，将重新生成`);
+  }
   
   // 动态导入以避免循环依赖
   const { interpretationService } = await import('../services/interpretationService.js');
   
-  const interpretation = await interpretationService.generateInterpretation(reportData);
+  const result = await interpretationService.generateInterpretation(reportData);
+  
+  // 如果有 reportId，保存到缓存并记录花费
+  if (reportId) {
+    await reportRecordService.saveInterpretation(reportId, result.content, result.cost);
+  }
   
   res.json({
     success: true,
     data: {
-      interpretation,
+      interpretation: result.content,
+      fromCache: false,
+      cost: result.cost,  // 返回花费信息给前端
     },
   });
+}));
+
+/**
+ * PUT /api/analysis/interpretation/:reportId
+ * 更新解读报告内容（用户编辑后保存）
+ */
+router.put('/interpretation/:reportId', asyncHandler(async (req: Request, res: Response) => {
+  const { reportId } = req.params;
+  const { interpretation } = req.body;
+
+  if (!reportId) {
+    return res.status(400).json({
+      success: false,
+      error: '缺少报告ID',
+    });
+  }
+
+  if (!interpretation) {
+    return res.status(400).json({
+      success: false,
+      error: '缺少解读内容',
+    });
+  }
+
+  // 使用已有的 saveInterpretation 方法更新（不传 costInfo，只更新内容）
+  const success = await reportRecordService.saveInterpretation(reportId, interpretation);
+
+  if (success) {
+    res.json({
+      success: true,
+      message: '解读报告已保存',
+    });
+  } else {
+    res.status(404).json({
+      success: false,
+      error: '未找到对应的报告记录',
+    });
+  }
 }));
 
 export default router;

@@ -83,6 +83,25 @@ export interface Suggestion {
   performanceSummary?: string;
 }
 
+// 学习建议结构（完整段落形式）
+export interface LearningRecommendation {
+  content: string;            // 完整的建议段落，由AI直接生成
+}
+
+export interface SpeechContent {
+  title: string;
+  estimatedDuration: number;  // 仅统计 sections 的时长，不包含学习建议
+  sections: {
+    title: string;
+    content: string;
+    duration: number;
+    notes?: string;
+  }[];
+  learningRecommendations?: LearningRecommendation[];  // 学习建议（独立模块）
+  keyPoints: string[];
+  cautions: string[];
+}
+
 export interface CostBreakdown {
   transcription: {
     service: string;           // 使用的转录服务（如 "tingwu"）
@@ -480,6 +499,80 @@ export class VideoAnalysisAPI {
           404: '未找到报告或无权限保存该报告',
         },
       });
+    }
+  }
+  /**
+   * 生成解读版报告
+   * @param reportData 报告数据
+   * @param options.reportId 报告ID（用于缓存）
+   * @param options.forceRegenerate 是否强制重新生成
+   * @returns 解读版内容和是否来自缓存
+   */
+  async generateInterpretation(
+    reportData: VideoAnalysisResponse,
+    options?: { reportId?: string; forceRegenerate?: boolean }
+  ): Promise<{ interpretation: SpeechContent; fromCache: boolean }> {
+    try {
+      const response = await axios.post(
+        `${this.baseURL}/api/analysis/generate-interpretation`,
+        { 
+          reportData,
+          reportId: options?.reportId,
+          forceRegenerate: options?.forceRegenerate,
+        },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            ...this.getAuthHeaders(),
+          },
+          withCredentials: true,
+          timeout: 120000, // AI 生成可能较慢，给 2 分钟超时
+        }
+      );
+
+      if (response.data.success) {
+        return {
+          interpretation: response.data.data.interpretation,
+          fromCache: response.data.data.fromCache ?? false,
+        };
+      }
+      
+      throw new Error('生成解读版失败');
+    } catch (error) {
+      console.error('Generate interpretation failed:', error);
+      return this.handleAxiosError(error, '生成解读版报告失败，请稍后重试');
+    }
+  }
+
+  /**
+   * 保存编辑后的解读报告
+   * @param reportId 报告ID
+   * @param interpretation 编辑后的解读内容
+   */
+  async saveInterpretation(
+    reportId: string,
+    interpretation: SpeechContent
+  ): Promise<void> {
+    try {
+      const response = await axios.put(
+        `${this.baseURL}/api/analysis/interpretation/${reportId}`,
+        { interpretation },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            ...this.getAuthHeaders(),
+          },
+          withCredentials: true,
+          timeout: 10000,
+        }
+      );
+
+      if (!response.data.success) {
+        throw new Error(response.data.error || '保存解读报告失败');
+      }
+    } catch (error) {
+      console.error('Save interpretation failed:', error);
+      return this.handleAxiosError(error, '保存解读报告失败，请稍后重试');
     }
   }
 }

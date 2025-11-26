@@ -94,6 +94,15 @@ export interface CostBreakdown {
     totalCost: number;         // AI分析总成本（元）
     currency: string;          // 货币单位
   };
+  interpretation?: {           // 解读版生成成本（可选，用户点击生成解读版时产生）
+    model: string;             // 使用的模型（如 "glm-4-plus"）
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+    cost: number;              // 解读版生成成本（元）
+    currency: string;          // 货币单位
+    generatedAt: string;       // 生成时间
+  };
   total: {
     cost: number;              // 总成本（元）
     currency: string;          // 货币单位

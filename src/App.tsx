@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { ThemeProvider } from "next-themes";
 import Index from "./pages/Index";
 import Login from "./pages/Login";
+import InterpretationPage from "./pages/InterpretationPage";
 import { AuthProvider } from "./contexts/AuthContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 import ErrorBoundary, { PageErrorBoundary } from "./components/ErrorBoundary";
@@ -63,6 +64,26 @@ const App = () => (
                     <ProtectedRoute>
                       <PageErrorBoundary>
                         <Index />
+                      </PageErrorBoundary>
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/report/:reportId/interpretation"
+                  element={
+                    <ProtectedRoute>
+                      <PageErrorBoundary>
+                        <InterpretationPage />
+                      </PageErrorBoundary>
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/interpretation"
+                  element={
+                    <ProtectedRoute>
+                      <PageErrorBoundary>
+                        <InterpretationPage />
                       </PageErrorBoundary>
                     </ProtectedRoute>
                   }

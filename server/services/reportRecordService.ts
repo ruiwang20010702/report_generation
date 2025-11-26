@@ -329,6 +329,129 @@ export class ReportRecordService {
       throw error;
     }
   }
+
+  /**
+   * 获取报告的解读版数据（缓存）
+   */
+  async getInterpretation(reportId: string): Promise<any | null> {
+    try {
+      const query = `
+        SELECT interpretation_data
+        FROM reports
+        WHERE id = $1
+        LIMIT 1
+      `;
+
+      const result = await pool.query(query, [reportId]);
+      if (result.rows.length === 0) {
+        return null;
+      }
+
+      const data = result.rows[0].interpretation_data;
+      if (!data) {
+        return null;
+      }
+
+      console.log(`✅ 从缓存读取解读版数据，报告ID: ${reportId}`);
+      return data;
+    } catch (error) {
+      console.error('❌ 读取解读版数据失败:', error);
+      return null;
+    }
+  }
+
+  /**
+   * 保存报告的解读版数据（缓存）并更新花费信息
+   */
+  async saveInterpretation(
+    reportId: string, 
+    interpretationData: any,
+    costInfo?: {
+      promptTokens: number;
+      completionTokens: number;
+      totalTokens: number;
+      cost: number;
+      model: string;
+      currency: string;
+    }
+  ): Promise<boolean> {
+    try {
+      const serialized = JSON.stringify(interpretationData);
+
+      if (costInfo) {
+        // 同时更新解读版数据和花费信息
+        const query = `
+          UPDATE reports
+          SET 
+            interpretation_data = $2::jsonb,
+            cost_detail = jsonb_set(
+              jsonb_set(
+                COALESCE(cost_detail, '{}'::jsonb),
+                '{interpretation}',
+                $3::jsonb
+              ),
+              '{total,cost}',
+              to_jsonb(COALESCE((cost_detail->'total'->>'cost')::numeric, 0) + $4::numeric)
+            ),
+            total_cost = COALESCE(total_cost, 0) + $4,
+            updated_at = NOW()
+          WHERE id = $1
+          RETURNING id
+        `;
+
+        const interpretationCostData = {
+          model: costInfo.model,
+          promptTokens: costInfo.promptTokens,
+          completionTokens: costInfo.completionTokens,
+          totalTokens: costInfo.totalTokens,
+          cost: costInfo.cost,
+          currency: costInfo.currency,
+          generatedAt: new Date().toISOString(),
+        };
+
+        const result = await pool.query(query, [
+          reportId, 
+          serialized, 
+          JSON.stringify(interpretationCostData),
+          costInfo.cost
+        ]);
+        const success = (result.rowCount ?? 0) > 0;
+
+        if (success) {
+          console.log(`✅ 解读版数据已缓存，报告ID: ${reportId}`);
+          console.log(`   💰 解读版花费: ¥${costInfo.cost.toFixed(4)} (已计入总花费)`);
+        } else {
+          console.warn(`⚠️ 未找到报告记录，无法缓存解读版数据，报告ID: ${reportId}`);
+        }
+
+        return success;
+      } else {
+        // 只更新解读版数据（用于缓存命中时）
+        const query = `
+          UPDATE reports
+          SET 
+            interpretation_data = $2::jsonb,
+            updated_at = NOW()
+          WHERE id = $1
+          RETURNING id
+        `;
+
+        const result = await pool.query(query, [reportId, serialized]);
+        const success = (result.rowCount ?? 0) > 0;
+
+        if (success) {
+          console.log(`✅ 解读版数据已缓存，报告ID: ${reportId}`);
+        } else {
+          console.warn(`⚠️ 未找到报告记录，无法缓存解读版数据，报告ID: ${reportId}`);
+        }
+
+        return success;
+      }
+    } catch (error) {
+      console.error('❌ 保存解读版数据失败:', error);
+      return false;
+    }
+  }
 }
 
 export const reportRecordService = new ReportRecordService();

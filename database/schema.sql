@@ -76,6 +76,7 @@ CREATE TABLE IF NOT EXISTS reports (
     transcript TEXT,
     analysis JSONB,
     analysis_data JSONB,
+    interpretation_data JSONB,
     cost_detail JSONB,
     total_cost DECIMAL(10, 4),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
@@ -106,6 +107,7 @@ COMMENT ON COLUMN reports.audio_dur IS '音频时长（秒）';
 COMMENT ON COLUMN reports.transcript IS '转录文本';
 COMMENT ON COLUMN reports.analysis IS '分析数据（旧字段）';
 COMMENT ON COLUMN reports.analysis_data IS '完整报告分析数据（JSON格式）';
+COMMENT ON COLUMN reports.interpretation_data IS '解读版演讲稿数据（JSON格式，缓存GLM生成结果）';
 COMMENT ON COLUMN reports.cost_detail IS 'API调用成本明细（JSON格式）';
 COMMENT ON COLUMN reports.total_cost IS '总成本（美元）';
 COMMENT ON COLUMN reports.created_at IS '创建时间';

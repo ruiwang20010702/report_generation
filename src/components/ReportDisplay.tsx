@@ -13,9 +13,8 @@ import microphoneIcon from "@/assets/microphone-icon.png";
 import html2canvas from "html2canvas";
 import { toast } from "@/hooks/use-toast";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { videoAnalysisAPI, type VideoAnalysisResponse } from "@/services/api";
-import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, BorderStyle, Table, TableRow, TableCell, WidthType, convertInchesToTwip } from "docx";
-import { saveAs } from "file-saver";
 
 type ReportData = VideoAnalysisResponse;
 
@@ -200,8 +199,8 @@ const EditableText = ({
 };
 
 export const ReportDisplay = ({ data: initialData, onBack }: ReportDisplayProps) => {
+  const navigate = useNavigate();
   const [isDownloading, setIsDownloading] = useState(false);
-  const [isGeneratingDoc, setIsGeneratingDoc] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [editableData, setEditableData] = useState<ReportData>(initialData);
@@ -444,310 +443,13 @@ export const ReportDisplay = ({ data: initialData, onBack }: ReportDisplayProps)
     }
   };
 
-  // 生成解读版文档 - 通过 GLM API 生成完整的15分钟演讲稿
-  const handleDownloadInterpretation = async () => {
-    setIsGeneratingDoc(true);
-    
-    toast({
-      title: "正在生成演讲稿...",
-      description: "AI正在生成15分钟完整演讲稿，请稍候（约20-30秒）",
-    });
-
-    try {
-      // 准备发送给后端的报告数据 - 直接传递原始数据
-      const reportDataForAPI = {
-        studentName: data.studentName,
-        studentId: data.studentId,
-        grade: data.grade,
-        level: data.level,
-        unit: data.unit,
-        // 直接传递原始学习数据
-        learningData: data.learningData,
-        // 直接传递进步维度
-        progressDimensions: data.progressDimensions,
-        // 传递待改进领域
-        improvementAreas: {
-          pronunciation: data.improvementAreas.pronunciation ? {
-            overview: data.improvementAreas.pronunciation.overview,
-            details: data.improvementAreas.pronunciation.details,
-            examples: data.improvementAreas.pronunciation.examples?.slice(0, 5),
-          } : undefined,
-          grammar: data.improvementAreas.grammar ? {
-            overview: data.improvementAreas.grammar.overview,
-            details: data.improvementAreas.grammar.details,
-            examples: data.improvementAreas.grammar.examples?.slice(0, 5),
-          } : undefined,
-          intonation: data.improvementAreas.intonation ? {
-            overview: data.improvementAreas.intonation.overview,
-            details: data.improvementAreas.intonation.details,
-          } : undefined,
-        },
-        // 传递整体建议
-        overallSuggestions: data.overallSuggestions,
-      };
-
-      // 调用后端 API 生成演讲稿
-      const response = await fetch('/api/analysis/generate-interpretation', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ reportData: reportDataForAPI }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `API 请求失败: ${response.status}`);
-      }
-
-      const result = await response.json();
-      const speech = result.data?.interpretation;
-
-      if (!speech) {
-        throw new Error('未获取到演讲稿内容');
-      }
-
-      // 使用 GLM 生成的演讲稿内容构建文档
-      const children: Paragraph[] = [];
-
-      // 标题
-      children.push(
-        new Paragraph({
-          text: speech.title || `${data.studentName}学习情况解读演讲稿`,
-          heading: HeadingLevel.TITLE,
-          alignment: AlignmentType.CENTER,
-          spacing: { after: 200 },
-        }),
-        new Paragraph({
-          alignment: AlignmentType.CENTER,
-          spacing: { after: 100 },
-          children: [
-            new TextRun({
-              text: "（销售专用 · AI智能生成 · 仅供内部使用）",
-              color: "666666",
-              size: 22,
-            }),
-          ],
-        }),
-        new Paragraph({
-          alignment: AlignmentType.CENTER,
-          spacing: { after: 400 },
-          children: [
-            new TextRun({
-              text: `预计时长：约 ${speech.estimatedDuration || 15} 分钟`,
-              color: "0066CC",
-              size: 24,
-              bold: true,
-            }),
-          ],
-        })
-      );
-
-      // 学生基本信息
-      children.push(
-        new Paragraph({
-          text: "📋 学生信息",
-          heading: HeadingLevel.HEADING_1,
-          spacing: { before: 300, after: 200 },
-        }),
-        new Paragraph({
-          children: [
-            new TextRun({ text: "学生姓名：", bold: true }),
-            new TextRun({ text: data.studentName }),
-            new TextRun({ text: "    学生ID：", bold: true }),
-            new TextRun({ text: data.studentId || "未填写" }),
-          ],
-          spacing: { after: 100 },
-        }),
-        new Paragraph({
-          children: [
-            new TextRun({ text: "年级：", bold: true }),
-            new TextRun({ text: data.grade }),
-            new TextRun({ text: "    级别：", bold: true }),
-            new TextRun({ text: data.level }),
-            new TextRun({ text: "    单元：", bold: true }),
-            new TextRun({ text: data.unit }),
-          ],
-          spacing: { after: 400 },
-        })
-      );
-
-      // 演讲稿正文（分段落）
-      if (speech.sections && speech.sections.length > 0) {
-        children.push(
-          new Paragraph({
-            text: "📝 演讲稿正文",
-            heading: HeadingLevel.HEADING_1,
-            spacing: { before: 300, after: 300 },
-          })
-        );
-
-        speech.sections.forEach((section: { title: string; content: string; duration: number; notes?: string }) => {
-          // 段落标题
-          children.push(
-            new Paragraph({
-              text: section.title,
-              heading: HeadingLevel.HEADING_2,
-              spacing: { before: 400, after: 150 },
-            }),
-            new Paragraph({
-              children: [
-                new TextRun({
-                  text: `⏱ 预计时长：${section.duration} 分钟`,
-                  color: "0066CC",
-                  size: 20,
-                  italics: true,
-                }),
-              ],
-              spacing: { after: 150 },
-            })
-          );
-
-          // 演讲备注（如果有）
-          if (section.notes) {
-            children.push(
-              new Paragraph({
-                children: [
-                  new TextRun({
-                    text: `💡 演讲提示：${section.notes}`,
-                    color: "CC6600",
-                    size: 20,
-                    italics: true,
-                  }),
-                ],
-                spacing: { after: 200 },
-              })
-            );
-          }
-
-          // 段落内容 - 完整的演讲文字
-          // 将内容按段落分割，保持格式
-          const paragraphs = section.content.split('\n').filter((p: string) => p.trim());
-          paragraphs.forEach((para: string) => {
-            children.push(
-              new Paragraph({
-                text: para.trim(),
-                spacing: { after: 150 },
-                indent: { firstLine: convertInchesToTwip(0.3) },
-              })
-            );
-          });
-
-          // 段落之间的分隔线
-          children.push(
-            new Paragraph({
-              text: "─".repeat(50),
-              alignment: AlignmentType.CENTER,
-              spacing: { before: 200, after: 200 },
-              children: [
-                new TextRun({
-                  text: "─".repeat(50),
-                  color: "CCCCCC",
-                }),
-              ],
-            })
-          );
-        });
-      }
-
-      // 关键要点
-      if (speech.keyPoints && speech.keyPoints.length > 0) {
-        children.push(
-          new Paragraph({
-            text: "🎯 关键要点提示",
-            heading: HeadingLevel.HEADING_1,
-            spacing: { before: 400, after: 200 },
-          })
-        );
-
-        speech.keyPoints.forEach((point: string, index: number) => {
-          children.push(
-            new Paragraph({
-              children: [
-                new TextRun({ text: `${index + 1}. `, bold: true }),
-                new TextRun({ text: point }),
-              ],
-              spacing: { after: 100 },
-            })
-          );
-        });
-      }
-
-      // 注意事项
-      if (speech.cautions && speech.cautions.length > 0) {
-        children.push(
-          new Paragraph({
-            text: "⚠️ 注意事项",
-            heading: HeadingLevel.HEADING_1,
-            spacing: { before: 400, after: 200 },
-          })
-        );
-
-        speech.cautions.forEach((caution: string) => {
-          children.push(
-            new Paragraph({
-              text: `• ${caution}`,
-              spacing: { after: 80 },
-            })
-          );
-        });
-      }
-
-      // 页脚
-      children.push(
-        new Paragraph({
-          alignment: AlignmentType.CENTER,
-          spacing: { before: 400 },
-          children: [
-            new TextRun({
-              text: "— 演讲稿结束 —",
-              color: "999999",
-              size: 20,
-            }),
-          ],
-        }),
-        new Paragraph({
-          alignment: AlignmentType.RIGHT,
-          spacing: { before: 200 },
-          children: [
-            new TextRun({
-              text: `AI生成时间：${new Date().toLocaleString("zh-CN")}`,
-              color: "999999",
-              size: 18,
-            }),
-          ],
-        })
-      );
-
-      // 创建文档
-      const doc = new Document({
-        sections: [
-          {
-            properties: {},
-            children: children,
-          },
-        ],
-      });
-
-      // 生成并下载文件
-      const blob = await Packer.toBlob(doc);
-      const fileName = `51Talk演讲稿_${data.studentName}_${new Date().toLocaleDateString("zh-CN").replace(/\//g, "-")}.docx`;
-      saveAs(blob, fileName);
-
-      toast({
-        title: "下载成功！",
-        description: `15分钟演讲稿已保存为：${fileName}`,
-      });
-
-    } catch (error) {
-      console.error("生成演讲稿失败:", error);
-      toast({
-        title: "生成失败",
-        description: error instanceof Error ? error.message : "抱歉，生成演讲稿时出现错误，请重试",
-        variant: "destructive",
-      });
-    } finally {
-      setIsGeneratingDoc(false);
+  // 查看解读版报告 - 跳转到解读页面
+  const handleViewInterpretation = () => {
+    const currentData = editableData || initialData;
+    if (reportId) {
+      navigate(`/report/${reportId}/interpretation`, { state: { reportData: currentData } });
+    } else {
+      navigate(`/interpretation`, { state: { reportData: currentData } });
     }
   };
 
@@ -1309,91 +1011,7 @@ export const ReportDisplay = ({ data: initialData, onBack }: ReportDisplayProps)
           </CardContent>
         </Card>
 
-        {/* Overall Learning Suggestions */}
-        {data.overallSuggestions && data.overallSuggestions.length > 0 && (
-          <Card className="w-full shadow-elevated border-none rounded-3xl overflow-hidden">
-            <CardHeader className="bg-gradient-hero relative">
-              <CardTitle className="text-3xl font-bold text-primary-foreground flex items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl bg-white flex items-center justify-center shadow-lg flex-shrink-0">
-                  <Target className="w-7 h-7 text-secondary" />
-                </div>
-                <span className="flex-shrink-0">整体学习建议</span>
-              </CardTitle>
-              <p className="text-base text-primary-foreground/90 mt-2 font-medium">
-                基于所有维度的综合分析，为您提供3条可直接告知家长的学习建议
-              </p>
-            </CardHeader>
-            <CardContent className="pt-6">
-              <div className="space-y-6">
-                {data.overallSuggestions.map((suggestion, idx) => {
-                  const summaryText = suggestion.performanceSummary?.trim() || "";
-                  const actionText = suggestion.description?.trim() || "";
-                  const combinedText = [summaryText, actionText].filter(Boolean).join("");
-                  const fallbackCombinedText =
-                    "总结该生在两次课堂中的共性表现、量化数据与显著变化。通过阅读和词汇卡片游戏，帮助学生扩大词汇量。鼓励家长在家中配合练习，并记录成效。";
-
-                  return (
-                    <div
-                      key={idx}
-                      className="p-6 rounded-2xl bg-gradient-to-br from-primary/20 to-primary/10 border-2 border-primary/20 shadow-md hover:shadow-lg transition-all"
-                    >
-                      <div className="flex gap-4 items-start">
-                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary to-primary/80 text-primary-foreground flex items-center justify-center flex-shrink-0 font-bold text-xl shadow-sm">
-                          {idx + 1}
-                        </div>
-                        <div className="flex-1 min-w-0 space-y-4">
-                          <EditableText
-                            value={suggestion.title}
-                            onChange={(newValue) => handleFieldChange(["overallSuggestions", idx, "title"], newValue)}
-                            isEditing={isEditing}
-                            as="h3"
-                            className="font-bold text-primary-foreground text-xl drop-shadow-sm"
-                            placeholder="请为该条建议添加聚焦主题"
-                          />
-
-                          <div className="rounded-2xl border border-primary/20 bg-primary/10 p-5 shadow-md hover:shadow-lg transition-shadow">
-                            {isEditing ? (
-                              <div className="space-y-4">
-                                <EditableText
-                                  value={summaryText}
-                                  onChange={(newValue) =>
-                                    handleFieldChange(["overallSuggestions", idx, "performanceSummary"], newValue)
-                                  }
-                                  isEditing={isEditing}
-                                  multiline
-                                  rows={4}
-                                  as="p"
-                                  className="text-lg text-foreground leading-8"
-                                  editingClassName="text-base leading-relaxed min-h-[120px] w-full"
-                                  placeholder="总结该生在两次课堂中的共性表现、量化数据与显著变化。"
-                                />
-                                <EditableText
-                                  value={actionText}
-                                  onChange={(newValue) => handleFieldChange(["overallSuggestions", idx, "description"], newValue)}
-                                  isEditing={isEditing}
-                                  multiline
-                                  rows={6}
-                                  as="p"
-                                  className="text-lg text-muted-foreground leading-8 mt-4"
-                                  editingClassName="text-base text-muted-foreground leading-relaxed min-h-[160px] w-full"
-                                  placeholder="通过阅读和词汇卡片游戏，帮助学生扩大词汇量，并列出家长可执行的频次、方法和预期效果。"
-                                />
-                              </div>
-                            ) : (
-                              <p className="text-lg text-foreground leading-8 whitespace-pre-line tracking-wide">
-                                {combinedText || fallbackCombinedText}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </CardContent>
-          </Card>
-        )}
+        {/* Overall Learning Suggestions - 已迁移至解读版生成中 */}
 
         {/* Action Buttons */}
         <div id="action-buttons" className="flex flex-col lg:flex-row gap-4 justify-between items-start lg:items-center mt-8 flex-wrap">
@@ -1430,25 +1048,25 @@ export const ReportDisplay = ({ data: initialData, onBack }: ReportDisplayProps)
               </Button>
             )}
           </div>
-          <Button
-            size="lg"
-            onClick={handleDownloadInterpretation}
-            disabled={isGeneratingDoc}
-            variant="outline"
-            className="border-2 border-primary text-primary hover:bg-primary/10 shadow-md hover:shadow-xl rounded-xl font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <FileText className="w-5 h-5 mr-2" />
-            {isGeneratingDoc ? "生成中..." : "下载解读版"}
-          </Button>
-          <Button
-            size="lg"
-            onClick={handleDownloadImage}
-            disabled={isDownloading}
-            className="bg-gradient-to-r from-secondary to-secondary/90 hover:from-secondary/90 hover:to-secondary text-secondary-foreground shadow-md hover:shadow-xl rounded-xl font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Download className="w-5 h-5 mr-2" />
-            {isDownloading ? "生成中..." : "下载长图"}
-          </Button>
+          <div className="flex flex-row gap-4">
+            <Button
+              size="lg"
+              onClick={handleViewInterpretation}
+              className="bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary text-primary-foreground shadow-md hover:shadow-xl rounded-xl font-semibold transition-all"
+            >
+              <BookOpen className="w-5 h-5 mr-2" />
+              查看解读报告
+            </Button>
+            <Button
+              size="lg"
+              onClick={handleDownloadImage}
+              disabled={isDownloading}
+              className="bg-gradient-to-r from-secondary to-secondary/90 hover:from-secondary/90 hover:to-secondary text-secondary-foreground shadow-md hover:shadow-xl rounded-xl font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Download className="w-5 h-5 mr-2" />
+              {isDownloading ? "生成中..." : "下载长图"}
+            </Button>
+          </div>
         </div>
       </div>
     </div>
