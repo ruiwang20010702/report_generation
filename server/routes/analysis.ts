@@ -512,5 +512,51 @@ router.put('/report/:reportId', asyncHandler(async (req: Request, res: Response)
   });
 }));
 
+ /**
+ * POST /api/analysis/generate-interpretation
+ * 通过 GLM API 生成销售解读版内容
+ */
+router.post('/generate-interpretation', asyncHandler(async (req: Request, res: Response) => {
+  const context = createErrorContext(req);
+  
+  const reportData = req.body?.reportData;
+  
+  if (!reportData || typeof reportData !== 'object') {
+    throw new AppError(
+      ErrorType.VALIDATION_ERROR,
+      'Missing or invalid reportData',
+      {
+        userMessage: '请提供报告数据',
+        context,
+      }
+    );
+  }
+  
+  if (!reportData.studentName) {
+    throw new AppError(
+      ErrorType.VALIDATION_ERROR,
+      'Missing studentName in reportData',
+      {
+        userMessage: '报告数据中缺少学生姓名',
+        context,
+      }
+    );
+  }
+  
+  console.log(`\n📝 收到解读版生成请求 - 学生: ${reportData.studentName}`);
+  
+  // 动态导入以避免循环依赖
+  const { interpretationService } = await import('../services/interpretationService.js');
+  
+  const interpretation = await interpretationService.generateInterpretation(reportData);
+  
+  res.json({
+    success: true,
+    data: {
+      interpretation,
+    },
+  });
+}));
+
 export default router;
 
