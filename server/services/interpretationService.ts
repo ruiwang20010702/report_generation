@@ -376,34 +376,67 @@ ${sections.join('\n\n')}
       // 尝试提取 JSON 内容
       let jsonStr = content;
       
+      console.log('📝 开始解析 GLM 响应，原始内容长度:', content.length);
+      
       // 移除可能的 markdown 代码块标记
       const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/);
       if (jsonMatch) {
         jsonStr = jsonMatch[1].trim();
+        console.log('📝 从 markdown 代码块中提取 JSON，长度:', jsonStr.length);
+      } else {
+        console.log('📝 未找到 markdown 代码块，尝试直接解析');
       }
       
       const parsed = JSON.parse(jsonStr);
       
+      console.log('✅ JSON 解析成功');
+      console.log('   - title:', parsed.title ? '有' : '无');
+      console.log('   - sections 数量:', parsed.sections?.length || 0);
+      console.log('   - keyPoints 数量:', parsed.keyPoints?.length || 0);
+      
+      // 验证 sections 是否有效（非空数组且每个 section 有内容）
+      const hasValidSections = parsed.sections && 
+        Array.isArray(parsed.sections) && 
+        parsed.sections.length > 0 &&
+        parsed.sections.every((s: any) => s.title && s.content && s.content.length > 50);
+      
+      if (!hasValidSections) {
+        console.log('⚠️ sections 无效或内容过短，使用默认内容');
+        if (parsed.sections) {
+          console.log('   sections 详情:', parsed.sections.map((s: any) => ({
+            title: s.title,
+            contentLength: s.content?.length || 0
+          })));
+        }
+      }
+      
       // 验证必要字段并提供默认值
-      return {
+      const result: SpeechContent = {
         title: parsed.title || `${studentName}学习情况解读演讲稿`,
         estimatedDuration: parsed.estimatedDuration || 15,
-        sections: parsed.sections || this.getDefaultSections(studentName),
-        keyPoints: parsed.keyPoints || [
+        sections: hasValidSections ? parsed.sections : this.getDefaultSections(studentName),
+        keyPoints: (parsed.keyPoints && parsed.keyPoints.length > 0) ? parsed.keyPoints : [
           '强调学生的进步和潜力',
           '用数据说话，增强说服力',
           '自然引导升级套餐，不要强推',
         ],
-        cautions: parsed.cautions || [
+        cautions: (parsed.cautions && parsed.cautions.length > 0) ? parsed.cautions : [
           '本演讲稿仅供销售人员内部使用',
           '根据家长反应灵活调整内容',
           '注意观察家长的情绪变化',
         ],
       };
       
+      // 计算总字数
+      const totalWords = result.sections.reduce((sum, s) => sum + (s.content?.length || 0), 0);
+      console.log(`✅ 演讲稿解析完成，共 ${result.sections.length} 个段落，总字数约 ${totalWords}`);
+      
+      return result;
+      
     } catch (error) {
-      console.error('解析 GLM 响应失败:', error);
-      console.log('原始响应:', content.substring(0, 500) + '...');
+      console.error('❌ 解析 GLM 响应失败:', error);
+      console.log('原始响应前500字符:', content.substring(0, 500));
+      console.log('原始响应后500字符:', content.substring(content.length - 500));
       
       // 返回默认内容
       return this.getDefaultContent(studentName);
