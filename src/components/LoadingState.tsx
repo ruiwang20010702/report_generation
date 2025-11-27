@@ -65,6 +65,8 @@ export const LoadingState = ({
       return null;
     }
 
+    const isProcessing = jobState.status === "processing";
+
     return [
       {
         label: "任务状态",
@@ -78,9 +80,12 @@ export const LoadingState = ({
         icon: Clock
       },
       {
-        label: "预计等待",
-        value:
-          jobState.estimatedWaitSeconds > 0
+        label: isProcessing ? "已等待" : "预计等待",
+        value: isProcessing
+          ? jobState.waitedSeconds !== undefined
+            ? `${jobState.waitedSeconds} 秒`
+            : "0 秒"
+          : jobState.estimatedWaitSeconds > 0
             ? `${jobState.estimatedWaitSeconds} 秒`
             : "计算中",
         icon: Clock

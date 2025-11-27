@@ -17,20 +17,20 @@ sudo yum install postgresql
 
 ### 2️⃣ 设置数据库连接字符串
 
-从 **Zeabur 控制台** 复制 PostgreSQL 连接字符串：
+从云服务控制台或 `.env` 文件获取 PostgreSQL 连接字符串：
 
 ```bash
 # 临时设置（当前终端会话有效）
-export POSTGRES_CONNECTION_STRING='postgresql://user:password@host:port/database'
-
-# 或者使用 DATABASE_URL
 export DATABASE_URL='postgresql://user:password@host:port/database'
+
+# 或者使用 POSTGRES_CONNECTION_STRING
+export POSTGRES_CONNECTION_STRING='postgresql://user:password@host:port/database'
 ```
 
-**💡 提示**：在 Zeabur 控制台找到连接字符串的位置：
-1. 打开你的 PostgreSQL 服务
-2. 点击 "连接" 标签
-3. 复制 "Connection String"
+**💡 提示**：连接字符串通常在以下位置获取：
+1. 阿里云 RDS 控制台 → 数据库连接信息
+2. 项目 `.env` 文件中的 `DATABASE_URL`
+3. Docker 部署时的环境变量配置
 
 ### 3️⃣ 运行查询工具
 
@@ -108,12 +108,11 @@ cd /Users/ruiwang/Desktop/test
 ### 导出查询结果到 CSV
 
 ```bash
-# 方法 1：使用重定向（需要修改脚本）
-psql "$POSTGRES_CONNECTION_STRING" -c "SELECT ..." --csv > output.csv
+# 方法 1：使用重定向
+psql "$DATABASE_URL" -c "SELECT ..." --csv > output.csv
 
-# 方法 2：手动导出
-export POSTGRES_CONNECTION_STRING='your-connection-string'
-psql "$POSTGRES_CONNECTION_STRING" -c "
+# 方法 2：使用 COPY 命令
+psql "$DATABASE_URL" -c "
   COPY (
     SELECT 
       u.email as 用户邮箱,
@@ -135,7 +134,7 @@ psql "$POSTGRES_CONNECTION_STRING" -c "
 crontab -e
 
 # 添加以下行：
-0 2 * * * export POSTGRES_CONNECTION_STRING='your-string' && /path/to/query-costs.sh > /path/to/daily-report.log 2>&1
+0 2 * * * export DATABASE_URL='your-string' && /path/to/query-costs.sh > /path/to/daily-report.log 2>&1
 ```
 
 ---
@@ -199,7 +198,7 @@ sudo apt install postgresql-client
 
 **检查项**：
 1. ✅ 连接字符串格式正确
-2. ✅ 网络可以访问 Zeabur 服务器
+2. ✅ 网络可以访问数据库服务器
 3. ✅ 数据库用户名和密码正确
 4. ✅ 数据库服务正在运行
 
@@ -226,18 +225,17 @@ export LANG=zh_CN.UTF-8
 
 1. 查看脚本内的注释
 2. 检查数据库连接状态
-3. 直接在 Zeabur 控制台运行 SQL
+3. 直接在数据库控制台运行 SQL
 4. 查看 PostgreSQL 日志
 
 ---
 
 ## 🔗 相关文件
 
-- 📝 SQL 查询集合：`/Users/ruiwang/Desktop/test/sql_queries/cost_analysis.sql`
-- 🔧 CLI 工具脚本：`/Users/ruiwang/Desktop/test/scripts/query-costs.sh`
-- 📚 数据库架构：`/Users/ruiwang/Desktop/test/database/add_cost_tracking.sql`
+- 📝 SQL 查询集合：`database/queries/cost_analysis.sql`
+- 🔧 CLI 工具脚本：`scripts/query-costs.sh`
+- 📚 数据库架构：`database/schema.sql`
 
 ---
 
 **享受高效的成本分析！** 🎉
-

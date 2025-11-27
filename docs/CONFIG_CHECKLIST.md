@@ -36,18 +36,14 @@ git status  # 应该显示干净的工作目录
 ### ✅ 第二步：环境文件配置
 
 - [ ] 已复制 `.env` 文件 (`cp env.aliyun.example .env`)
-- [ ] 或运行配置向导 (`npm run setup:env`)
-- [ ] 或运行快速配置 (`./scripts/quick-setup.sh`)
+- [ ] 或运行快速配置向导 (`./scripts/quick-setup.sh`)
 
 **快速开始**:
 ```bash
 # 方式1: 手动复制
 cp env.aliyun.example .env
 
-# 方式2: 交互式配置
-npm run setup:env
-
-# 方式3: 快速配置向导
+# 方式2: 快速配置向导
 ./scripts/quick-setup.sh
 ```
 
@@ -171,7 +167,7 @@ DB_SSL=false
 
 **初始化数据库**:
 ```bash
-npm run setup:db
+psql "$DATABASE_URL" -f database/schema.sql
 ```
 
 ---

@@ -41,9 +41,9 @@ npm install
    ```bash
    cp env.aliyun.example .env
    ```
-2. 或运行交互式向导：
+2. 或运行配置向导：
    ```bash
-   npm run setup:env
+   ./scripts/quick-setup.sh
    ```
 3. 核心配置项
    - 数据库：`DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `JWT_SECRET`
@@ -60,8 +60,8 @@ npm install
 # 检查环境变量
 npm run check:env
 
-# 创建基础表（users / otps / reports）
-npm run setup:db
+# 创建基础表（使用 psql 执行 schema.sql）
+psql "$DATABASE_URL" -f database/schema.sql
 
 # 验证连接
 npm run test:db
@@ -120,11 +120,9 @@ npm run dev:frontend    # 仅前端
 npm run build           # 打包（结果位于 dist/ + build/server）
 npm run start           # 运行生产构建
 npm run lint            # ESLint
-npm run setup:env       # 交互式环境变量配置
-npm run setup:db        # 初始化数据库结构
+npm run check:env       # 检查环境变量配置
 npm run test:db         # 数据库连通性测试
 npm run test:tingwu     # 通义听悟连通性测试
-npm run setup:ai        # 向导式 AI 配置检查
 ```
 
 ## API 概览
@@ -189,7 +187,7 @@ npm run setup:ai        # 向导式 AI 配置检查
 - **阿里云 ECS/容器**：确保配置所有环境变量，开放 3001 端口，建议配置 HTTPS
 - **Nginx 反向代理**：前端静态文件指向 `dist/`，API 请求代理到 `node build/server/index.js`
 
-> **注意**：Vercel 和 Zeabur 相关配置已归档到 `docs/deployment/vercel/` 和 `docs/archive/`，当前不推荐使用这些平台部署
+> **注意**：Vercel 和 Zeabur 相关配置已归档到 `docs/archive/`，当前推荐使用 Docker 或阿里云 ECS 部署
 
 ## 项目结构
 
@@ -209,25 +207,29 @@ npm run setup:ai        # 向导式 AI 配置检查
 │   └── utils/             # 工具函数
 ├── database/               # 数据库脚本
 │   ├── schema.sql         # 完整表结构
-│   ├── init.sql           # 初始化脚本
+│   ├── migrations/        # 数据库迁移脚本
+│   ├── queries/           # 常用查询脚本
 │   └── archive/           # 历史迁移脚本
 ├── scripts/                # 辅助脚本
-│   ├── setup-database.ts  # 数据库初始化
-│   ├── setup-env.ts       # 环境配置向导
-│   └── check-env.ts       # 配置检查
+│   ├── quick-setup.sh     # 环境配置向导
+│   ├── check-env.ts       # 环境变量检查
+│   ├── test-database.ts   # 数据库连接测试
+│   ├── query-costs.sh     # 成本查询工具
+│   └── archive/           # 归档的历史脚本
 ├── tests/                  # 测试文件
-│   └── integration/       # 集成测试（27个测试）
+│   └── integration/       # 集成测试
 ├── docs/                   # 项目文档
-│   ├── archive/           # 归档的过时文档和说明文档
-│   ├── work-reports/      # 工作日报周报
-│   ├── deployment/        # 部署相关文档
-│   │   └── vercel/       # Vercel 配置归档（不推荐使用）
+│   ├── getting-started/   # 快速入门
 │   ├── guides/            # 使用指南
 │   ├── technical/         # 技术文档
-│   └── getting-started/   # 快速入门
+│   ├── deployment/        # 部署相关文档
+│   ├── model-config/      # AI 模型配置
+│   ├── emotion-analysis/  # 语音情感分析评估
+│   └── archive/           # 归档的过时文档
 ├── public/                 # 前端静态资源
 ├── build/                  # 后端构建产物
 ├── dist/                   # 前端构建产物
+├── gaea/                   # Gaea 部署配置
 ├── README.md              # 项目说明（本文件）
 └── package.json           # 项目配置
 ```
