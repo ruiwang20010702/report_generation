@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { VideoAnalysisForm } from "@/components/VideoAnalysisForm";
 import { LoadingState } from "@/components/LoadingState";
 import { ReportDisplay } from "@/components/ReportDisplay";
-import logo51Talk from "@/assets/51talk-logo.jpg";
+import logo51Talk from "@/assets/51talk-logo-new.png";
 import {
   videoAnalysisAPI,
   VideoAnalysisResponse,
@@ -436,7 +436,7 @@ const Index = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-gradient-to-br from-primary/20 via-background to-secondary/20">
       {appState === "form" && (
         <div className="min-h-screen flex flex-col items-center justify-center p-4">
           <div className="w-full max-w-2xl mb-8">
@@ -460,7 +460,7 @@ const Index = () => {
               className="h-16 mx-auto mb-4 bg-white p-2 rounded shadow-md"
             />
             <h1 className="text-4xl md:text-5xl font-bold text-primary mb-2">
-              51Talk 学习分析
+              51Talk 学情分析
             </h1>
             <p className="text-lg text-muted-foreground">
               AI驱动的英语学习进步追踪系统

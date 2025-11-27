@@ -6,10 +6,10 @@ import monkeyMascot from "@/assets/mascot-goodjob-new.png";
 import { AnalysisJobState } from "@/services/api";
 
 const ANALYSIS_STEPS = [
-  { icon: Video, label: "下载并分析视频内容", duration: 15000 }, // 15秒
-  { icon: Brain, label: "AI深度学习分析", duration: 20000 },      // 20秒
-  { icon: BarChart3, label: "生成数据报告", duration: 15000 },    // 15秒
-  { icon: FileText, label: "准备最终报告", duration: 10000 }      // 10秒
+  { icon: Video, label: "下载并分析视频内容", duration: 30000 }, // 30秒
+  { icon: Brain, label: "AI深度学习分析", duration: 30000 },      // 30秒
+  { icon: BarChart3, label: "生成数据报告", duration: 30000 },    // 35秒
+  { icon: FileText, label: "准备最终报告", duration: 300000 }      // 30秒
 ]; // 总时长：60秒
 
 interface LoadingStateProps {
@@ -94,7 +94,7 @@ export const LoadingState = ({
   }, [jobState, statusMeta]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-hero">
+    <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-primary/20 via-background to-secondary/20">
       <Card className="w-full max-w-lg shadow-elevated border-2 border-primary/20">
         <CardContent className="pt-8 pb-8">
           <div className="flex flex-col items-center space-y-8">

@@ -235,7 +235,7 @@ const InterpretationPage = () => {
 
   if (loading || regenerating) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-background">
+      <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-primary/20 via-background to-secondary/20">
         <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
         <p className="text-lg text-muted-foreground">{statusMessage}</p>
         {jobState && jobState.status === 'processing' && (
@@ -283,7 +283,7 @@ const InterpretationPage = () => {
   if (!interpretation || !displayData) return null;
 
   return (
-    <div className="min-h-screen bg-muted/30 print:bg-white">
+    <div className="min-h-screen bg-gradient-to-br from-primary/20 via-background to-secondary/20 print:bg-white">
       <div className="container max-w-4xl mx-auto py-8 px-4 print:py-0 print:px-0">
         {/* 顶部导航 - 打印时隐藏 */}
         <div className="flex items-center justify-between mb-6 print:hidden">
