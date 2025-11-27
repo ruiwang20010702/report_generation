@@ -4,6 +4,7 @@ import { tingwuTranscriptionService } from '../services/tingwuTranscriptionServi
 import { AppError, ErrorType, asyncHandler, createErrorContext } from '../utils/errors.js';
 import { isValidVideoUrl, isValidStudentName, isValidStudentId, safeSubstring } from '../utils/validation.js';
 import { analysisJobQueue } from '../services/analysisJobQueue.js';
+import { interpretationJobQueue } from '../services/interpretationJobQueue.js';
 import { reportRecordService } from '../services/reportRecordService.js';
 import { getCurrentUser } from '../services/authService.js';
 
@@ -629,6 +630,88 @@ router.put('/interpretation/:reportId', asyncHandler(async (req: Request, res: R
       error: '未找到对应的报告记录',
     });
   }
+}));
+
+/**
+ * POST /api/analysis/interpretation/enqueue
+ * 异步生成解读报告 - 将任务加入队列
+ * 返回 jobId 和建议的轮询间隔
+ */
+router.post('/interpretation/enqueue', asyncHandler(async (req: Request, res: Response) => {
+  const context = createErrorContext(req);
+  
+  const reportData = req.body?.reportData;
+  const reportId = req.body?.reportId;
+  const forceRegenerate = req.body?.forceRegenerate === true;
+  
+  if (!reportData || typeof reportData !== 'object') {
+    throw new AppError(
+      ErrorType.VALIDATION_ERROR,
+      'Missing or invalid reportData',
+      {
+        userMessage: '请提供报告数据',
+        context,
+      }
+    );
+  }
+  
+  if (!reportData.studentName) {
+    throw new AppError(
+      ErrorType.VALIDATION_ERROR,
+      'Missing studentName in reportData',
+      {
+        userMessage: '报告数据中缺少学生姓名',
+        context,
+      }
+    );
+  }
+  
+  console.log(`\n📝 收到解读版异步生成请求 - 学生: ${reportData.studentName}`);
+  if (reportId) {
+    console.log(`   报告ID: ${reportId}`);
+  }
+  if (forceRegenerate) {
+    console.log(`   强制重新生成: 是`);
+  }
+  
+  const result = await interpretationJobQueue.enqueue(reportData, {
+    reportId,
+    forceRegenerate,
+  });
+  
+  res.json({
+    success: true,
+    message: result.job.status === 'completed' ? '解读报告已从缓存获取' : '任务已入队',
+    job: result.job,
+    pollAfterSeconds: result.pollAfterSeconds,
+  });
+}));
+
+/**
+ * GET /api/analysis/interpretation/jobs/:jobId
+ * 查询解读报告生成任务状态
+ */
+router.get('/interpretation/jobs/:jobId', asyncHandler(async (req: Request, res: Response) => {
+  const { jobId } = req.params;
+  
+  if (!jobId) {
+    return res.status(400).json({
+      success: false,
+      error: '缺少任务ID',
+    });
+  }
+  
+  const jobState = await interpretationJobQueue.getJob(jobId);
+  
+  if (!jobState) {
+    return res.status(404).json({
+      success: false,
+      error: '任务不存在或已过期',
+    });
+  }
+  
+  // 返回任务状态（直接返回 jobState 对象，与分析任务保持一致）
+  res.json(jobState);
 }));
 
 export default router;

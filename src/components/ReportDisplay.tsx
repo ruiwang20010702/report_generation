@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Download, TrendingUp, TrendingDown, Minus, ArrowLeft, Code2, Music, Lightbulb, X, Check, Zap, Smile, BookOpen, Layers, Hand, MessageSquare, CheckCircle, BookMarked, BarChart3, Target, Trophy, Edit3, RefreshCcw, FileText } from "lucide-react";
+import { Download, TrendingUp, TrendingDown, Minus, ArrowLeft, Code2, Music, Lightbulb, X, Check, Zap, Smile, BookOpen, Layers, Hand, MessageSquare, CheckCircle, BookMarked, BarChart3, Target, Trophy, Edit3, RefreshCcw, FileText, Plus, Trash2 } from "lucide-react";
 import logo51Talk from "@/assets/51talk-logo-new.jpg";
 import mascotHighFive from "@/assets/mascot-highfive-card.png";
 import mascotLearn from "@/assets/mascot-learn-card.png";
@@ -108,9 +108,38 @@ interface CachedReport {
 // 改为按 reportId 存储，每份报告独立缓存
 const getStorageKey = (reportId?: string) => `${STORAGE_KEY_PREFIX}:${reportId || "default"}`;
 
-const parsePercentageValue = (percentage?: string): number | null => {
-  if (!percentage) return null;
-  const sanitized = percentage.replace(/[^\d.-]/g, "");
+// 安全地将任何值转换为字符串（处理对象类型）
+const safeStringify = (value: unknown): string => {
+  if (value === undefined || value === null) return "";
+  if (typeof value === "string") return value;
+  if (typeof value === "number") return String(value);
+  if (typeof value === "object") {
+    // 如果是对象，尝试提取有意义的值
+    const obj = value as Record<string, unknown>;
+    // 尝试常见的字段名
+    if ("percentage" in obj) return safeStringify(obj.percentage);
+    if ("value" in obj) return safeStringify(obj.value);
+    if ("text" in obj) return safeStringify(obj.text);
+    // 如果都没有，返回空字符串而不是 [object Object]
+    return "";
+  }
+  return String(value);
+};
+
+const parsePercentageValue = (percentage?: unknown): number | null => {
+  if (percentage === undefined || percentage === null) return null;
+  
+  // 如果已经是数字，直接返回
+  if (typeof percentage === 'number') {
+    return Number.isFinite(percentage) ? percentage : null;
+  }
+  
+  // 先安全转换为字符串（处理对象类型）
+  const strValue = safeStringify(percentage);
+  if (!strValue) return null;
+  
+  // 如果是字符串，提取数字
+  const sanitized = strValue.replace(/[^\d.-]/g, "");
   if (!sanitized) return null;
 
   const numericValue = Number(sanitized);
@@ -153,7 +182,7 @@ const EditableText = ({
   editingClassName,
   placeholder,
 }: {
-  value: string;
+  value: string | number;
   onChange: (newValue: string) => void;
   isEditing: boolean;
   multiline?: boolean;
@@ -163,7 +192,8 @@ const EditableText = ({
   editingClassName?: string;
   placeholder?: string;
 }) => {
-  const safeValue = value ?? "";
+  // 确保 value 转换为字符串，处理数字类型
+  const safeValue = value !== undefined && value !== null ? String(value) : "";
   const inputClassName = editingClassName ?? className;
 
   if (isEditing) {
@@ -288,6 +318,26 @@ export const ReportDisplay = ({ data: initialData, onBack }: ReportDisplayProps)
       }
 
       current[path[path.length - 1]] = newValue;
+      return cloned;
+    });
+  };
+
+  // 添加建议
+  const handleAddSuggestion = (category: "pronunciation" | "intonation" | "grammar") => {
+    setEditableData((prev) => {
+      const cloned = cloneData(prev);
+      const suggestions = cloned.improvementAreas[category].suggestions;
+      suggestions.push({ title: "", description: "" });
+      return cloned;
+    });
+  };
+
+  // 删除建议
+  const handleDeleteSuggestion = (category: "pronunciation" | "intonation" | "grammar", idx: number) => {
+    setEditableData((prev) => {
+      const cloned = cloneData(prev);
+      const suggestions = cloned.improvementAreas[category].suggestions;
+      suggestions.splice(idx, 1);
       return cloned;
     });
   };
@@ -596,7 +646,7 @@ export const ReportDisplay = ({ data: initialData, onBack }: ReportDisplayProps)
                         <div className="flex items-baseline gap-3 mb-3">
                           <TrendIcon trend={derivedTrend} />
                           <EditableText
-                            value={value.percentage}
+                            value={safeStringify(value.percentage) || "0%"}
                             onChange={(newValue) => handleFieldChange(["learningData", key, "percentage"], newValue)}
                             isEditing={isEditing}
                             className={`text-5xl font-extrabold drop-shadow-sm w-full ${percentageColorClass}`}
@@ -604,7 +654,7 @@ export const ReportDisplay = ({ data: initialData, onBack }: ReportDisplayProps)
                           <TrendBadge trend={derivedTrend} />
                         </div>
                         <EditableText
-                          value={value.analysis}
+                          value={safeStringify(value.analysis)}
                           onChange={(newValue) => handleFieldChange(["learningData", key, "analysis"], newValue)}
                           isEditing={isEditing}
                           multiline
@@ -730,6 +780,7 @@ export const ReportDisplay = ({ data: initialData, onBack }: ReportDisplayProps)
                 </div>
 
                 {/* Specific Pronunciation Examples */}
+                {Array.isArray(data.improvementAreas.pronunciation.examples) && data.improvementAreas.pronunciation.examples.length > 0 && (
                 <div className="space-y-4">
                   <h4 className="font-bold text-foreground flex items-center gap-2 text-xl">
                     <span className="text-3xl">📝</span> 特定单词发音问题单
@@ -783,9 +834,10 @@ export const ReportDisplay = ({ data: initialData, onBack }: ReportDisplayProps)
                     ))}
                   </div>
                 </div>
-
+                )}
 
                 {/* Suggestions */}
+                {Array.isArray(data.improvementAreas.pronunciation.suggestions) && (data.improvementAreas.pronunciation.suggestions.length > 0 || isEditing) && (
                 <div className="p-6 rounded-2xl bg-gradient-to-br from-secondary/10 to-secondary/5 border-none shadow-md">
                   <h4 className="font-bold text-secondary mb-5 flex items-center gap-3 text-xl">
                     <div className="w-10 h-10 rounded-xl bg-secondary/20 flex items-center justify-center flex-shrink-0">
@@ -794,34 +846,58 @@ export const ReportDisplay = ({ data: initialData, onBack }: ReportDisplayProps)
                     <span className="flex-shrink-0">提升建议</span>
                   </h4>
                   <div className="space-y-4">
-                    {data.improvementAreas.pronunciation.suggestions.map((suggestion, idx) => (
-                      <div key={idx} className="flex gap-4 p-4 rounded-xl bg-white/50 hover:bg-white/80 transition-colors">
+                    {data.improvementAreas.pronunciation.suggestions
+                      .map((suggestion, originalIdx) => ({ suggestion, originalIdx }))
+                      .filter(({ suggestion }) => isEditing || suggestion.title || suggestion.description)
+                      .map(({ suggestion, originalIdx }, displayIdx) => (
+                      <div key={originalIdx} className="flex gap-4 p-4 rounded-xl bg-white/50 hover:bg-white/80 transition-colors group">
                         <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-secondary to-secondary/80 text-secondary-foreground flex items-center justify-center flex-shrink-0 font-bold text-base shadow-sm">
-                          {idx + 1}
+                          {displayIdx + 1}
                         </div>
                         <div className="flex-1 min-w-0 space-y-1">
                           <EditableText
                             value={suggestion.title}
-                            onChange={(newValue) => handleFieldChange(["improvementAreas", "pronunciation", "suggestions", idx, "title"], newValue)}
+                            onChange={(newValue) => handleFieldChange(["improvementAreas", "pronunciation", "suggestions", originalIdx, "title"], newValue)}
                             isEditing={isEditing}
                             className="font-bold text-foreground text-base mb-1"
                             as="h5"
+                            placeholder="请输入建议标题..."
                           />
                           <EditableText
                             value={suggestion.description}
-                            onChange={(newValue) => handleFieldChange(["improvementAreas", "pronunciation", "suggestions", idx, "description"], newValue)}
+                            onChange={(newValue) => handleFieldChange(["improvementAreas", "pronunciation", "suggestions", originalIdx, "description"], newValue)}
                             isEditing={isEditing}
                             multiline
                             rows={6}
                             as="p"
                             className="text-base text-muted-foreground leading-relaxed w-full"
                             editingClassName="text-base text-muted-foreground leading-relaxed min-h-[160px] w-full"
+                            placeholder="请输入建议详情..."
                           />
                         </div>
+                        {isEditing && (
+                          <button
+                            onClick={() => handleDeleteSuggestion("pronunciation", originalIdx)}
+                            className="w-8 h-8 rounded-lg bg-destructive/10 hover:bg-destructive/20 flex items-center justify-center flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                            title="删除此建议"
+                          >
+                            <Trash2 className="w-4 h-4 text-destructive" />
+                          </button>
+                        )}
                       </div>
                     ))}
+                    {isEditing && (
+                      <button
+                        onClick={() => handleAddSuggestion("pronunciation")}
+                        className="w-full p-4 rounded-xl border-2 border-dashed border-secondary/30 hover:border-secondary/50 hover:bg-secondary/5 flex items-center justify-center gap-2 text-secondary/70 hover:text-secondary transition-colors"
+                      >
+                        <Plus className="w-5 h-5" />
+                        <span className="font-medium">添加建议</span>
+                      </button>
+                    )}
                   </div>
                 </div>
+                )}
               </div>
             )}
 
@@ -855,6 +931,7 @@ export const ReportDisplay = ({ data: initialData, onBack }: ReportDisplayProps)
                 </div>
 
                 {/* Intonation Suggestions */}
+                {Array.isArray(data.improvementAreas.intonation.suggestions) && (data.improvementAreas.intonation.suggestions.length > 0 || isEditing) && (
                 <div className="p-6 rounded-2xl bg-gradient-to-br from-secondary/10 to-secondary/5 border-none shadow-md">
                   <h4 className="font-bold text-secondary mb-5 flex items-center gap-3 text-xl">
                     <div className="w-10 h-10 rounded-xl bg-secondary/20 flex items-center justify-center flex-shrink-0">
@@ -863,34 +940,58 @@ export const ReportDisplay = ({ data: initialData, onBack }: ReportDisplayProps)
                     <span className="flex-shrink-0">提升建议</span>
                   </h4>
                   <div className="space-y-4">
-                    {data.improvementAreas.intonation.suggestions.map((suggestion, idx) => (
-                      <div key={idx} className="flex gap-4 p-4 rounded-xl bg-white/50 hover:bg-white/80 transition-colors">
+                    {data.improvementAreas.intonation.suggestions
+                      .map((suggestion, originalIdx) => ({ suggestion, originalIdx }))
+                      .filter(({ suggestion }) => isEditing || suggestion.title || suggestion.description)
+                      .map(({ suggestion, originalIdx }, displayIdx) => (
+                      <div key={originalIdx} className="flex gap-4 p-4 rounded-xl bg-white/50 hover:bg-white/80 transition-colors group">
                         <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-secondary to-secondary/80 text-secondary-foreground flex items-center justify-center flex-shrink-0 font-bold text-base shadow-sm">
-                          {idx + 1}
+                          {displayIdx + 1}
                         </div>
                         <div className="flex-1 min-w-0 space-y-1">
                           <EditableText
                             value={suggestion.title}
-                            onChange={(newValue) => handleFieldChange(["improvementAreas", "intonation", "suggestions", idx, "title"], newValue)}
+                            onChange={(newValue) => handleFieldChange(["improvementAreas", "intonation", "suggestions", originalIdx, "title"], newValue)}
                             isEditing={isEditing}
                             as="h5"
                             className="font-bold text-foreground text-base mb-1"
+                            placeholder="请输入建议标题..."
                           />
                           <EditableText
                             value={suggestion.description}
-                            onChange={(newValue) => handleFieldChange(["improvementAreas", "intonation", "suggestions", idx, "description"], newValue)}
+                            onChange={(newValue) => handleFieldChange(["improvementAreas", "intonation", "suggestions", originalIdx, "description"], newValue)}
                             isEditing={isEditing}
                             multiline
                             rows={6}
                             as="p"
                             className="text-base text-muted-foreground leading-relaxed w-full"
                             editingClassName="text-base text-muted-foreground leading-relaxed min-h-[160px] w-full"
+                            placeholder="请输入建议详情..."
                           />
                         </div>
+                        {isEditing && (
+                          <button
+                            onClick={() => handleDeleteSuggestion("intonation", originalIdx)}
+                            className="w-8 h-8 rounded-lg bg-destructive/10 hover:bg-destructive/20 flex items-center justify-center flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                            title="删除此建议"
+                          >
+                            <Trash2 className="w-4 h-4 text-destructive" />
+                          </button>
+                        )}
                       </div>
                     ))}
+                    {isEditing && (
+                      <button
+                        onClick={() => handleAddSuggestion("intonation")}
+                        className="w-full p-4 rounded-xl border-2 border-dashed border-secondary/30 hover:border-secondary/50 hover:bg-secondary/5 flex items-center justify-center gap-2 text-secondary/70 hover:text-secondary transition-colors"
+                      >
+                        <Plus className="w-5 h-5" />
+                        <span className="font-medium">添加建议</span>
+                      </button>
+                    )}
                   </div>
                 </div>
+                )}
               </div>
             )}
 
@@ -924,6 +1025,7 @@ export const ReportDisplay = ({ data: initialData, onBack }: ReportDisplayProps)
                 </div>
 
                 {/* Grammar Examples */}
+                {Array.isArray(data.improvementAreas.grammar.examples) && data.improvementAreas.grammar.examples.length > 0 && (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
                   {data.improvementAreas.grammar.examples.map((example, idx) => (
                     <div key={idx} className="p-5 rounded-2xl bg-gradient-to-br from-accent/20 to-accent/10 border-none shadow-md hover:shadow-lg transition-shadow">
@@ -968,8 +1070,10 @@ export const ReportDisplay = ({ data: initialData, onBack }: ReportDisplayProps)
                     </div>
                   ))}
                 </div>
+                )}
 
                 {/* Grammar Suggestions */}
+                {Array.isArray(data.improvementAreas.grammar.suggestions) && (data.improvementAreas.grammar.suggestions.length > 0 || isEditing) && (
                 <div className="p-6 rounded-2xl bg-gradient-to-br from-secondary/10 to-secondary/5 border-none shadow-md">
                   <h4 className="font-bold text-secondary mb-5 flex items-center gap-3 text-xl">
                     <div className="w-10 h-10 rounded-xl bg-secondary/20 flex items-center justify-center flex-shrink-0">
@@ -978,34 +1082,58 @@ export const ReportDisplay = ({ data: initialData, onBack }: ReportDisplayProps)
                     <span className="flex-shrink-0">提升建议</span>
                   </h4>
                   <div className="space-y-4">
-                    {data.improvementAreas.grammar.suggestions.map((suggestion, idx) => (
-                      <div key={idx} className="flex gap-4 p-4 rounded-xl bg-white/50 hover:bg-white/80 transition-colors">
+                    {data.improvementAreas.grammar.suggestions
+                      .map((suggestion, originalIdx) => ({ suggestion, originalIdx }))
+                      .filter(({ suggestion }) => isEditing || suggestion.title || suggestion.description)
+                      .map(({ suggestion, originalIdx }, displayIdx) => (
+                      <div key={originalIdx} className="flex gap-4 p-4 rounded-xl bg-white/50 hover:bg-white/80 transition-colors group">
                         <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-secondary to-secondary/80 text-secondary-foreground flex items-center justify-center flex-shrink-0 font-bold text-base shadow-sm">
-                          {idx + 1}
+                          {displayIdx + 1}
                         </div>
                         <div className="flex-1 min-w-0 space-y-1">
                           <EditableText
                             value={suggestion.title}
-                            onChange={(newValue) => handleFieldChange(["improvementAreas", "grammar", "suggestions", idx, "title"], newValue)}
+                            onChange={(newValue) => handleFieldChange(["improvementAreas", "grammar", "suggestions", originalIdx, "title"], newValue)}
                             isEditing={isEditing}
                             as="h5"
                             className="font-bold text-foreground text-base mb-1"
+                            placeholder="请输入建议标题..."
                           />
                           <EditableText
                             value={suggestion.description}
-                            onChange={(newValue) => handleFieldChange(["improvementAreas", "grammar", "suggestions", idx, "description"], newValue)}
+                            onChange={(newValue) => handleFieldChange(["improvementAreas", "grammar", "suggestions", originalIdx, "description"], newValue)}
                             isEditing={isEditing}
                             multiline
                             rows={6}
                             as="p"
                             className="text-base text-muted-foreground leading-relaxed w-full"
                             editingClassName="text-base text-muted-foreground leading-relaxed min-h-[160px] w-full"
+                            placeholder="请输入建议详情..."
                           />
                         </div>
+                        {isEditing && (
+                          <button
+                            onClick={() => handleDeleteSuggestion("grammar", originalIdx)}
+                            className="w-8 h-8 rounded-lg bg-destructive/10 hover:bg-destructive/20 flex items-center justify-center flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                            title="删除此建议"
+                          >
+                            <Trash2 className="w-4 h-4 text-destructive" />
+                          </button>
+                        )}
                       </div>
                     ))}
+                    {isEditing && (
+                      <button
+                        onClick={() => handleAddSuggestion("grammar")}
+                        className="w-full p-4 rounded-xl border-2 border-dashed border-secondary/30 hover:border-secondary/50 hover:bg-secondary/5 flex items-center justify-center gap-2 text-secondary/70 hover:text-secondary transition-colors"
+                      >
+                        <Plus className="w-5 h-5" />
+                        <span className="font-medium">添加建议</span>
+                      </button>
+                    )}
                   </div>
                 </div>
+                )}
               </div>
             )}
           </CardContent>
@@ -1033,7 +1161,7 @@ export const ReportDisplay = ({ data: initialData, onBack }: ReportDisplayProps)
               className="rounded-xl font-semibold shadow-sm hover:shadow-md transition-all disabled:opacity-60"
             >
               <Edit3 className="w-5 h-5 mr-2" />
-              {isEditing ? (isSaving ? "保存中..." : "完成编辑") : "编辑报告内容"}
+              {isEditing ? (isSaving ? "保存中..." : "保存编辑内容") : "编辑报告内容"}
             </Button>
             {isEditing && (
               <Button

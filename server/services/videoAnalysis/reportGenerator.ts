@@ -12,7 +12,8 @@ import {
   validateAndFixPronunciationExamples,
   validateAndFixGrammarExamples,
   validateAndFixNegativePercentages,
-  validateAndFixDataConsistency
+  validateAndFixDataConsistency,
+  normalizeLearningData
 } from './dataValidator.js';
 import type { SingleVideoResult, StudentInfo } from './types.js';
 import type { VideoAnalysisResponse, CostBreakdown } from '../../types/index.js';
@@ -100,7 +101,8 @@ function extractStudentWords(utterances: any[] | undefined): string[] {
 }
 
 /**
- * 计算变化百分比
+ * 计算变化百分比（相对变化率）
+ * 用于非百分比指标，如次数、词数等
  */
 function calculateChange(oldVal: number | undefined | null, newVal: number | undefined | null): string {
   // 确保值是有效数字
@@ -116,6 +118,21 @@ function calculateChange(oldVal: number | undefined | null, newVal: number | und
   
   const changeStr = changeValue.toFixed(0);
   return changeValue >= 0 ? `+${changeStr}%` : `${changeStr}%`;
+}
+
+/**
+ * 计算百分比指标的差值（绝对差值）
+ * 用于已经是百分比的指标，如完整句子率、阅读准确率等
+ * 例如：从80%提升到88%，应该显示+8%而不是+10%
+ */
+function calculatePercentageDiff(oldVal: number | undefined | null, newVal: number | undefined | null): string {
+  const oldNum = Number(oldVal) || 0;
+  const newNum = Number(newVal) || 0;
+  
+  const diff = newNum - oldNum;
+  const diffStr = Math.round(diff).toString();
+  
+  return diff >= 0 ? `+${diffStr}%` : `${diffStr}%`;
 }
 
 /**
@@ -246,6 +263,15 @@ export async function compareVideos(
     console.log(`📝 [发音分析] 合并后的发音重点关注单词 (${pronunciationFocusWords.length}个): [${pronunciationFocusWords.join(', ')}]`);
     console.log(`📝 [发音分析] 学生说过的所有单词 (${allStudentWords.length}个): [${allStudentWords.slice(0, 20).join(', ')}${allStudentWords.length > 20 ? '...' : ''}]`);
 
+    // 3. 提取 AI 在单视频分析时识别的语法错误示例（每个视频最多 3 个，共最多 6 个）
+    const video1GrammarExamples = Array.isArray(video1Analysis.grammarExamples) ? video1Analysis.grammarExamples : [];
+    const video2GrammarExamples = Array.isArray(video2Analysis.grammarExamples) ? video2Analysis.grammarExamples : [];
+    const allGrammarExamples = [...video1GrammarExamples, ...video2GrammarExamples];
+    
+    console.log(`📝 [语法分析] 视频1 AI提取的语法错误示例: ${video1GrammarExamples.length}个`);
+    console.log(`📝 [语法分析] 视频2 AI提取的语法错误示例: ${video2GrammarExamples.length}个`);
+    console.log(`📝 [语法分析] 合并后的语法错误示例 (${allGrammarExamples.length}个)`);
+
     // 预提取关键数据（确保所有数值都有默认值）
     const video1Data = {
       handRaising: { 
@@ -295,12 +321,12 @@ export async function compareVideos(
       completeSentences: {
         old: video1Data.completeSentences.percentage,
         new: video2Data.completeSentences.percentage,
-        change: calculateChange(video1Data.completeSentences.percentage, video2Data.completeSentences.percentage)
+        change: calculatePercentageDiff(video1Data.completeSentences.percentage, video2Data.completeSentences.percentage)
       },
       accuracy: {
         old: video1Data.accuracy.correctRate,
         new: video2Data.accuracy.correctRate,
-        change: calculateChange(video1Data.accuracy.correctRate, video2Data.accuracy.correctRate)
+        change: calculatePercentageDiff(video1Data.accuracy.correctRate, video2Data.accuracy.correctRate)
       }
     };
 
@@ -315,7 +341,8 @@ export async function compareVideos(
       video2Dialogues,
       dataChanges,
       allStudentWords,
-      pronunciationFocusWords
+      pronunciationFocusWords,
+      allGrammarExamples
     );
 
     const model = getModelName(openai);
@@ -362,6 +389,9 @@ export async function compareVideos(
     }
 
     const analysisData = JSON.parse(content);
+    
+    // 首先规范化 learningData（处理对象类型的字段值）
+    normalizeLearningData(analysisData);
     
     // 验证并修复数据
     validateAndFixPronunciationExamples(analysisData);
@@ -519,7 +549,8 @@ function buildComparisonPrompt(
   video2Dialogues: string,
   dataChanges: any,
   allStudentWords: string[],
-  pronunciationFocusWords: string[]
+  pronunciationFocusWords: string[],
+  allGrammarExamples: any[]
 ): string {
   return `你是一位在英语教学分析领域经验丰富的专家，专注于1对1教学场景的学生进步分析。
 
@@ -543,15 +574,208 @@ ${studentInfo.video2Time ? `- 最近上课时间：${studentInfo.video2Time}` : 
 3. 完整句输出比例：${dataChanges.completeSentences.old}% → ${dataChanges.completeSentences.new}% (${dataChanges.completeSentences.change})
 4. 准确率：${dataChanges.accuracy.old}% → ${dataChanges.accuracy.new}% (${dataChanges.accuracy.change})
 
+---
+
 **【早期课堂数据】**
-转录文本：${video1Result.transcription.text.substring(0, 2000)}${video1Result.transcription.text.length > 2000 ? '...(已截断)' : ''}
+转录文本：
+${video1Result.transcription.text.substring(0, 2000)}${video1Result.transcription.text.length > 2000 ? '...(已截断)' : ''}
 ${video1Dialogues}
-分析结果：${JSON.stringify(video1Analysis, null, 2)}
+分析结果：
+${JSON.stringify(video1Analysis, null, 2)}
 
 **【最近课堂数据】**
-转录文本：${video2Result.transcription.text.substring(0, 2000)}${video2Result.transcription.text.length > 2000 ? '...(已截断)' : ''}
+转录文本：
+${video2Result.transcription.text.substring(0, 2000)}${video2Result.transcription.text.length > 2000 ? '...(已截断)' : ''}
 ${video2Dialogues}
-分析结果：${JSON.stringify(video2Analysis, null, 2)}
+分析结果：
+${JSON.stringify(video2Analysis, null, 2)}
+
+---
+
+**请按照以下要求进行深度对比分析：**
+
+**一、4项关键提升率**（基于两次课堂的量化数据对比）
+
+1. **主动回答次数提升率**：
+   - 计算：（最近课堂主动回答次数 - 早期课堂主动回答次数）/ 早期课堂主动回答次数 × 100%
+   - 分析：提升率反映了学生的学习积极性和课堂参与意愿的变化
+   - 案例：提取两次课堂中最能体现主动性的对话片段进行对比
+
+2. **平均回答长度提升率**：
+   - 计算：（最近课堂平均回答词数 - 早期课堂平均回答词数）/ 早期课堂平均回答词数 × 100%
+   - 分析：提升率体现学生表达能力和语言组织能力的发展
+   - 案例：对比两次课堂中相似问题的回答长度
+
+3. **完整句输出提升率**：
+   - 计算：（最近课堂完整句次数 - 早期课堂完整句次数）/ 早期课堂完整句次数 × 100%
+   - 分析：提升率反映学生语法结构和句子完整性的进步
+   - 案例：提取两次课堂的典型句子进行对比
+
+4. **语言准确率变化**：
+   - 计算：最近课堂准确率 - 早期课堂准确率
+   - 分析：准确率变化反映学生发音、语法、词汇使用的精准度
+   - 案例：对比两次课堂中的错误类型和频率
+
+**二、4大维度深度进步分析**
+
+每个维度需要包含：
+1. 详细的能力变化分析（至少${REPORT_WORD_COUNT.progressDimensions.fluency}词）
+2. 两次课堂的原文对话案例对比（只需1组最具代表性的案例）
+3. 专业解读：这种进步在英语学习中的意义
+
+**维度1：口语流利度**
+- 对比：语速、停顿频率、连贯性、卡顿情况
+- 原文案例：提取两次课堂中学生最流畅的一段表达进行对比
+- 专业解读：流利度提升对整体英语能力的影响
+
+**维度2：自信心与互动**
+- 对比：主动发言次数、声音大小、表达犹豫程度、眼神交流（如果有）
+- 原文案例：提取两次课堂中学生主动发起或回应的对话，必须使用【早期课堂】【最近课堂】【对比分析】的换行格式
+- 专业解读：自信心对语言学习的促进作用
+
+**维度3：语言主动应用能力**
+- 对比：词汇使用的灵活性、新词运用、语法结构的多样性
+- 原文案例：对比两次课堂中学生使用复杂词汇或句式的片段，必须使用【早期课堂】【最近课堂】【对比分析】的换行格式
+- 专业解读：主动应用能力体现的语言内化程度
+
+**维度4：句子复杂度及组织能力**
+- 对比：句型结构、从句使用、连接词、逻辑表达
+- 原文案例：提取两次课堂中学生说出的最复杂句子进行对比，必须使用【早期课堂】【最近课堂】【对比分析】的换行格式
+- 专业解读：句子复杂度对语言表达能力的提升意义
+
+---
+
+**请以JSON格式返回分析报告**：
+
+{
+  "learningData": {
+    "handRaising": {
+      "trend": "提升/下降/持平",
+      "percentage": "提升率（如 +30%，必须基于实际数据计算）",
+      "analysis": "详细分析（融入具体数据、原文案例对比、专业解读），至少${REPORT_WORD_COUNT.learningData.handRaising}词"
+    },
+    "answerLength": {
+      "trend": "提升/下降/持平",
+      "percentage": "提升率（必须基于实际数据）",
+      "analysis": "详细分析（融入对比案例），至少${REPORT_WORD_COUNT.learningData.answerLength}词"
+    },
+    "completeSentences": {
+      "trend": "提升/下降/持平",
+      "percentage": "提升率（必须基于实际数据）",
+      "analysis": "详细分析（融入句子案例对比），至少${REPORT_WORD_COUNT.learningData.completeSentences}词"
+    },
+    "readingAccuracy": {
+      "trend": "提升/下降/持平",
+      "percentage": "变化值（如 +8%或92%→95%）",
+      "analysis": "详细分析（融入错误类型对比），至少${REPORT_WORD_COUNT.learningData.readingAccuracy}词"
+    }
+  },
+  "progressDimensions": {
+    "fluency": {
+      "analysis": "口语流利度的深度分析，包括：1) 具体数据对比；2) 语速、停顿、连贯性变化；3) 专业解读。至少${REPORT_WORD_COUNT.progressDimensions.fluency}词。",
+      "example": "【早期课堂】\\n老师：'...'\\n学生：'...'\\n\\n【最近课堂】\\n老师：'...'\\n学生：'...'\\n\\n【对比分析】\\n..."
+    },
+    "confidence": {
+      "analysis": "自信心与互动的深度分析（融入量化数据），至少${REPORT_WORD_COUNT.progressDimensions.confidence}词。",
+      "example": "【早期课堂】\\n老师：'...'\\n学生：'...'\\n\\n【最近课堂】\\n老师：'...'\\n学生：'...'\\n\\n【对比分析】\\n..."
+    },
+    "languageApplication": {
+      "analysis": "语言主动应用能力的深度分析（融入词汇和语法对比），至少${REPORT_WORD_COUNT.progressDimensions.languageApplication}词。",
+      "example": "【早期课堂】\\n老师：'...'\\n学生：'...'\\n\\n【最近课堂】\\n老师：'...'\\n学生：'...'\\n\\n【对比分析】\\n..."
+    },
+    "sentenceComplexity": {
+      "analysis": "句子复杂度及组织能力的深度分析（融入句型统计），至少${REPORT_WORD_COUNT.progressDimensions.sentenceComplexity}词。",
+      "example": "【早期课堂】\\n老师：'...'\\n学生：'...'\\n\\n【最近课堂】\\n老师：'...'\\n学生：'...'\\n\\n【对比分析】\\n..."
+    }
+  },
+  "improvementAreas": {
+    "pronunciation": {
+      "overview": "发音方面的整体评估和趋势总结（基于两次课堂对比）。至少${REPORT_WORD_COUNT.improvementAreas.overview}词。",
+      "details": "详细的发音问题深度分析。至少${REPORT_WORD_COUNT.improvementAreas.details}词。",
+      "examples": [
+        {
+          "word": "🔴必须从上方【学生说过的单词列表】中选择🔴 第1个发音错误的单词",
+          "incorrect": "学生实际发出的错误发音的IPA音标",
+          "correct": "该单词的标准正确发音的IPA音标（必须与incorrect不同）",
+          "type": "问题类型（如：元音不准确、重音问题、辅音发音等）"
+        },
+        {
+          "word": "第2个发音错误的单词",
+          "incorrect": "错误音标",
+          "correct": "正确音标（必须与incorrect不同）",
+          "type": "问题类型"
+        },
+        {
+          "word": "第3个发音错误的单词",
+          "incorrect": "错误音标",
+          "correct": "正确音标（必须与incorrect不同）",
+          "type": "问题类型"
+        }
+      ],
+      "suggestions": [
+        {
+          "title": "建议标题",
+          "description": "详细的练习建议和方法（至少${REPORT_WORD_COUNT.improvementAreas.suggestion}词）"
+        },
+        {
+          "title": "第二个建议标题",
+          "description": "第二个练习建议和方法（至少${REPORT_WORD_COUNT.improvementAreas.suggestion}词）"
+        }
+      ]
+    },
+    "grammar": {
+      "overview": "语法方面的整体评估和趋势总结。至少${REPORT_WORD_COUNT.improvementAreas.overview}词。",
+      "details": "详细的语法问题深度分析。至少${REPORT_WORD_COUNT.improvementAreas.details}词。",
+      "examples": [
+        // 🔴 必须从上方【单视频分析提取的语法错误示例】中选择3个最有代表性的！
+        // 🔴 如果上方列表为空，才可以根据转录文本自行识别
+        // 🔴 category 和 explanation 必须是中文，incorrect 和 correct 是英文
+        {
+          "category": "中文错误类别（如：主谓一致、动词时态、冠词遗漏）",
+          "incorrect": "学生实际说出的英文错误句子（必须是真实的！）",
+          "correct": "正确的英文句子",
+          "explanation": "中文错误解释和语法规则"
+        },
+        {
+          "category": "第2个中文错误类别",
+          "incorrect": "第2个英文错误句子",
+          "correct": "正确的英文句子",
+          "explanation": "中文错误解释"
+        },
+        {
+          "category": "第3个中文错误类别",
+          "incorrect": "第3个英文错误句子",
+          "correct": "正确的英文句子",
+          "explanation": "中文错误解释"
+        }
+      ],
+      "suggestions": [
+        {
+          "title": "建议标题",
+          "description": "详细的练习建议和方法（至少${REPORT_WORD_COUNT.improvementAreas.suggestion}词）"
+        },
+        {
+          "title": "第二个建议标题",
+          "description": "第二个练习建议和方法（至少${REPORT_WORD_COUNT.improvementAreas.suggestion}词）"
+        }
+      ]
+    },
+    "intonation": {
+      "overview": "语调与节奏方面的整体评估和趋势总结。至少${REPORT_WORD_COUNT.improvementAreas.overview}词。",
+      "details": "详细的语调与节奏深度分析。至少${REPORT_WORD_COUNT.improvementAreas.details}词。",
+      "suggestions": [
+        {
+          "title": "建议标题",
+          "description": "详细的练习建议和方法（至少${REPORT_WORD_COUNT.improvementAreas.suggestion}词）"
+        },
+        {
+          "title": "第二个建议标题",
+          "description": "第二个练习建议和方法（至少${REPORT_WORD_COUNT.improvementAreas.suggestion}词）"
+        }
+      ]
+    }
+  },
+}
 
 **【发音重点关注单词】（共${pronunciationFocusWords.length}个，优先从这些单词中选择发音示例）**
 ${pronunciationFocusWords.join(', ') || '无'}
@@ -559,23 +783,52 @@ ${pronunciationFocusWords.join(', ') || '无'}
 **【学生说过的所有单词】（用于验证，发音示例必须来自此列表）**
 ${allStudentWords.slice(0, 100).join(', ')}${allStudentWords.length > 100 ? '...(仅显示前100个)' : ''}
 
-请以JSON格式返回分析报告，包含以下字段：
-- learningData: 学习数据分析（handRaising, answerLength, completeSentences, readingAccuracy）
-- progressDimensions: 进步维度分析（fluency, confidence, languageApplication, sentenceComplexity）
-- improvementAreas: 改进领域（pronunciation, grammar, intonation）
+**【单视频分析提取的语法错误示例】（共${allGrammarExamples.length}个，请从中选择3个最有代表性的，最好是不同错误类型的）**
+${allGrammarExamples.length > 0 ? allGrammarExamples.map((ex: any, i: number) => `${i + 1}. [${ex.category || '未分类'}] 错误: "${ex.incorrect}" → 正确: "${ex.correct}" (${ex.explanation || '无解释'})`).join('\n') : '无（AI将根据转录文本自行识别）'}
 
-每个字段的具体要求：
-1. learningData 中每个指标需要包含 trend、percentage、analysis
-2. progressDimensions 中每个维度需要包含 analysis 和 example
-3. improvementAreas 中的 pronunciation 需要包含 overview、details、examples（3个发音示例）、suggestions
-4. improvementAreas 中的 grammar 需要包含 overview、details、examples（3个语法示例）、suggestions
+**learningData 的精确格式（必须严格遵守）**：
+\`\`\`json
+{
+  "learningData": {
+    "handRaising": {
+      "trend": "提升",
+      "percentage": "+15%",
+      "analysis": "分析文字..."
+    },
+    "answerLength": {
+      "trend": "提升",
+      "percentage": "+20%",
+      "analysis": "分析文字..."
+    },
+    "completeSentences": {
+      "trend": "持平",
+      "percentage": "0%",
+      "analysis": "分析文字..."
+    },
+    "readingAccuracy": {
+      "trend": "下降",
+      "percentage": "-5%",
+      "analysis": "分析文字..."
+    }
+  }
+}
+\`\`\`
+- trend 必须是字符串，只能是 "提升"、"下降" 或 "持平" 三个值之一
+- percentage 必须是字符串，格式为 "+数字%" 或 "-数字%" 或 "0%"，例如 "+15%"、"-8%"、"0%"
+- analysis 必须是字符串，约50字的分析说明
 
 **重要提示**：
-- 发音示例的单词必须优先从【发音重点关注单词】中选择（这些是 AI 在单视频分析时识别出的发音难点词）
-- 如果【发音重点关注单词】不足 3 个，可以从【学生说过的所有单词】中补充
-- incorrect 和 correct 音标必须不同
-- 所有百分比必须基于实际数据计算
-- 所有原文案例必须来自实际转录文本`;
+1. 所有百分比必须基于实际数据计算，不要编造数字
+2. 所有原文案例必须来自实际转录文本或对话记录
+3. 每个analysis和example字段都要融入"对比"元素，突出变化
+4. 基于阈值触发规则，在suggestions中智能添加相应建议
+5. 确保返回有效的JSON格式，不要包含注释
+6. 所有文字描述要详实、具体、有数据支撑
+7. ⚠️ 发音示例（pronunciation.examples）的单词必须从【学生说过的单词列表】中选择
+8. ⚠️ incorrect 和 correct 音标必须不同！
+9. ⚠️ 语法示例（grammar.examples）必须优先从【单视频分析提取的语法错误示例】中选择3个最有代表性的！这些是学生真实说过的错误句子！
+
+现在开始生成 JSON 响应...`;
 }
 
 

@@ -1,7 +1,7 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { videoAnalysisAPI, type VideoAnalysisResponse, type SpeechContent } from "@/services/api";
+import { videoAnalysisAPI, type VideoAnalysisResponse, type SpeechContent, type InterpretationJobState } from "@/services/api";
 import { ArrowLeft, Loader2, Printer, AlertCircle, RefreshCw, Pencil, Save, X } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -20,21 +20,36 @@ const InterpretationPage = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [fromCache, setFromCache] = useState(false);
   const [reportData, setReportData] = useState<VideoAnalysisResponse | null>(null);
+  
+  // 异步任务状态
+  const [jobState, setJobState] = useState<InterpretationJobState | null>(null);
+  const [statusMessage, setStatusMessage] = useState<string>("正在检查缓存...");
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const fetchInterpretation = useCallback(async (forceRegenerate = false) => {
+    // 取消之前的请求
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    abortControllerRef.current = new AbortController();
+
     try {
       if (forceRegenerate) {
         setRegenerating(true);
+        setStatusMessage("正在提交重新生成请求...");
       } else {
         setLoading(true);
+        setStatusMessage("正在检查缓存...");
       }
       setError(null);
+      setJobState(null);
 
       let data: VideoAnalysisResponse | null = reportData || location.state?.reportData;
 
       // 如果没有通过 state 传递 reportData，且有 reportId，则尝试获取
       if (!data && reportId) {
         try {
+          setStatusMessage("正在获取报告数据...");
           data = await videoAnalysisAPI.getReport(reportId);
           setReportData(data);
         } catch (err) {
@@ -52,11 +67,43 @@ const InterpretationPage = () => {
         setReportData(data);
       }
 
-      // 调用生成解读接口，传入 reportId 用于缓存
-      const result = await videoAnalysisAPI.generateInterpretation(data, {
+      // 使用异步API入队任务
+      setStatusMessage("正在提交生成任务...");
+      const enqueueResult = await videoAnalysisAPI.enqueueInterpretation(data, {
         reportId,
         forceRegenerate,
       });
+
+      // 如果任务已完成（从缓存获取），直接设置结果
+      if (enqueueResult.job.status === 'completed' && enqueueResult.job.result) {
+        setInterpretation(enqueueResult.job.result.interpretation);
+        setFromCache(enqueueResult.job.result.fromCache);
+        if (forceRegenerate) {
+          toast({
+            title: "重新生成成功",
+            description: "解读报告已更新",
+          });
+        }
+        return;
+      }
+
+      // 否则开始轮询
+      setJobState(enqueueResult.job);
+      setStatusMessage(getStatusMessage(enqueueResult.job));
+
+      const result = await videoAnalysisAPI.waitForInterpretationResult(
+        enqueueResult.job.jobId,
+        {
+          pollIntervalMs: 15000, // 15秒轮询
+          maxWaitMs: 300000, // 最多等待5分钟
+          signal: abortControllerRef.current.signal,
+          onPoll: (state) => {
+            setJobState(state);
+            setStatusMessage(getStatusMessage(state));
+          },
+        }
+      );
+
       setInterpretation(result.interpretation);
       setFromCache(result.fromCache);
 
@@ -67,16 +114,47 @@ const InterpretationPage = () => {
         });
       }
     } catch (err) {
+      if (err instanceof Error && err.message === '已取消') {
+        console.log("Request cancelled");
+        return;
+      }
       console.error("Error generating interpretation:", err);
       setError(err instanceof Error ? err.message : "生成解读报告失败");
     } finally {
       setLoading(false);
       setRegenerating(false);
+      setJobState(null);
     }
   }, [reportId, location.state, reportData]);
 
+  // 获取状态消息
+  const getStatusMessage = (state: InterpretationJobState): string => {
+    switch (state.status) {
+      case 'queued':
+        if (state.position > 0) {
+          return `任务排队中，当前位置: ${state.position}，预计等待 ${state.estimatedWaitSeconds} 秒`;
+        }
+        return "任务排队中...";
+      case 'processing':
+        return "正在生成解读报告，请稍候...";
+      case 'completed':
+        return "生成完成！";
+      case 'failed':
+        return state.error?.userMessage || state.error?.message || "生成失败";
+      default:
+        return "处理中...";
+    }
+  };
+
   useEffect(() => {
     fetchInterpretation(false);
+    
+    // 组件卸载时取消请求
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
   }, []);
 
   const handleRegenerate = () => {
@@ -155,12 +233,26 @@ const InterpretationPage = () => {
   // 当前显示的数据（编辑模式使用编辑中的数据，否则使用原始数据）
   const displayData = isEditing ? editedInterpretation : interpretation;
 
-  if (loading) {
+  if (loading || regenerating) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-background">
         <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
-        <p className="text-lg text-muted-foreground">正在加载解读报告，请稍候...</p>
-        <p className="text-sm text-muted-foreground mt-2">正在检查缓存或生成新内容</p>
+        <p className="text-lg text-muted-foreground">{statusMessage}</p>
+        {jobState && jobState.status === 'processing' && (
+          <p className="text-sm text-muted-foreground mt-2">
+            AI 正在生成内容，每15秒自动刷新状态
+          </p>
+        )}
+        {jobState && jobState.status === 'queued' && jobState.position > 0 && (
+          <div className="mt-4 text-center">
+            <p className="text-sm text-muted-foreground">
+              队列位置: {jobState.position}
+            </p>
+            <p className="text-sm text-muted-foreground">
+              预计等待: {jobState.estimatedWaitSeconds} 秒
+            </p>
+          </div>
+        )}
       </div>
     );
   }
@@ -176,6 +268,14 @@ const InterpretationPage = () => {
           <AlertTitle>出错了</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
         </Alert>
+        <Button 
+          variant="outline" 
+          onClick={() => fetchInterpretation(false)} 
+          className="mt-4"
+        >
+          <RefreshCw className="mr-2 h-4 w-4" />
+          重试
+        </Button>
       </div>
     );
   }
@@ -398,4 +498,3 @@ const InterpretationPage = () => {
 };
 
 export default InterpretationPage;
-

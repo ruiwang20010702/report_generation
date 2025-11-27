@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { History, RefreshCcw } from "lucide-react";
+import { History, RefreshCcw, FileText } from "lucide-react";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,7 @@ interface ReportHistoryPanelProps {
   error?: string | null;
   onRefresh: () => void | Promise<void>;
   onSelect: (reportId: string) => void;
+  onViewInterpretation?: (reportId: string) => void;
   loadingReportId?: string | null;
 }
 
@@ -41,6 +42,7 @@ export const ReportHistoryPanel = ({
   error,
   onRefresh,
   onSelect,
+  onViewInterpretation,
   loadingReportId,
 }: ReportHistoryPanelProps) => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -133,16 +135,31 @@ export const ReportHistoryPanel = ({
                       {formatDateTime(report.createdAt)}
                     </div>
                   </div>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="secondary"
-                    className="sm:w-28"
-                    onClick={() => onSelect(report.id)}
-                    disabled={loadingReportId === report.id}
-                  >
-                    {loadingReportId === report.id ? "载入中..." : "查看报告"}
-                  </Button>
+                  <div className="flex gap-2 flex-wrap sm:flex-nowrap">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      className="flex-1 sm:flex-none sm:w-24"
+                      onClick={() => onSelect(report.id)}
+                      disabled={loadingReportId === report.id}
+                    >
+                      {loadingReportId === report.id ? "载入中..." : "查看报告"}
+                    </Button>
+                    {onViewInterpretation && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="flex-1 sm:flex-none sm:w-24"
+                        onClick={() => onViewInterpretation(report.id)}
+                        disabled={loadingReportId === report.id}
+                      >
+                        <FileText className="h-4 w-4 mr-1" />
+                        解读版
+                      </Button>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>

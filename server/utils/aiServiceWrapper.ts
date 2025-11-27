@@ -86,10 +86,80 @@ class AISemaphore {
 }
 
 // 全局 AI 调用信号量（限制并发 AI 调用）
-// GLM-4-Plus 支持最大 20 并发，默认设为 18 留有余量
+// GLM-4-Plus 支持最大 20 并发，默认设为 19 留有余量
 const aiSemaphore = new AISemaphore(
-  Math.max(1, Number.parseInt(process.env.AI_MAX_CONCURRENT || '18', 10))
+  Math.max(1, Number.parseInt(process.env.AI_MAX_CONCURRENT || '19', 10))
 );
+
+/**
+ * AI 请求间隔控制器
+ * 避免瞬时并发过高触发 API 速率限制（429错误）
+ * 通过确保请求之间有最小间隔，平滑请求发送
+ */
+class AIRateLimiter {
+  private lastCallTime: number = 0;
+  private readonly minInterval: number; // 最小间隔（毫秒）
+  private readonly lock: Promise<void> = Promise.resolve();
+  private pendingLock: Promise<void> | null = null;
+
+  constructor(minInterval: number = 100) {
+    this.minInterval = minInterval;
+  }
+
+  /**
+   * 等待直到可以发送下一个请求
+   * 使用锁机制确保多个并发调用也能正确排队
+   */
+  async waitForNextCall(): Promise<void> {
+    // 等待前一个请求的锁释放
+    while (this.pendingLock) {
+      await this.pendingLock;
+    }
+
+    const now = Date.now();
+    const elapsed = now - this.lastCallTime;
+
+    if (elapsed < this.minInterval) {
+      const waitTime = this.minInterval - elapsed;
+      
+      // 创建新的锁
+      let resolveLock: () => void;
+      this.pendingLock = new Promise(resolve => {
+        resolveLock = resolve;
+      });
+
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+      
+      // 释放锁
+      this.pendingLock = null;
+      resolveLock!();
+    }
+
+    this.lastCallTime = Date.now();
+  }
+
+  /**
+   * 获取当前配置的最小间隔
+   */
+  getMinInterval(): number {
+    return this.minInterval;
+  }
+}
+
+// 全局 AI 请求间隔控制器
+// 默认 150ms 间隔，确保每秒最多约 6-7 个请求，避免瞬时并发
+const aiRateLimiter = new AIRateLimiter(
+  Math.max(50, Number.parseInt(process.env.AI_MIN_INTERVAL || '150', 10))
+);
+
+/**
+ * 获取 AI 速率限制器统计
+ */
+export function getAIRateLimiterStats() {
+  return {
+    minInterval: aiRateLimiter.getMinInterval(),
+  };
+}
 
 /**
  * 获取 AI 并发统计
@@ -260,6 +330,9 @@ export async function withRetry<T>(
   
   // 获取信号量（控制并发）
   await aiSemaphore.acquire();
+  
+  // 等待请求间隔（避免瞬时并发过高）
+  await aiRateLimiter.waitForNextCall();
   
   try {
     for (let attempt = 0; attempt <= maxRetries; attempt++) {

@@ -369,6 +369,13 @@ const Index = () => {
     }
   };
 
+  const handleViewInterpretation = (reportId: string) => {
+    if (!reportId) {
+      return;
+    }
+    navigate(`/report/${reportId}/interpretation`);
+  };
+
   useEffect(() => {
     if (!isBrowser) {
       return;
@@ -469,6 +476,7 @@ const Index = () => {
               error={historyError}
               onRefresh={() => fetchReportHistory()}
               onSelect={handleLoadSavedReport}
+              onViewInterpretation={handleViewInterpretation}
               loadingReportId={historyLoadingReportId}
             />
           )}

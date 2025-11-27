@@ -52,6 +52,12 @@ export interface Suggestion {
   performanceSummary: string;  // 必填字段：表现数据摘要，用于给家长展示量化指标
 }
 
+// 改进建议类型（用于 improvementAreas.suggestions）
+export interface ImprovementSuggestion {
+  title: string;
+  description: string;
+}
+
 export interface CostBreakdown {
   transcription: {
     service: string;           // 使用的转录服务（如 "tingwu"）
@@ -138,21 +144,20 @@ export interface VideoAnalysisResponse {
         title: string;
         items: string[];
       };
-      suggestions: Suggestion[];
+      suggestions: ImprovementSuggestion[];
     };
     grammar?: {
       overview: string;
       details: string;
       examples: GrammarExample[];
-      suggestions: Suggestion[];
+      suggestions: ImprovementSuggestion[];
     };
     intonation?: {
       overview: string;
       details: string;
-      suggestions: Suggestion[];
+      suggestions: ImprovementSuggestion[];
     };
   };
-  overallSuggestions: Suggestion[];  // 3条综合性的整体学习建议
   costBreakdown?: CostBreakdown;  // 成本详情（可选）
 }
 

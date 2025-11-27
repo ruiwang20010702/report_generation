@@ -314,9 +314,7 @@ export class AnalysisJobQueue {
    */
   private async processJob(job: AnalysisJobInternal): Promise<void> {
     try {
-      job.result = job.useMock
-        ? await this.analysisService.analyzeMock(job.request)
-        : await this.analysisService.analyzeVideos(job.request);
+      job.result = await this.analysisService.analyzeVideos(job.request);
       job.status = 'completed';
       job.completedAt = new Date();
       

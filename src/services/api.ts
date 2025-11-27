@@ -32,6 +32,48 @@ export interface AnalysisJobEnqueueResponse {
   pollAfterSeconds: number;
 }
 
+// 解读报告任务状态
+export type InterpretationJobStatus = 'queued' | 'processing' | 'completed' | 'failed';
+
+export interface InterpretationJobError {
+  type?: string;
+  message: string;
+  userMessage?: string;
+}
+
+export interface InterpretationJobResult {
+  interpretation: SpeechContent;
+  fromCache: boolean;
+  cost?: {
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+    cost: number;
+    model: string;
+    currency: string;
+  };
+}
+
+export interface InterpretationJobState {
+  jobId: string;
+  status: InterpretationJobStatus;
+  submittedAt: string;
+  startedAt?: string;
+  completedAt?: string;
+  position: number;
+  estimatedWaitSeconds: number;
+  durationSeconds?: number;
+  result?: InterpretationJobResult;
+  error?: InterpretationJobError;
+}
+
+export interface InterpretationJobEnqueueResponse {
+  success: boolean;
+  message: string;
+  job: InterpretationJobState;
+  pollAfterSeconds: number;
+}
+
 export interface VideoAnalysisRequest {
   video1: string;
   video2: string;
@@ -573,6 +615,122 @@ export class VideoAnalysisAPI {
     } catch (error) {
       console.error('Save interpretation failed:', error);
       return this.handleAxiosError(error, '保存解读报告失败，请稍后重试');
+    }
+  }
+
+  /**
+   * 异步生成解读报告 - 将任务加入队列
+   * @param reportData 报告数据
+   * @param options.reportId 报告ID（用于缓存）
+   * @param options.forceRegenerate 是否强制重新生成
+   * @returns 任务状态和建议的轮询间隔
+   */
+  async enqueueInterpretation(
+    reportData: VideoAnalysisResponse,
+    options?: { reportId?: string; forceRegenerate?: boolean }
+  ): Promise<InterpretationJobEnqueueResponse> {
+    try {
+      const response = await axios.post<InterpretationJobEnqueueResponse>(
+        `${this.baseURL}/api/analysis/interpretation/enqueue`,
+        {
+          reportData,
+          reportId: options?.reportId,
+          forceRegenerate: options?.forceRegenerate,
+        },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            ...this.getAuthHeaders(),
+          },
+          withCredentials: true,
+          timeout: 30000,
+        }
+      );
+
+      return response.data;
+    } catch (error) {
+      console.error('Enqueue interpretation failed:', error);
+      return this.handleAxiosError(error, '提交解读报告生成任务失败，请稍后重试');
+    }
+  }
+
+  /**
+   * 查询解读报告生成任务状态
+   * @param jobId 任务ID
+   * @returns 任务状态
+   */
+  async getInterpretationJob(jobId: string): Promise<InterpretationJobState> {
+    try {
+      const response = await axios.get<InterpretationJobState>(
+        `${this.baseURL}/api/analysis/interpretation/jobs/${jobId}`,
+        {
+          headers: this.getAuthHeaders(),
+          withCredentials: true,
+          timeout: 15000,
+        }
+      );
+
+      return response.data;
+    } catch (error) {
+      console.error('Get interpretation job failed:', error);
+      return this.handleAxiosError(error, '查询解读报告任务状态失败');
+    }
+  }
+
+  /**
+   * 等待解读报告生成完成（轮询方式）
+   * @param jobId 任务ID
+   * @param options.pollIntervalMs 轮询间隔（默认15秒）
+   * @param options.maxWaitMs 最大等待时间（默认5分钟）
+   * @param options.signal AbortSignal 用于取消
+   * @param options.onPoll 每次轮询时的回调
+   */
+  async waitForInterpretationResult(
+    jobId: string,
+    options?: {
+      pollIntervalMs?: number;
+      maxWaitMs?: number;
+      signal?: AbortSignal;
+      onPoll?: (state: InterpretationJobState) => void;
+    }
+  ): Promise<InterpretationJobResult> {
+    const pollIntervalMs = options?.pollIntervalMs ?? 15000; // 默认15秒
+    const maxWaitMs = options?.maxWaitMs ?? 300000; // 默认5分钟
+    const startTime = Date.now();
+
+    const delay = (ms: number) =>
+      new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(resolve, ms);
+        if (options?.signal) {
+          options.signal.addEventListener('abort', () => {
+            clearTimeout(timer);
+            reject(new Error('已取消'));
+          });
+        }
+      });
+
+    while (true) {
+      if (options?.signal?.aborted) {
+        throw new Error('已取消');
+      }
+
+      const elapsed = Date.now() - startTime;
+      if (elapsed > maxWaitMs) {
+        throw new Error('等待超时，请稍后重试');
+      }
+
+      const state = await this.getInterpretationJob(jobId);
+      options?.onPoll?.(state);
+
+      if (state.status === 'completed' && state.result) {
+        return state.result;
+      }
+
+      if (state.status === 'failed') {
+        throw new Error(state.error?.userMessage || state.error?.message || '生成失败');
+      }
+
+      await delay(pollIntervalMs);
     }
   }
 }

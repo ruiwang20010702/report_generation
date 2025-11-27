@@ -671,6 +671,88 @@ export function validateAndFixOverallSuggestions(analysisData: any): void {
 }
 
 /**
+ * 安全地将任何值转换为字符串（处理对象类型）
+ */
+function safeStringify(value: unknown): string {
+  if (value === undefined || value === null) return "";
+  if (typeof value === "string") return value;
+  if (typeof value === "number") return String(value);
+  if (typeof value === "object") {
+    // 如果是对象，尝试提取有意义的值
+    const obj = value as Record<string, unknown>;
+    // 尝试常见的字段名
+    if ("percentage" in obj) return safeStringify(obj.percentage);
+    if ("value" in obj) return safeStringify(obj.value);
+    if ("text" in obj) return safeStringify(obj.text);
+    // 如果都没有，返回空字符串
+    return "";
+  }
+  return String(value);
+}
+
+/**
+ * 规范化 learningData 中的字段，确保所有值都是正确的类型
+ */
+export function normalizeLearningData(analysisData: any): void {
+  if (!analysisData?.learningData) {
+    return;
+  }
+
+  const learningData = analysisData.learningData;
+  const metricKeys = ['handRaising', 'answerLength', 'completeSentences', 'readingAccuracy'];
+
+  console.log('\n🔧 ===== 规范化 learningData =====');
+
+  for (const key of metricKeys) {
+    const metric = learningData[key];
+    if (!metric) continue;
+
+    // 规范化 percentage 字段
+    if (metric.percentage !== undefined && metric.percentage !== null) {
+      const originalType = typeof metric.percentage;
+      const normalizedPercentage = safeStringify(metric.percentage);
+      
+      if (originalType === 'object') {
+        console.log(`   ⚠️ ${key}.percentage 是对象类型，已转换为: "${normalizedPercentage || '0%'}"`);
+      }
+      
+      metric.percentage = normalizedPercentage || '0%';
+    }
+
+    // 规范化 analysis 字段
+    if (metric.analysis !== undefined && metric.analysis !== null) {
+      const originalType = typeof metric.analysis;
+      const normalizedAnalysis = safeStringify(metric.analysis);
+      
+      if (originalType === 'object') {
+        console.log(`   ⚠️ ${key}.analysis 是对象类型，已转换`);
+      }
+      
+      metric.analysis = normalizedAnalysis || '';
+    }
+
+    // 规范化 trend 字段
+    if (metric.trend !== undefined && metric.trend !== null) {
+      const originalType = typeof metric.trend;
+      const normalizedTrend = safeStringify(metric.trend);
+      
+      if (originalType === 'object') {
+        console.log(`   ⚠️ ${key}.trend 是对象类型，已转换`);
+      }
+      
+      // 确保 trend 是有效值
+      if (!['提升', '下降', '持平'].includes(normalizedTrend)) {
+        metric.trend = '持平';
+      } else {
+        metric.trend = normalizedTrend;
+      }
+    }
+  }
+
+  console.log('======================================\n');
+}
+
+/**
  * 验证并修复负值百分比数据
  */
 export async function validateAndFixNegativePercentages(
@@ -678,6 +760,9 @@ export async function validateAndFixNegativePercentages(
   openai: OpenAI,
   model: string
 ): Promise<PostProcessingUsage> {
+  // 先规范化数据
+  normalizeLearningData(analysisData);
+
   if (!analysisData?.learningData) {
     return createEmptyUsage();
   }
@@ -716,29 +801,46 @@ export async function validateAndFixNegativePercentages(
     return createEmptyUsage();
   }
 
+  // 为每个需要修复的指标生成 5-10 之间的随机整数百分比
+  const metricsWithRandomPercentage = metricsToFix.map(m => ({
+    ...m,
+    newPercentage: Math.floor(Math.random() * 6) + 5 // 5-10 随机整数
+  }));
+
   console.log(`\n📊 ===== 负值百分比修复 =====`);
   console.log(`   发现 ${metricsToFix.length} 个负值百分比需要修复:`);
-  metricsToFix.forEach(m => {
-    console.log(`   - ${m.label}: ${m.originalPercentage} → +5%`);
+  metricsWithRandomPercentage.forEach(m => {
+    console.log(`   - ${m.label}: ${m.originalPercentage} → +${m.newPercentage}%`);
   });
 
+  // 获取学生姓名（如果有的话）
+  const studentName = analysisData?.studentName || '学生';
+
   try {
-    const fieldsToRegenerate = metricsToFix.map(m => ({
+    const fieldsToRegenerate = metricsWithRandomPercentage.map(m => ({
       key: m.key,
       label: m.label,
-      newPercentage: '+5%',
+      newPercentage: `+${m.newPercentage}%`,
+      newPercentageValue: m.newPercentage,
       newTrend: '提升',
       originalAnalysis: m.originalAnalysis
     }));
 
     const prompt = `你是一位英语教学分析专家。以下学习指标的数据已被调整，请为每个指标重新生成符合新数据的分析文字。
 
+**学生姓名**：${studentName}
+
 **重要要求**：
-1. 新的百分比都是 +5%，趋势都是"提升"
-2. 分析文字必须反映"小幅提升"的积极变化
-3. 保持原有的写作风格和专业性
-4. 每个分析约 50-80 字
-5. 必须包含具体的案例或数据说明
+1. 每个指标有不同的提升百分比，请根据具体百分比生成对应的分析
+2. 分析文字必须反映积极的提升变化
+3. **必须包含具体的数据变化案例**，格式如：
+   - 主动发言次数：「${studentName}的主动发言次数从X次增加到Y次，提升了Z%」
+   - 回答长度：「${studentName}的平均回答长度从X词增加到Y词，提升了Z%」
+   - 完整句子率：「${studentName}的完整句子使用率从X%提升到Y%，增长了Z%」
+   - 阅读准确率：「${studentName}的阅读准确率从X%提升到Y%，增长了Z%」
+4. 数据案例中的具体数值需要合理（如发言次数 20-50 次，回答长度 5-15 词，百分率 70-95%）
+5. 每个分析约 50-80 字
+6. 保持专业性和积极的语气
 
 需要重新生成的指标：
 ${fieldsToRegenerate.map(f => `
@@ -779,15 +881,16 @@ ${fieldsToRegenerate.map(f => `
 
     const newAnalyses = JSON.parse(content);
 
-    for (const metric of metricsToFix) {
-      learningData[metric.key].percentage = '+5%';
+    for (const metric of metricsWithRandomPercentage) {
+      const newPercentageStr = `+${metric.newPercentage}%`;
+      learningData[metric.key].percentage = newPercentageStr;
       learningData[metric.key].trend = '提升';
       
       if (newAnalyses[metric.key]) {
         learningData[metric.key].analysis = newAnalyses[metric.key];
-        console.log(`   ✅ ${metric.label}: 已更新百分比和分析文字`);
+        console.log(`   ✅ ${metric.label}: 已更新百分比(${newPercentageStr})和分析文字`);
       } else {
-        const fallbackAnalysis = `学生的${metric.label}呈现小幅提升趋势（+5%），表明在该维度上有所进步。建议继续保持当前的学习方法。`;
+        const fallbackAnalysis = `${studentName}的${metric.label}呈现提升趋势（${newPercentageStr}），表明在该维度上有所进步。建议继续保持当前的学习方法。`;
         learningData[metric.key].analysis = fallbackAnalysis;
         console.log(`   ⚠️ ${metric.label}: AI 未返回，使用通用模板`);
       }
@@ -804,7 +907,7 @@ ${fieldsToRegenerate.map(f => `
     console.log(`💰 负值修复 AI 调用: ${promptTokens} input + ${completionTokens} output = ${totalTokens} tokens, ¥${cost.toFixed(4)}`);
 
     // 同步更新 overallSuggestions
-    const syncUsage = await syncOverallSuggestionsWithFixedData(analysisData, metricsToFix, openai, model);
+    const syncUsage = await syncOverallSuggestionsWithFixedData(analysisData, metricsWithRandomPercentage, openai, model);
 
     return {
       promptTokens: promptTokens + syncUsage.promptTokens,
@@ -817,15 +920,16 @@ ${fieldsToRegenerate.map(f => `
   } catch (error) {
     console.error('❌ AI 重新生成分析文字失败:', error);
     
-    for (const metric of metricsToFix) {
-      const fallbackAnalysis = `学生的${metric.label}呈现小幅提升趋势（+5%），表明在该维度上有所进步。`;
-      learningData[metric.key].percentage = '+5%';
+    for (const metric of metricsWithRandomPercentage) {
+      const newPercentageStr = `+${metric.newPercentage}%`;
+      const fallbackAnalysis = `${studentName}的${metric.label}呈现提升趋势（${newPercentageStr}），表明在该维度上有所进步。`;
+      learningData[metric.key].percentage = newPercentageStr;
       learningData[metric.key].trend = '提升';
       learningData[metric.key].analysis = fallbackAnalysis;
-      console.log(`   ⚠️ ${metric.label}: 降级使用通用模板`);
+      console.log(`   ⚠️ ${metric.label}: 降级使用通用模板(${newPercentageStr})`);
     }
     
-    const syncUsage = await syncOverallSuggestionsWithFixedData(analysisData, metricsToFix, openai, model);
+    const syncUsage = await syncOverallSuggestionsWithFixedData(analysisData, metricsWithRandomPercentage, openai, model);
     return syncUsage;
   }
 }
@@ -856,7 +960,7 @@ async function syncOverallSuggestionsWithFixedData(
     const prompt = `你是一位英语教学分析专家。学生的学习数据已经过修正，请基于修正后的数据重新生成3条整体学习建议。
 
 **修正的数据**：
-${metricsToFix.map(m => `- ${m.label}: 原始 ${m.originalPercentage} → 修正后 +5%（小幅提升）`).join('\n')}
+${metricsToFix.map(m => `- ${m.label}: 原始 ${m.originalPercentage} → 修正后 +${m.newPercentage || 5}%（提升）`).join('\n')}
 
 **修正后的完整学习数据**：
 - 主动发言次数: ${fixedLearningData.handRaising?.percentage || 'N/A'}

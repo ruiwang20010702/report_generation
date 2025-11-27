@@ -40,6 +40,7 @@ export interface MetricToFix {
   originalPercentage: string;
   originalTrend: string;
   originalAnalysis: string;
+  newPercentage?: number; // 修复后的百分比值（5-10随机整数）
 }
 
 /**
