@@ -479,7 +479,7 @@ const Index = () => {
               className="h-16 mx-auto mb-4 bg-white p-2 rounded shadow-md"
             />
             <h1 className="text-4xl md:text-5xl font-bold text-primary mb-2">
-              51Talk 学情分析
+              51Talk学员学情报告
             </h1>
             <p className="text-lg text-muted-foreground">
               AI驱动的英语学习进步追踪系统

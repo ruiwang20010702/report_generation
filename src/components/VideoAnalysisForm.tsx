@@ -231,7 +231,7 @@ export const VideoAnalysisForm = ({ onSubmit }: VideoAnalysisFormProps) => {
           <div className="flex-1">
             <CardTitle className="text-3xl font-bold text-primary">英语学习视频分析</CardTitle>
             <CardDescription className="text-base text-muted-foreground">
-              上传两个学习视频，让AI为您生成专业的学习分析报告
+              上传两个学习视频，让AI为您生成专业的42天学员学情分析报告
             </CardDescription>
           </div>
           <Button
