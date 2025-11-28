@@ -422,18 +422,21 @@ export const ReportDisplay = ({ data: initialData, onBack }: ReportDisplayProps)
         throw new Error('找不到报告内容');
       }
 
-      // 使用元素的实际宽度进行截图，避免出现多余的灰色区域
-      const actualWidth = reportElement.offsetWidth;
+      // 固定导出宽度为 1400px，保证统一的排版效果
+      const EXPORT_WIDTH = 1400;
 
       // 使用 modern-screenshot 生成高质量截图
       const dataUrl = await domToPng(reportElement, {
         scale: 2, // 2倍高清截图
-        backgroundColor: '#ffffff', // 使用白色背景，与报告卡片背景一致
-        width: actualWidth,
+        backgroundColor: '#ffffff', // 使用白色背景
+        width: EXPORT_WIDTH,
         height: reportElement.scrollHeight,
         style: {
+          width: `${EXPORT_WIDTH}px`,
+          maxWidth: 'none', // 移除 max-width 限制，让内容填满
           height: 'auto',
           overflow: 'visible',
+          margin: '0', // 移除居中的 margin
         },
         filter: (node: Node) => {
           // 过滤掉按钮区域
@@ -444,6 +447,11 @@ export const ReportDisplay = ({ data: initialData, onBack }: ReportDisplayProps)
         },
         onCloneNode: (clonedNode: Node) => {
           if (clonedNode instanceof HTMLElement) {
+            // 移除报告容器的 max-width 限制，让内容扩展填满 1400px
+            clonedNode.style.maxWidth = 'none';
+            clonedNode.style.width = '100%';
+            clonedNode.style.margin = '0';
+            
             // 优化：在导出模式下，强制所有卡片高度拉伸，避免参差不齐
             const cards = clonedNode.querySelectorAll('.grid > div');
             cards.forEach((card) => {
