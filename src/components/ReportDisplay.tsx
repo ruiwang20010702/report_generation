@@ -436,6 +436,8 @@ export const ReportDisplay = ({ data: initialData, onBack }: ReportDisplayProps)
         logging: false,
         width: EXPORT_WIDTH,      // 强制宽度
         windowWidth: EXPORT_WIDTH, // 模拟窗口宽度
+        scrollX: 0, // 避免因页面滚动导致的偏移
+        scrollY: 0, // 避免因页面滚动导致的偏移
         // 不设置 height 和 windowHeight，让 html2canvas 自动计算克隆后的实际高度
         onclone: (clonedDoc, clonedElement) => {
           if (clonedElement) {
