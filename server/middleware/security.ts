@@ -32,7 +32,7 @@ export function securityHeaders(req: Request, res: Response, next: NextFunction)
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com", // 允许内联样式和字体
     "font-src 'self' https://fonts.gstatic.com data:",
     "img-src 'self' data: https: blob:", // 允许图片从各种来源加载
-    "connect-src 'self' https://api.openai.com https://*.aliyuncs.com https://*.sentry.io", // 允许API连接
+    "connect-src 'self' https://api.openai.com https://*.aliyuncs.com https://*.sentry.io data: blob:", // 允许API连接和图片导出
     "frame-ancestors 'none'", // 防止被嵌入iframe
     "base-uri 'self'",
     "form-action 'self'",
