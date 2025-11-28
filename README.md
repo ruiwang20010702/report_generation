@@ -8,7 +8,9 @@ AI 驱动的英语学习视频对比分析平台，帮助老师和教研团队�
 - 🎙️ **通义听悟极速转写**：默认使用通义听悟教育模型，自动说话人识别，享受每天 120 分钟免费额度。
 - 🧠 **智谱 GLM-4-Plus 深度分析**：固定使用国内质量最高的 GLM-4-Plus，输出结构化进步报告和成本明细。
 - 📊 **进步对比仪表盘**：举手次数、完整句率、语言准确度、四大能力维度等指标一目了然。
+- 📝 **报告解读版**：支持生成、编辑和保存家长友好的解读版报告，便于分享和沟通。
 - 🧾 **成本与用量追踪**：自动记录转写与模型调用费用，管理端可查询历史报告与成本统计。
+- 🕐 **北京时间统一显示**：所有时间戳自动转换为北京时间（UTC+8），格式清晰易读。
 - 🧪 **双模式支持**：本地开发可开启 Mock 数据，无需外部依赖；生产环境使用真实 AI 管线。
 
 ## 系统架构速览
@@ -141,6 +143,11 @@ npm run test:tingwu     # 通义听悟连通性测试
 - `GET /api/analysis/health`：健康检查
 - `GET /api/analysis/quota`：查询通义听悟剩余额度
 
+### 报告解读
+- `POST /api/interpretation/generate`：生成报告解读版（家长友好版本）
+- `PUT /api/interpretation/:reportId`：更新解读版报告内容
+- `GET /api/interpretation/:reportId`：获取指定报告的解读版
+
 ### 管理
 - `GET /api/admin/reports`：分页查询历史报告与成本
 - `GET /api/admin/cost-statistics`：按用户汇总成本
@@ -153,6 +160,7 @@ npm run test:tingwu     # 通义听悟连通性测试
 - `VideoAnalysisForm`：表单校验、验证码发送、Mock 切换、AI Key 输入
 - `LoadingState`：并行处理实时进度提示（15 秒刷新一次）
 - `ReportDisplay`：三块数据展示、GLM 生成内容渲染、成本明细、长图导出
+- `InterpretationEditor`：解读版报告编辑器，支持在线编辑和保存
 - `ProtectedRoute` + `AuthContext`：鉴权守卫与用户信息缓存
 
 ## 技术栈
@@ -200,11 +208,11 @@ npm run test:tingwu     # 通义听悟连通性测试
 │   ├── services/          # API 服务
 │   └── assets/            # 静态资源
 ├── server/                 # 后端源码
-│   ├── routes/            # API 路由（analysis, auth, admin）
-│   ├── services/          # 业务服务（videoAnalysis, tingwu, email）
+│   ├── routes/            # API 路由（analysis, auth, admin, interpretation）
+│   ├── services/          # 业务服务（videoAnalysis, tingwu, email, interpretation）
 │   ├── middleware/        # 中间件（auth, security, logging）
 │   ├── config/            # 配置（database, sentry）
-│   └── utils/             # 工具函数
+│   └── utils/             # 工具函数（datetime 北京时间处理等）
 ├── database/               # 数据库脚本
 │   ├── schema.sql         # 完整表结构
 │   ├── migrations/        # 数据库迁移脚本
