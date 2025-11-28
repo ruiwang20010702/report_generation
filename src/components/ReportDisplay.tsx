@@ -422,19 +422,16 @@ export const ReportDisplay = ({ data: initialData, onBack }: ReportDisplayProps)
         throw new Error('找不到报告内容');
       }
 
-      // 1. 强制设定一个理想的导出宽度 (例如 1400px)，保证双列/三列布局完美展示
-      // 这样无论用户当前窗口是宽是窄，导出的图片排版都是统一的
-      const EXPORT_WIDTH = 1400; 
+      // 使用元素的实际宽度进行截图，避免出现多余的灰色区域
+      const actualWidth = reportElement.offsetWidth;
 
       // 使用 modern-screenshot 生成高质量截图
       const dataUrl = await domToPng(reportElement, {
         scale: 2, // 2倍高清截图
-        backgroundColor: '#f5f5f5',
-        width: EXPORT_WIDTH,
+        backgroundColor: '#ffffff', // 使用白色背景，与报告卡片背景一致
+        width: actualWidth,
         height: reportElement.scrollHeight,
         style: {
-          width: `${EXPORT_WIDTH}px`,
-          maxWidth: `${EXPORT_WIDTH}px`,
           height: 'auto',
           overflow: 'visible',
         },
