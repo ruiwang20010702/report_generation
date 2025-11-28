@@ -422,12 +422,12 @@ export const ReportDisplay = ({ data: initialData, onBack }: ReportDisplayProps)
         throw new Error('找不到报告内容');
       }
 
-      // 1. 强制设定一个理想的导出宽度 (例如 1024px)，保证双列/三列布局完美展示
+      // 1. 强制设定一个理想的导出宽度 (例如 1400px)，保证双列/三列布局完美展示
       // 这样无论用户当前窗口是宽是窄，导出的图片排版都是统一的
       const EXPORT_WIDTH = 1400; 
-      const computedHeight = Math.ceil(reportElement.scrollHeight);
 
       // 使用 html2canvas 生成高质量截图
+      // 注意：不预先设置 height，让 html2canvas 在 onclone 中根据克隆元素的实际高度自动计算
       const canvas = await html2canvas(reportElement, {
         scale: 2, // 提高分辨率
         useCORS: true, // 允许跨域图片
@@ -436,16 +436,17 @@ export const ReportDisplay = ({ data: initialData, onBack }: ReportDisplayProps)
         logging: false,
         width: EXPORT_WIDTH,      // 强制宽度
         windowWidth: EXPORT_WIDTH, // 模拟窗口宽度
-        height: computedHeight,
-        windowHeight: computedHeight,
-        onclone: (clonedDoc) => {
-          const clonedElement = clonedDoc.getElementById('report-content');
+        // 不设置 height 和 windowHeight，让 html2canvas 自动计算克隆后的实际高度
+        onclone: (clonedDoc, clonedElement) => {
           if (clonedElement) {
-            // 锁定克隆元素的宽度，确保布局响应式规则按 1024px 执行
+            // 锁定克隆元素的宽度，确保布局响应式规则按 1400px 执行
             clonedElement.style.width = `${EXPORT_WIDTH}px`;
             clonedElement.style.maxWidth = `${EXPORT_WIDTH}px`;
             clonedElement.style.margin = '0 auto'; // 居中
             clonedElement.style.setProperty('--report-export-width', `${EXPORT_WIDTH}px`);
+            // 确保高度自动扩展
+            clonedElement.style.height = 'auto';
+            clonedElement.style.overflow = 'visible';
             
             // 优化：在导出模式下，强制所有卡片高度拉伸，避免参差不齐
             const cards = clonedElement.querySelectorAll('.grid > div');
