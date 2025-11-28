@@ -21,6 +21,7 @@ export interface AnalysisJobState {
   completedAt?: string;
   position: number;
   estimatedWaitSeconds: number;
+  waitedSeconds?: number;  // 实际排队等待时长（秒），任务开始处理后才有值
   durationSeconds?: number;
   result?: VideoAnalysisResponse;
   error?: AnalysisJobError;

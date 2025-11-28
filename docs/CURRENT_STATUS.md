@@ -24,7 +24,7 @@
 - ✅ **阿里云 PolarDB PostgreSQL 17**
 - ✅ 数据库连接已验证
 - ✅ Schema 文件已准备（database/schema.sql）
-- ⚠️  需要执行：`npm run setup:db` 创建表结构
+- ⚠️  需要执行数据库初始化（见下方说明）
 
 ### 4. 测试系统 ✅
 - ✅ **27个集成测试全部通过**
@@ -53,15 +53,11 @@
 
 #### 初始化数据库表结构
 ```bash
-# 方式1：使用 npm 脚本（推荐）
-npm run setup:db
+# 使用 psql 执行 schema.sql
+psql "$DATABASE_URL" -f database/schema.sql
 
-# 方式2：手动执行 SQL
-psql -h report-generation-project-pub.rwlb.rds.aliyuncs.com \
-     -p 5432 \
-     -U report_write \
-     -d report_generation_project \
-     -f database/schema.sql
+# 或手动指定连接信息
+psql -h <your-host> -p 5432 -U <your-user> -d <your-database> -f database/schema.sql
 ```
 
 #### 验证数据库
@@ -151,7 +147,7 @@ npm run dev:all
 #### 阶段1：初始化数据库（5分钟）
 ```bash
 # 1. 执行数据库初始化
-npm run setup:db
+psql "$DATABASE_URL" -f database/schema.sql
 
 # 2. 验证数据库连接
 npm run test:db
@@ -238,7 +234,7 @@ git push
 
 **初始化数据库：**
 ```bash
-npm run setup:db
+psql "$DATABASE_URL" -f database/schema.sql
 ```
 
 **启动应用（Mock模式）：**

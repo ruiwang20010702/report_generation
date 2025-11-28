@@ -19,6 +19,7 @@ export interface AnalysisJobState {
   completedAt?: string;
   position: number;
   estimatedWaitSeconds: number;
+  waitedSeconds?: number;  // 实际排队等待时长（秒），任务开始处理后才有值
   durationSeconds?: number;
   result?: VideoAnalysisResponse;
   error?: {
@@ -472,6 +473,18 @@ export class AnalysisJobQueue {
     return undefined;
   }
 
+  /**
+   * 获取排队等待时长（秒）
+   * - 如果任务已开始处理，返回从提交到开始的时间
+   * - 如果任务还在排队，返回 undefined
+   */
+  private getWaitedSeconds(job: AnalysisJobInternal): number | undefined {
+    if (job.startedAt) {
+      return Math.round((job.startedAt.getTime() - job.submittedAt.getTime()) / 1000);
+    }
+    return undefined;
+  }
+
   private toPublicState(jobId: string): AnalysisJobState | null {
     const job = this.jobs.get(jobId);
     if (!job) {
@@ -491,6 +504,7 @@ export class AnalysisJobQueue {
       completedAt: job.completedAt?.toISOString(),
       position,
       estimatedWaitSeconds,
+      waitedSeconds: this.getWaitedSeconds(job),
       durationSeconds: this.getDurationSeconds(job),
       result: job.status === 'completed' ? job.result : undefined,
       error: job.status === 'failed' ? job.error : undefined

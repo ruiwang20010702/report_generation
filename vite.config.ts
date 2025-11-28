@@ -28,4 +28,51 @@ export default defineConfig(({ mode }) => ({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          // React 核心库
+          if (id.includes('node_modules/react/') || 
+              id.includes('node_modules/react-dom/') || 
+              id.includes('node_modules/react-router')) {
+            return 'vendor-react';
+          }
+          // Radix UI 组件库
+          if (id.includes('node_modules/@radix-ui/')) {
+            return 'vendor-radix';
+          }
+          // 图表库 (recharts 及其依赖)
+          if (id.includes('node_modules/recharts') || 
+              id.includes('node_modules/d3-') ||
+              id.includes('node_modules/victory-')) {
+            return 'vendor-charts';
+          }
+          // Sentry 错误追踪
+          if (id.includes('node_modules/@sentry/')) {
+            return 'vendor-sentry';
+          }
+          // html2canvas (报告导出)
+          if (id.includes('node_modules/html2canvas')) {
+            return 'vendor-html2canvas';
+          }
+          // 表单和数据处理
+          if (id.includes('node_modules/react-hook-form') ||
+              id.includes('node_modules/@hookform/') ||
+              id.includes('node_modules/zod') ||
+              id.includes('node_modules/date-fns') ||
+              id.includes('node_modules/@tanstack/')) {
+            return 'vendor-utils';
+          }
+          // 其他工具库
+          if (id.includes('node_modules/lucide-react') ||
+              id.includes('node_modules/clsx') ||
+              id.includes('node_modules/tailwind-merge') ||
+              id.includes('node_modules/class-variance-authority')) {
+            return 'vendor-misc';
+          }
+        },
+      },
+    },
+  },
 }));

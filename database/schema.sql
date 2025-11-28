@@ -74,11 +74,12 @@ CREATE TABLE IF NOT EXISTS reports (
     video_url TEXT,
     audio_dur INTEGER,
     transcript TEXT,
-    analysis JSONB,
     analysis_data JSONB,
     interpretation_data JSONB,
     cost_detail JSONB,
-    total_cost DECIMAL(10, 4),
+    report_cost DECIMAL(10, 4),
+    interpretation_cost DECIMAL(10, 4),
+    total_cost DECIMAL(10, 4) GENERATED ALWAYS AS (COALESCE(report_cost, 0) + COALESCE(interpretation_cost, 0)) STORED,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
@@ -105,11 +106,12 @@ COMMENT ON COLUMN reports.file_url IS '文件存储URL';
 COMMENT ON COLUMN reports.video_url IS '视频URL';
 COMMENT ON COLUMN reports.audio_dur IS '音频时长（秒）';
 COMMENT ON COLUMN reports.transcript IS '转录文本';
-COMMENT ON COLUMN reports.analysis IS '分析数据（旧字段）';
 COMMENT ON COLUMN reports.analysis_data IS '完整报告分析数据（JSON格式）';
 COMMENT ON COLUMN reports.interpretation_data IS '解读版演讲稿数据（JSON格式，缓存GLM生成结果）';
 COMMENT ON COLUMN reports.cost_detail IS 'API调用成本明细（JSON格式）';
-COMMENT ON COLUMN reports.total_cost IS '总成本（美元）';
+COMMENT ON COLUMN reports.report_cost IS '报告生成成本（转录+AI分析，单位：元）';
+COMMENT ON COLUMN reports.interpretation_cost IS '解读版生成成本（单位：元）';
+COMMENT ON COLUMN reports.total_cost IS '总成本（report_cost + interpretation_cost，自动计算）';
 COMMENT ON COLUMN reports.created_at IS '创建时间';
 COMMENT ON COLUMN reports.updated_at IS '更新时间';
 

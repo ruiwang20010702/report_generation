@@ -15,6 +15,7 @@ import { LogOut } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { ReportHistoryPanel } from "@/components/ReportHistoryPanel";
 import type { SavedReportSummary, ReportListResponse } from "@/services/api";
+import { AnalyticsEvents } from "@/config/analytics";
 
 type AppState = "form" | "loading" | "report";
 
@@ -229,6 +230,10 @@ const Index = () => {
     cancelPolling();
     resetJobTracking();
     const sessionToken = ++pollTokenRef.current;
+    const analysisStartTime = Date.now();
+    
+    // 追踪分析开始事件
+    AnalyticsEvents.analysisStart(data.studentName);
     
     try {
       console.log('📡 Calling async analysis API...');
@@ -266,6 +271,10 @@ const Index = () => {
         
         setAppState("report");
         
+        // 追踪分析完成事件
+        const analysisDuration = Math.round((Date.now() - analysisStartTime) / 1000);
+        AnalyticsEvents.analysisComplete(data.studentName, analysisDuration);
+        
         toast({
           title: "分析完成！",
           description: "已成功生成学习报告",
@@ -274,6 +283,10 @@ const Index = () => {
         await fetchReportHistory();
     } catch (error) {
       console.error('❌ Analysis failed:', error);
+      
+      // 追踪分析失败事件
+      const errorType = error instanceof Error ? error.message.split(':')[0] : 'unknown';
+      AnalyticsEvents.analysisFailed(errorType);
       
       setAppState("form");
       cancelPolling();
@@ -353,6 +366,10 @@ const Index = () => {
       const savedReport = await videoAnalysisAPI.getReport(reportId);
       setReportData(savedReport);
       setAppState("report");
+      
+      // 追踪历史报告查看事件
+      AnalyticsEvents.reportHistoryView(reportId);
+      
       toast({
         title: "已载入历史报告",
         description: `${savedReport.studentName} 的学习报告`,
@@ -373,6 +390,8 @@ const Index = () => {
     if (!reportId) {
       return;
     }
+    // 追踪报告解读查看事件
+    AnalyticsEvents.interpretationView(reportId);
     navigate(`/report/${reportId}/interpretation`);
   };
 

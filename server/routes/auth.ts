@@ -35,12 +35,11 @@ router.post('/send-otp', async (req: Request, res: Response) => {
       });
     }
 
-    const result = await sendOtp(email);
+    await sendOtp(email);
 
     res.json({
       success: true,
-      message: '验证码已发送',
-      data: result,
+      message: '验证码已发送到您的邮箱，请查收',
     });
   } catch (error: any) {
     console.error('Send OTP error:', error);
@@ -157,26 +156,32 @@ router.post('/login', async (req: Request, res: Response) => {
 });
 
 /**
- * 设置密码（用于首次设置或修改密码）
+ * 设置密码（仅限已登录用户修改自己的密码）
  * POST /api/auth/set-password
+ * 需要认证：是
  */
 router.post('/set-password', async (req: Request, res: Response) => {
   try {
-    const { email, password } = req.body;
+    // 验证用户身份
+    const token = req.headers.authorization?.replace('Bearer ', '') || req.cookies?.auth_token;
 
-    if (!email || !email.includes('@')) {
-      return res.status(400).json({
+    if (!token) {
+      return res.status(401).json({
         success: false,
-        error: '请输入有效的邮箱地址',
+        error: '请先登录后再设置密码',
       });
     }
 
-    if (!validateEmailDomain(email)) {
-      return res.status(400).json({
+    // 验证 token 并获取用户信息
+    const userResult = await getCurrentUser(token);
+    if (!userResult || !userResult.user) {
+      return res.status(401).json({
         success: false,
-        error: '只允许使用 @51talk.com 邮箱注册和登录',
+        error: '登录已过期，请重新登录',
       });
     }
+
+    const { password } = req.body;
 
     if (!password || password.length < 6) {
       return res.status(400).json({
@@ -185,7 +190,8 @@ router.post('/set-password', async (req: Request, res: Response) => {
       });
     }
 
-    await setPassword(email, password);
+    // 使用用户ID设置密码（而不是邮箱）
+    await setPassword(userResult.user.id, password);
 
     res.json({
       success: true,
@@ -193,6 +199,15 @@ router.post('/set-password', async (req: Request, res: Response) => {
     });
   } catch (error: any) {
     console.error('Set password error:', error);
+    
+    // 区分认证错误和其他错误
+    if (error.message?.includes('Token') || error.message?.includes('过期')) {
+      return res.status(401).json({
+        success: false,
+        error: '登录已过期，请重新登录',
+      });
+    }
+    
     res.status(400).json({
       success: false,
       error: error.message || '密码设置失败',

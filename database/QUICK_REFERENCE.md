@@ -40,8 +40,11 @@
 | `transcript` | TEXT | 转录文本 |
 | `analysis` | JSONB | 分析结果 |
 | `analysis_data` | JSONB | 完整分析数据 |
+| `interpretation_data` | JSONB | 解读版数据（缓存） |
 | `cost_detail` | JSONB | 成本详情 ⚠️ |
-| `total_cost` | DECIMAL(10,4) | 总成本 |
+| `report_cost` | DECIMAL(10,4) | 报告生成成本（转录+AI分析） |
+| `interpretation_cost` | DECIMAL(10,4) | 解读版生成成本 |
+| `total_cost` | DECIMAL(10,4) | 总成本（自动计算：report_cost + interpretation_cost） |
 | `created_at` | TIMESTAMP | 创建时间 |
 | `updated_at` | TIMESTAMP | 更新时间 |
 
@@ -98,8 +101,15 @@ LIMIT 10;
 ### 查询报告
 
 ```sql
--- 查询用户的所有报告
-SELECT id, student_name, audio_dur, total_cost, created_at
+-- 查询用户的所有报告（含费用明细）
+SELECT 
+  id, 
+  student_name, 
+  audio_dur, 
+  report_cost,           -- 报告生成费用
+  interpretation_cost,   -- 解读版费用
+  total_cost,            -- 总费用（自动计算）
+  created_at
 FROM reports 
 WHERE user_id = '...'
 ORDER BY created_at DESC;
@@ -108,8 +118,11 @@ ORDER BY created_at DESC;
 SELECT 
   student_name,
   audio_dur,
-  cost_detail->>'transcription' AS transcription_cost,
-  cost_detail->>'analysis' AS analysis_cost,
+  cost_detail->'transcription'->>'cost' AS transcription_cost,
+  cost_detail->'aiAnalysis'->>'totalCost' AS ai_analysis_cost,
+  cost_detail->'interpretation'->>'cost' AS interpretation_cost,
+  report_cost,
+  interpretation_cost,
   total_cost
 FROM reports 
 WHERE user_id = '...'
@@ -118,6 +131,8 @@ ORDER BY created_at DESC;
 -- 统计总成本
 SELECT 
   COUNT(*) AS report_count,
+  SUM(report_cost) AS total_report_cost,
+  SUM(interpretation_cost) AS total_interpretation_cost,
   SUM(total_cost) AS total_cost,
   AVG(total_cost) AS avg_cost,
   SUM(audio_dur) AS total_duration_seconds
@@ -223,6 +238,6 @@ report = {
 
 ---
 
-**最后更新**：2025-11-17  
-**版本**：v2.0 - 符合命名规范
+**最后更新**：2025-11-28  
+**版本**：v2.1 - 添加 report_cost 和 interpretation_cost 字段
 

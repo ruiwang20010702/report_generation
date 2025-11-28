@@ -3,6 +3,7 @@ import { VideoAnalysisRequest } from '../types/index.js';
 import { tingwuTranscriptionService } from '../services/tingwuTranscriptionService.js';
 import { AppError, ErrorType, asyncHandler, createErrorContext } from '../utils/errors.js';
 import { isValidVideoUrl, isValidStudentName, isValidStudentId, safeSubstring } from '../utils/validation.js';
+import { toBeijingTime, nowBeijingTime } from '../utils/datetime.js';
 import { analysisJobQueue } from '../services/analysisJobQueue.js';
 import { interpretationJobQueue } from '../services/interpretationJobQueue.js';
 import { reportRecordService } from '../services/reportRecordService.js';
@@ -330,7 +331,7 @@ router.get('/jobs/:jobId', asyncHandler(async (req: Request, res: Response) => {
 router.get('/health', (req: Request, res: Response) => {
   res.json({
     status: 'ok',
-    timestamp: new Date().toISOString(),
+    timestamp: nowBeijingTime(),
     useMock: process.env.USE_MOCK_ANALYSIS === 'true'
   });
 });
@@ -421,7 +422,7 @@ router.get('/report/:reportId', asyncHandler(async (req: Request, res: Response)
     );
   }
 
-  const rawAnalysis = record.analysisData || record.analysis;
+  const rawAnalysis = record.analysisData;
   let analysisData: unknown = rawAnalysis;
 
   if (typeof rawAnalysis === 'string') {
@@ -449,11 +450,11 @@ router.get('/report/:reportId', asyncHandler(async (req: Request, res: Response)
     );
   }
 
-  const isoCreatedAt = record.createdAt ? new Date(record.createdAt).toISOString() : new Date().toISOString();
+  const beijingCreatedAt = record.createdAt ? toBeijingTime(record.createdAt) : nowBeijingTime();
   const reportPayload: Record<string, unknown> = {
     ...(analysisData as Record<string, unknown>),
     reportId: record.id,
-    generatedAt: isoCreatedAt,
+    generatedAt: beijingCreatedAt,
   };
 
   if (!('studentName' in reportPayload) && record.studentName) {
@@ -508,7 +509,7 @@ router.put('/report/:reportId', asyncHandler(async (req: Request, res: Response)
     success: true,
     data: {
       reportId,
-      updatedAt: new Date().toISOString(),
+      updatedAt: nowBeijingTime(),
     },
   });
 }));

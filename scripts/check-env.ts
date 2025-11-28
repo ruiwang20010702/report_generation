@@ -179,7 +179,7 @@ function main() {
   if (allRequired && hasDatabaseConfig) {
     console.log('✅ 所有必需的环境变量已配置！\n');
     console.log('💡 下一步：');
-    console.log('   1. 在数据库中创建表：npm run setup:db');
+    console.log('   1. 创建数据库表：psql "$DATABASE_URL" -f database/schema.sql');
     console.log('   2. 测试数据库连接：npm run test:db');
     console.log('   3. 启动服务器：npm run dev\n');
   } else {
