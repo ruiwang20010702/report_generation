@@ -36,10 +36,9 @@ function generateOtp(): string {
 
 /**
  * 发送邮箱验证码
- * 注意：这里需要配置邮件服务（如阿里云邮件推送、SendGrid等）
- * 目前返回验证码用于测试，生产环境应通过邮件发送
+ * 验证码仅通过邮件发送，不会返回给前端
  */
-export async function sendOtp(email: string): Promise<{ code: string }> {
+export async function sendOtp(email: string): Promise<void> {
   // 验证邮箱域名
   if (!validateEmailDomain(email)) {
     throw new Error('只允许使用 @51talk.com 邮箱注册和登录');
@@ -82,18 +81,7 @@ export async function sendOtp(email: string): Promise<{ code: string }> {
   }
 
   // 发送验证码邮件
-  try {
     await sendVerificationEmail(email, code);
-  } catch (error: any) {
-    console.error('发送邮件失败:', error);
-    // 即使邮件发送失败，也继续返回验证码（开发环境可能没有配置邮件服务）
-    // 生产环境应该根据实际情况决定是否抛出错误
-    if (process.env.NODE_ENV === 'production') {
-      throw new Error('验证码发送失败，请稍后重试');
-    }
-  }
-
-  return { code };
 }
 
 /**
@@ -226,18 +214,15 @@ export async function loginWithPassword(email: string, password: string): Promis
 }
 
 /**
- * 设置用户密码（用于首次设置或修改密码）
+ * 设置用户密码（仅限已认证用户修改自己的密码）
+ * @param userId - 已认证用户的ID（从JWT中获取）
+ * @param password - 新密码
  */
-export async function setPassword(email: string, password: string): Promise<void> {
-  // 验证邮箱域名
-  if (!validateEmailDomain(email)) {
-    throw new Error('只允许使用 @51talk.com 邮箱注册和登录');
-  }
-
+export async function setPassword(userId: string, password: string): Promise<void> {
   // 查找用户
   const result = await query(
-    'SELECT id FROM users WHERE email = $1',
-    [email]
+    'SELECT id, email FROM users WHERE id = $1',
+    [userId]
   );
 
   if (result.rows.length === 0) {
@@ -250,8 +235,8 @@ export async function setPassword(email: string, password: string): Promise<void
 
   // 更新密码
   await query(
-    'UPDATE users SET passwd_hash = $1 WHERE email = $2',
-    [hashedPassword, email]
+    'UPDATE users SET passwd_hash = $1 WHERE id = $2',
+    [hashedPassword, userId]
   );
 }
 

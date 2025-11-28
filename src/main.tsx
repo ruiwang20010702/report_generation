@@ -6,4 +6,8 @@ import "./index.css";
 import { initSentry } from "./config/sentry";
 initSentry();
 
+// 初始化百度统计
+import { initBaiduAnalytics } from "./config/analytics";
+initBaiduAnalytics();
+
 createRoot(document.getElementById("root")!).render(<App />);

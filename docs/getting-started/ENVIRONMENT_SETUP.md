@@ -87,6 +87,9 @@ USE_MOCK_ANALYSIS=false        # true=模拟数据, false=真实API
 # ============ 前端配置 ============
 VITE_API_URL=http://localhost:3001  # 后端API地址
 
+# ============ 数据统计（可选）============
+VITE_BAIDU_ANALYTICS_ID=xxx    # 百度统计站点ID（在 hm.js? 后面的字符串）
+
 # ============ 代理配置（可选）============
 # 如果在不支持的地区，需要配置代理
 # HTTPS_PROXY=http://127.0.0.1:4780

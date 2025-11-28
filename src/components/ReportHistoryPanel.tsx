@@ -136,16 +136,16 @@ export const ReportHistoryPanel = ({
                     </div>
                   </div>
                   <div className="flex gap-2 flex-wrap sm:flex-nowrap">
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="secondary"
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
                       className="flex-1 sm:flex-none sm:w-24"
-                      onClick={() => onSelect(report.id)}
-                      disabled={loadingReportId === report.id}
-                    >
-                      {loadingReportId === report.id ? "载入中..." : "查看报告"}
-                    </Button>
+                    onClick={() => onSelect(report.id)}
+                    disabled={loadingReportId === report.id}
+                  >
+                    {loadingReportId === report.id ? "载入中..." : "查看报告"}
+                  </Button>
                     {onViewInterpretation && (
                       <Button
                         type="button"

@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { getCurrentUser, isAuthenticated, logout as logoutService } from '@/services/auth';
+import { AnalyticsEvents } from '@/config/analytics';
 
 interface User {
   id: string;
@@ -53,10 +54,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const login = (userData: User) => {
     setUser(userData);
+    // 追踪用户登录事件
+    AnalyticsEvents.login(userData.id);
   };
 
   const logout = async () => {
     try {
+      // 追踪用户登出事件
+      AnalyticsEvents.logout();
       await logoutService();
     } catch (error) {
       console.error('Logout error:', error);

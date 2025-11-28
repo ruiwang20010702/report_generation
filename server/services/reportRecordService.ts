@@ -5,6 +5,7 @@
 
 import { pool } from '../config/database.js';
 import type { CostBreakdown } from '../types/index.js';
+import { toBeijingTime } from '../utils/datetime.js';
 
 export interface ReportRecord {
   userId?: string;
@@ -57,8 +58,10 @@ export class ReportRecordService {
         }
       }
 
-      // 从 costDetail 中提取 total_cost
-      const totalCost = record.costDetail?.total?.cost ?? null;
+      // 从 costDetail 中提取 report_cost（转录 + AI分析成本）
+      const transcriptionCost = record.costDetail?.transcription?.cost ?? 0;
+      const aiAnalysisCost = record.costDetail?.aiAnalysis?.totalCost ?? 0;
+      const reportCost = transcriptionCost + aiAnalysisCost;
 
       const query = `
         INSERT INTO reports (
@@ -72,11 +75,10 @@ export class ReportRecordService {
           file_name,
           file_url,
           cost_detail,
-          total_cost,
-          analysis,
+          report_cost,
           analysis_data,
           created_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW())
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW())
         RETURNING id, created_at
       `;
 
@@ -91,8 +93,7 @@ export class ReportRecordService {
         record.fileName || null,
         record.fileUrl || null,
         JSON.stringify(record.costDetail),
-        totalCost,
-        record.analysisData ? JSON.stringify(record.analysisData) : null,
+        reportCost || null,
         record.analysisData ? JSON.stringify(record.analysisData) : null
       ];
 
@@ -110,7 +111,7 @@ export class ReportRecordService {
 
       return {
         id: reportId,
-        createdAt: new Date(createdAt).toISOString(),
+        createdAt: toBeijingTime(createdAt),
       };
     } catch (error) {
       console.error('❌ 保存报告记录失败:', error);
@@ -143,9 +144,9 @@ export class ReportRecordService {
           id,
           student_id,
           student_name,
-          analysis->>'grade' as grade,
-          analysis->>'level' as level,
-          analysis->>'unit' as unit,
+          analysis_data->>'grade' as grade,
+          analysis_data->>'level' as level,
+          analysis_data->>'unit' as unit,
           cost_detail,
           created_at
         FROM reports
@@ -175,7 +176,7 @@ export class ReportRecordService {
         level: row.level,
         unit: row.unit,
         costDetail: row.cost_detail,
-        createdAt: new Date(row.created_at).toISOString(),
+        createdAt: toBeijingTime(row.created_at),
       }));
 
       return {
@@ -232,7 +233,7 @@ export class ReportRecordService {
           r.user_id,
           r.student_id,
           u.email as user_email,
-          r.analysis->>'studentName' as student_name,
+          r.analysis_data->>'studentName' as student_name,
           r.cost_detail,
           r.created_at
         FROM reports r
@@ -269,7 +270,6 @@ export class ReportRecordService {
           student_id,
           student_name,
           cost_detail,
-          analysis,
           analysis_data,
           created_at
         FROM reports
@@ -290,9 +290,8 @@ export class ReportRecordService {
         studentId: row.student_id,
         studentName: row.student_name,
         costDetail: row.cost_detail,
-        analysis: row.analysis,
         analysisData: row.analysis_data,
-        createdAt: new Date(row.created_at).toISOString(),
+        createdAt: toBeijingTime(row.created_at),
       };
     } catch (error) {
       console.error('❌ 查询报告详情失败:', error);
@@ -314,7 +313,6 @@ export class ReportRecordService {
       const query = `
         UPDATE reports
         SET 
-          analysis = $3::jsonb,
           analysis_data = $3::jsonb,
           student_name = COALESCE($4, student_name),
           updated_at = NOW()
@@ -380,6 +378,7 @@ export class ReportRecordService {
 
       if (costInfo) {
         // 同时更新解读版数据和花费信息
+        // interpretation_cost 累加（支持重新生成解读版），total_cost 由数据库自动计算
         const query = `
           UPDATE reports
           SET 
@@ -391,12 +390,12 @@ export class ReportRecordService {
                 $3::jsonb
               ),
               '{total,cost}',
-              to_jsonb(COALESCE((cost_detail->'total'->>'cost')::numeric, 0) + $4::numeric)
+              to_jsonb(COALESCE(report_cost, 0) + COALESCE(interpretation_cost, 0) + $4::numeric)
             ),
-            total_cost = COALESCE(total_cost, 0) + $4,
+            interpretation_cost = COALESCE(interpretation_cost, 0) + $4,
             updated_at = NOW()
           WHERE id = $1
-          RETURNING id
+          RETURNING id, report_cost, interpretation_cost, total_cost
         `;
 
         const interpretationCostData = {
@@ -418,8 +417,14 @@ export class ReportRecordService {
         const success = (result.rowCount ?? 0) > 0;
 
         if (success) {
+          const row = result.rows[0];
+          const reportCost = parseFloat(row.report_cost) || 0;
+          const interpretationCost = parseFloat(row.interpretation_cost) || 0;
+          const totalCost = parseFloat(row.total_cost) || 0;
           console.log(`✅ 解读版数据已缓存，报告ID: ${reportId}`);
-          console.log(`   💰 解读版花费: ¥${costInfo.cost.toFixed(4)} (已计入总花费)`);
+          console.log(`   💰 报告生成费用: ¥${reportCost.toFixed(4)}`);
+          console.log(`   💰 解读版累计费用: ¥${interpretationCost.toFixed(4)} (本次: +¥${costInfo.cost.toFixed(4)})`);
+          console.log(`   💰 总费用: ¥${totalCost.toFixed(4)}`);
         } else {
           console.warn(`⚠️ 未找到报告记录，无法缓存解读版数据，报告ID: ${reportId}`);
         }
