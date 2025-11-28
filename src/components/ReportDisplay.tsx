@@ -10,7 +10,7 @@ import mascotLearn from "@/assets/mascot-learn-card.png";
 import mascotGoodJob from "@/assets/mascot-goodjob-card.png";
 import mascotYouDidIt from "@/assets/mascot-youdidit-card.png";
 import microphoneIcon from "@/assets/microphone-icon.png";
-import html2canvas from "html2canvas";
+import { domToPng } from "modern-screenshot";
 import { toast } from "@/hooks/use-toast";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -426,60 +426,41 @@ export const ReportDisplay = ({ data: initialData, onBack }: ReportDisplayProps)
       // 这样无论用户当前窗口是宽是窄，导出的图片排版都是统一的
       const EXPORT_WIDTH = 1400; 
 
-      // 使用 html2canvas 生成高质量截图
-      // 注意：不预先设置 height，让 html2canvas 在 onclone 中根据克隆元素的实际高度自动计算
-      const canvas = await html2canvas(reportElement, {
-        scale: 2, // 提高分辨率
-        useCORS: true, // 允许跨域图片
-        allowTaint: true,
+      // 使用 modern-screenshot 生成高质量截图
+      const dataUrl = await domToPng(reportElement, {
+        scale: 2, // 2倍高清截图
         backgroundColor: '#f5f5f5',
-        logging: false,
-        width: EXPORT_WIDTH,      // 强制宽度
-        windowWidth: EXPORT_WIDTH, // 模拟窗口宽度
-        scrollX: 0, // 避免因页面滚动导致的偏移
-        scrollY: 0, // 避免因页面滚动导致的偏移
-        // 不设置 height 和 windowHeight，让 html2canvas 自动计算克隆后的实际高度
-        onclone: (clonedDoc, clonedElement) => {
-          if (clonedElement) {
-            // 锁定克隆元素的宽度，确保布局响应式规则按 1400px 执行
-            clonedElement.style.width = `${EXPORT_WIDTH}px`;
-            clonedElement.style.maxWidth = `${EXPORT_WIDTH}px`;
-            clonedElement.style.margin = '0 auto'; // 居中
-            clonedElement.style.setProperty('--report-export-width', `${EXPORT_WIDTH}px`);
-            // 确保高度自动扩展
-            clonedElement.style.height = 'auto';
-            clonedElement.style.overflow = 'visible';
-            
-            // 优化：在导出模式下，强制所有卡片高度拉伸，避免参差不齐
-            const cards = clonedElement.querySelectorAll('.grid > div');
-            cards.forEach((card) => {
-                if (card instanceof HTMLElement) {
-                    card.style.height = '100%';
-                }
-            });
+        width: EXPORT_WIDTH,
+        height: reportElement.scrollHeight,
+        style: {
+          width: `${EXPORT_WIDTH}px`,
+          maxWidth: `${EXPORT_WIDTH}px`,
+          height: 'auto',
+          overflow: 'visible',
+        },
+        filter: (node: Node) => {
+          // 过滤掉按钮区域
+          if (node instanceof HTMLElement && node.id === 'action-buttons') {
+            return false;
           }
-          
-          // 给克隆的 body 添加导出类名
-          clonedDoc.body.classList.add('report-exporting');
-
-          // 在克隆的文档中隐藏按钮区域
-          const buttonsElement = clonedDoc.getElementById('action-buttons');
-          if (buttonsElement) {
-            buttonsElement.style.display = 'none';
+          return true;
+        },
+        onCloneNode: (clonedNode: Node) => {
+          if (clonedNode instanceof HTMLElement) {
+            // 优化：在导出模式下，强制所有卡片高度拉伸，避免参差不齐
+            const cards = clonedNode.querySelectorAll('.grid > div');
+            cards.forEach((card) => {
+              if (card instanceof HTMLElement) {
+                card.style.height = '100%';
+              }
+            });
           }
         },
       });
 
-      // 将 canvas 转换为图片并下载
-      const blob = await new Promise<Blob>((resolve, reject) => {
-        canvas.toBlob((generatedBlob) => {
-          if (generatedBlob) {
-            resolve(generatedBlob);
-          } else {
-            reject(new Error('生成图片失败'));
-          }
-        }, 'image/png');
-      });
+      // 将 dataUrl 转换为 Blob
+      const response = await fetch(dataUrl);
+      const blob = await response.blob();
 
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
