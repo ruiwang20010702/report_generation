@@ -70,6 +70,11 @@ export function initBaiduAnalytics(): boolean {
 export function trackPageView(pageUrl?: string): void {
   if (!isAnalyticsEnabled()) return;
 
+  // 确保 _hmt 数组已初始化
+  if (!window._hmt) {
+    window._hmt = [];
+  }
+
   const url = pageUrl || window.location.pathname + window.location.search;
   window._hmt.push(['_trackPageview', url]);
   
@@ -104,6 +109,11 @@ export function trackEvent(
 ): void {
   if (!isAnalyticsEnabled()) return;
 
+  // 确保 _hmt 数组已初始化
+  if (!window._hmt) {
+    window._hmt = [];
+  }
+
   window._hmt.push(['_trackEvent', category, action, label, value]);
   
   if (import.meta.env.DEV) {
@@ -118,6 +128,11 @@ export function trackEvent(
  */
 export function setUserId(userId: string): void {
   if (!isAnalyticsEnabled()) return;
+
+  // 确保 _hmt 数组已初始化
+  if (!window._hmt) {
+    window._hmt = [];
+  }
 
   window._hmt.push(['_setUserId', userId]);
   

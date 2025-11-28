@@ -13,7 +13,9 @@ import {
   validateAndFixGrammarExamples,
   validateAndFixNegativePercentages,
   validateAndFixDataConsistency,
-  normalizeLearningData
+  normalizeLearningData,
+  fixPronunciationErrorTypes,
+  fixGrammarErrorTypes
 } from './dataValidator.js';
 import type { SingleVideoResult, StudentInfo } from './types.js';
 import type { VideoAnalysisResponse, CostBreakdown } from '../../types/index.js';
@@ -400,6 +402,22 @@ export async function compareVideos(
     
     // 后处理 AI 调用使用量累加器
     let postProcessingUsage: PostProcessingUsage = createEmptyUsage();
+    
+    // AI 重新判断发音错误类型（在音标修复后）
+    const errorTypeFixUsage = await fixPronunciationErrorTypes(analysisData, openai, model);
+    postProcessingUsage.promptTokens += errorTypeFixUsage.promptTokens;
+    postProcessingUsage.completionTokens += errorTypeFixUsage.completionTokens;
+    postProcessingUsage.totalTokens += errorTypeFixUsage.totalTokens;
+    postProcessingUsage.cost += errorTypeFixUsage.cost;
+    postProcessingUsage.callCount += errorTypeFixUsage.callCount;
+    
+    // AI 重新判断语法错误类型（在语法示例修复后）
+    const grammarTypeFixUsage = await fixGrammarErrorTypes(analysisData, openai, model);
+    postProcessingUsage.promptTokens += grammarTypeFixUsage.promptTokens;
+    postProcessingUsage.completionTokens += grammarTypeFixUsage.completionTokens;
+    postProcessingUsage.totalTokens += grammarTypeFixUsage.totalTokens;
+    postProcessingUsage.cost += grammarTypeFixUsage.cost;
+    postProcessingUsage.callCount += grammarTypeFixUsage.callCount;
     
     // 验证并修复负值百分比
     const negativeFixUsage = await validateAndFixNegativePercentages(analysisData, openai, model);

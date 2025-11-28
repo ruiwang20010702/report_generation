@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,6 +9,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Film, User, GraduationCap, TrendingUp, Zap, CalendarIcon } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import { AnalyticsEvents } from "@/config/analytics";
 
 interface FormData {
   video1: string;
@@ -54,6 +55,16 @@ export const VideoAnalysisForm = ({ onSubmit }: VideoAnalysisFormProps) => {
   const [selectedDate2, setSelectedDate2] = useState<Date>();
 
   const [errors, setErrors] = useState<Partial<FormData>>({});
+  
+  // 追踪表单开始填写（仅触发一次）
+  const hasTrackedFormStart = useRef(false);
+  
+  useEffect(() => {
+    if (!hasTrackedFormStart.current) {
+      AnalyticsEvents.formStart();
+      hasTrackedFormStart.current = true;
+    }
+  }, []);
 
   // 更新表单字段，如果 useMockData 为 true，则重置为 false
   const updateFormField = (updates: Partial<FormData>) => {
@@ -136,7 +147,16 @@ export const VideoAnalysisForm = ({ onSubmit }: VideoAnalysisFormProps) => {
     }
 
     setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    
+    // 追踪表单验证失败事件
+    const errorFields = Object.keys(newErrors);
+    if (errorFields.length > 0) {
+      errorFields.forEach(field => {
+        AnalyticsEvents.formValidationError(field);
+      });
+    }
+    
+    return errorFields.length === 0;
   };
 
   const isValidUrl = (url: string): boolean => {
@@ -193,6 +213,9 @@ export const VideoAnalysisForm = ({ onSubmit }: VideoAnalysisFormProps) => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (validateForm()) {
+      // 追踪表单提交事件
+      AnalyticsEvents.formSubmit();
+      
       const submitData = {
         ...formData,
         unit: formData.unit ? `Unit ${formData.unit}` : ""

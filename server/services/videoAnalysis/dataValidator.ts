@@ -68,10 +68,24 @@ export function validateAndFixPronunciationExamples(analysisData: any): void {
   }
   
   let fixedCount = 0;
+  let swappedCount = 0;
   
   for (const example of examples) {
     const beforeIncorrect = example.incorrect;
     const beforeCorrect = example.correct;
+    
+    // 🔄 首先检查是否需要交换 incorrect 和 correct
+    // 如果 incorrect 看起来更像标准音标，而 correct 包含非标准符号，则交换
+    if (shouldSwapPhonetics(example.word, example.incorrect, example.correct)) {
+      const temp = example.incorrect;
+      example.incorrect = example.correct;
+      example.correct = temp;
+      swappedCount++;
+      console.log(`🔄 交换发音示例: ${example.word}`);
+      console.log(`   原始 → incorrect="${beforeIncorrect}", correct="${beforeCorrect}"`);
+      console.log(`   交换 → incorrect="${example.incorrect}", correct="${example.correct}"`);
+    }
+    
     const incorrectNormalized = normalizePhoneticString(example.incorrect || '');
     const correctNormalized = normalizePhoneticString(example.correct || '');
 
@@ -81,18 +95,103 @@ export function validateAndFixPronunciationExamples(analysisData: any): void {
       if (fixed) {
         fixedCount++;
         console.log(`🔧 自动修复发音示例: ${example.word}`);
-        console.log(`   原始 → incorrect="${beforeIncorrect}", correct="${beforeCorrect}"`);
+        console.log(`   原始 → incorrect="${example.incorrect}", correct="${example.correct}"`);
         console.log(`   修复 → incorrect="${example.incorrect}", correct="${example.correct}"`);
       }
     }
   }
 
   // 日志输出
-  if (fixedCount > 0) {
-    console.log(`✅ 发音示例验证完成: ${examples.length} 个示例，其中 ${fixedCount} 个音标已自动修复`);
+  if (fixedCount > 0 || swappedCount > 0) {
+    console.log(`✅ 发音示例验证完成: ${examples.length} 个示例，其中 ${swappedCount} 个已交换，${fixedCount} 个音标已自动修复`);
   } else {
     console.log(`✅ 发音示例验证完成: 所有 ${examples.length} 个示例均有效`);
   }
+}
+
+/**
+ * 判断是否需要交换 incorrect 和 correct
+ * 检测 AI 是否把 incorrect 和 correct 搞反了
+ */
+function shouldSwapPhonetics(word: string, incorrect: string, correct: string): boolean {
+  if (!incorrect || !correct || !word) return false;
+  
+  const wordLower = word.toLowerCase();
+  
+  // 常见单词的标准音标映射（用于检测）
+  const standardPhonetics: Record<string, string[]> = {
+    'milk': ['mɪlk', 'milk'],
+    'big': ['bɪg', 'bɪɡ', 'big'],
+    'night': ['naɪt', 'nait'],
+    'think': ['θɪŋk', 'θink'],
+    'this': ['ðɪs', 'ðis'],
+    'very': ['veri', 'verɪ'],
+    'want': ['wɒnt', 'wɔnt', 'wɑnt'],
+    'like': ['laɪk', 'laik'],
+    'good': ['gʊd', 'gud'],
+    'look': ['lʊk', 'luk'],
+  };
+  
+  // 非标准音标符号（通常出现在错误发音中，或者是过度精细的语音学标注）
+  const nonStandardSymbols = ['ɫ', 'ɪ̯', 'ʔ', 'ˑ', '̃', '̥', '̩', '̯'];
+  
+  const incorrectNorm = normalizePhoneticString(incorrect);
+  const correctNorm = normalizePhoneticString(correct);
+  
+  // 检查1: correct 包含非标准符号，而 incorrect 不包含
+  const correctHasNonStandard = nonStandardSymbols.some(s => correct.includes(s));
+  const incorrectHasNonStandard = nonStandardSymbols.some(s => incorrect.includes(s));
+  
+  if (correctHasNonStandard && !incorrectHasNonStandard) {
+    console.log(`   检测到 correct 包含非标准符号: ${correct}`);
+    return true;
+  }
+  
+  // 检查2: 如果有该单词的标准音标，检查哪个更接近
+  if (standardPhonetics[wordLower]) {
+    const standards = standardPhonetics[wordLower];
+    const incorrectMatchesStandard = standards.some(s => 
+      incorrectNorm === normalizePhoneticString(s) || incorrectNorm.includes(normalizePhoneticString(s))
+    );
+    const correctMatchesStandard = standards.some(s => 
+      correctNorm === normalizePhoneticString(s) || correctNorm.includes(normalizePhoneticString(s))
+    );
+    
+    // 如果 incorrect 匹配标准音标，而 correct 不匹配，说明反了
+    if (incorrectMatchesStandard && !correctMatchesStandard) {
+      console.log(`   检测到 incorrect "${incorrect}" 更接近标准音标，而 correct "${correct}" 不匹配`);
+      return true;
+    }
+  }
+  
+  // 检查3: correct 音标与单词拼写完全不符（如 big 的 correct 是 bɪɫ，结尾不对）
+  // 简单检查：单词结尾字母与音标结尾是否大致对应
+  const wordEnding = wordLower.slice(-1);
+  const correctEnding = correctNorm.slice(-1);
+  const incorrectEnding = incorrectNorm.slice(-1);
+  
+  const endingMap: Record<string, string[]> = {
+    'g': ['g', 'ɡ', 'k'],
+    'k': ['k', 'g', 'ɡ'],
+    't': ['t', 'd'],
+    'd': ['d', 't'],
+    'p': ['p', 'b'],
+    'b': ['b', 'p'],
+  };
+  
+  if (endingMap[wordEnding]) {
+    const validEndings = endingMap[wordEnding];
+    const correctEndingValid = validEndings.includes(correctEnding);
+    const incorrectEndingValid = validEndings.includes(incorrectEnding);
+    
+    // 如果 incorrect 结尾正确，而 correct 结尾错误，说明反了
+    if (incorrectEndingValid && !correctEndingValid) {
+      console.log(`   检测到 correct "${correct}" 结尾不匹配单词 "${word}"，而 incorrect "${incorrect}" 匹配`);
+      return true;
+    }
+  }
+  
+  return false;
 }
 
 /**
@@ -287,6 +386,426 @@ function generateFallbackIncorrect(correct: string): string {
   }
 
   return `${correct} (var)`;
+}
+
+/**
+ * 使用 AI 重新判断发音错误类型
+ * 在音标修复后调用，确保 type 与实际音标差异一致
+ */
+export async function fixPronunciationErrorTypes(
+  analysisData: any,
+  openai: OpenAI,
+  model: string
+): Promise<PostProcessingUsage> {
+  if (!analysisData?.improvementAreas?.pronunciation?.examples) {
+    return createEmptyUsage();
+  }
+
+  const examples = analysisData.improvementAreas.pronunciation.examples;
+  if (!Array.isArray(examples) || examples.length === 0) {
+    return createEmptyUsage();
+  }
+
+  // 检查是否有需要修正的示例（有 incorrect 和 correct 音标的）
+  const validExamples = examples.filter(
+    (ex: any) => ex.word && ex.incorrect && ex.correct
+  );
+
+  if (validExamples.length === 0) {
+    return createEmptyUsage();
+  }
+
+  console.log(`\n🔧 ===== AI 重新判断发音错误类型 =====`);
+  console.log(`   需要处理 ${validExamples.length} 个发音示例`);
+
+  try {
+    const prompt = `你是一位专业的英语语音学专家。请根据以下单词的错误音标和正确音标，准确判断发音错误的类型。
+
+**发音示例列表**：
+${examples.map((ex: any, i: number) => `
+${i + 1}. 单词: ${ex.word}
+   错误音标: ${ex.incorrect}
+   正确音标: ${ex.correct}
+   当前类型: ${ex.type || '未标注'}
+`).join('')}
+
+**错误类型分类规则**：
+1. **元音不准确** - 元音音素发音错误，例如：
+   - /iː/ 读成 /ɪ/（长元音变短元音）
+   - /æ/ 读成 /e/（前元音混淆）
+   - /aɪ/ 读成 /æ/（双元音变单元音）
+   - /ɔː/ 读成 /ɒ/（后元音混淆）
+
+2. **辅音发音** - 辅音音素发音错误，例如：
+   - /θ/ 读成 /s/（th音问题）
+   - /ð/ 读成 /d/ 或 /z/
+   - /v/ 读成 /w/（唇齿音问题）
+   - /r/ 读成 /l/（流音混淆）
+   - /ŋ/ 读成 /n/（鼻音问题）
+
+3. **重音问题** - 重音位置错误，例如：
+   - 重音符号 ˈ 位置不同
+   - 重音音节改变
+
+请以 JSON 格式返回每个单词的正确错误类型：
+{
+  "corrections": [
+    { "word": "单词1", "type": "正确的错误类型" },
+    { "word": "单词2", "type": "正确的错误类型" },
+    ...
+  ]
+}
+
+**重要**：
+- 仔细对比 incorrect 和 correct 音标的具体差异
+- 根据差异的音素类型（元音/辅音/重音）判断错误类型
+- type 只能是以下三个值之一：「元音不准确」「辅音发音」「重音问题」`;
+
+    const aiCallConfig: AICallConfig = {
+      maxRetries: 2,
+      retryDelayBase: 1000,
+      timeout: 60000,
+      operationLabel: '发音错误类型判断AI调用',
+    };
+
+    const response = await withRetry(
+      () => openai.chat.completions.create({
+        model,
+        messages: [
+          { role: 'system', content: '你是一位专业的英语语音学专家，擅长分析发音问题。' },
+          { role: 'user', content: prompt }
+        ],
+        response_format: { type: 'json_object' },
+        temperature: 0.2,
+        max_tokens: 500
+      }),
+      aiCallConfig
+    );
+
+    const content = response.choices[0]?.message?.content;
+    if (!content) throw new Error('AI 未返回内容');
+
+    const result = JSON.parse(content);
+    
+    const usage = response.usage;
+    const promptTokens = usage?.prompt_tokens || 0;
+    const completionTokens = usage?.completion_tokens || 0;
+    const totalTokens = usage?.total_tokens || 0;
+    const cost = calculateAICost(model, promptTokens, completionTokens);
+    
+    console.log(`💰 错误类型判断 AI 调用: ${promptTokens} input + ${completionTokens} output = ${totalTokens} tokens, ¥${cost.toFixed(4)}`);
+
+    // 更新错误类型
+    if (result.corrections && Array.isArray(result.corrections)) {
+      let updatedCount = 0;
+      for (const correction of result.corrections) {
+        const example = examples.find((ex: any) => ex.word === correction.word);
+        if (example && correction.type) {
+          const oldType = example.type;
+          example.type = correction.type;
+          if (oldType !== correction.type) {
+            updatedCount++;
+            console.log(`   ✅ ${correction.word}: "${oldType}" → "${correction.type}"`);
+          }
+        }
+      }
+      console.log(`   共更新 ${updatedCount}/${examples.length} 个错误类型`);
+    }
+
+    console.log(`======================================\n`);
+    
+    return { promptTokens, completionTokens, totalTokens, cost, callCount: 1 };
+
+  } catch (error) {
+    console.error(`   ❌ AI 判断错误类型失败:`, error);
+    console.log(`   使用规则引擎进行降级判断...`);
+    
+    // 降级：使用规则引擎判断
+    for (const example of examples) {
+      const newType = inferErrorTypeFromPhonetics(example.incorrect, example.correct);
+      if (newType && newType !== example.type) {
+        console.log(`   🔄 ${example.word}: "${example.type}" → "${newType}" (规则推断)`);
+        example.type = newType;
+      }
+    }
+    
+    console.log(`======================================\n`);
+    return createEmptyUsage();
+  }
+}
+
+/**
+ * 基于音标差异推断错误类型（降级方案）
+ */
+function inferErrorTypeFromPhonetics(incorrect: string, correct: string): string | null {
+  if (!incorrect || !correct) return null;
+
+  // 定义元音和辅音音素
+  const vowels = ['iː', 'i:', 'ɪ', 'e', 'æ', 'ɑː', 'ɑ:', 'ɒ', 'ɔː', 'ɔ:', 'ʊ', 'uː', 'u:', 'ʌ', 'ɜː', 'ɜ:', 'ə', 'aɪ', 'eɪ', 'ɔɪ', 'aʊ', 'əʊ', 'oʊ', 'ɪə', 'eə', 'ʊə'];
+  const consonants = ['p', 'b', 't', 'd', 'k', 'g', 'f', 'v', 'θ', 'ð', 's', 'z', 'ʃ', 'ʒ', 'h', 'm', 'n', 'ŋ', 'l', 'r', 'w', 'j', 'tʃ', 'dʒ'];
+
+  // 检查重音差异
+  const incorrectStress = (incorrect.match(/ˈ/g) || []).length;
+  const correctStress = (correct.match(/ˈ/g) || []).length;
+  const incorrectStressPos = incorrect.indexOf('ˈ');
+  const correctStressPos = correct.indexOf('ˈ');
+  
+  if (incorrectStress !== correctStress || (incorrectStressPos !== correctStressPos && incorrectStressPos >= 0 && correctStressPos >= 0)) {
+    return '重音问题';
+  }
+
+  // 移除重音符号和斜杠后比较
+  const cleanIncorrect = incorrect.replace(/[ˈˌ\/]/g, '').toLowerCase();
+  const cleanCorrect = correct.replace(/[ˈˌ\/]/g, '').toLowerCase();
+
+  // 检查元音差异
+  for (const vowel of vowels) {
+    const inIncorrect = cleanIncorrect.includes(vowel);
+    const inCorrect = cleanCorrect.includes(vowel);
+    if (inIncorrect !== inCorrect) {
+      return '元音不准确';
+    }
+  }
+
+  // 检查辅音差异
+  for (const consonant of consonants) {
+    const inIncorrect = cleanIncorrect.includes(consonant);
+    const inCorrect = cleanCorrect.includes(consonant);
+    if (inIncorrect !== inCorrect) {
+      return '辅音发音';
+    }
+  }
+
+  // 默认返回元音问题（最常见）
+  return '元音不准确';
+}
+
+/**
+ * 使用 AI 重新判断语法错误类型
+ * 在语法示例修复后调用，确保 category 与实际错误差异一致
+ */
+export async function fixGrammarErrorTypes(
+  analysisData: any,
+  openai: OpenAI,
+  model: string
+): Promise<PostProcessingUsage> {
+  if (!analysisData?.improvementAreas?.grammar?.examples) {
+    return createEmptyUsage();
+  }
+
+  const examples = analysisData.improvementAreas.grammar.examples;
+  if (!Array.isArray(examples) || examples.length === 0) {
+    return createEmptyUsage();
+  }
+
+  // 检查是否有需要修正的示例（有 incorrect 和 correct 句子的）
+  const validExamples = examples.filter(
+    (ex: any) => ex.incorrect && ex.correct && ex.incorrect.trim() !== ex.correct.trim()
+  );
+
+  if (validExamples.length === 0) {
+    return createEmptyUsage();
+  }
+
+  console.log(`\n🔧 ===== AI 重新判断语法错误类型 =====`);
+  console.log(`   需要处理 ${validExamples.length} 个语法示例`);
+
+  try {
+    const prompt = `你是一位专业的英语语法专家。请根据以下句子的错误版本和正确版本，准确判断语法错误的类型。
+
+**语法示例列表**：
+${examples.map((ex: any, i: number) => `
+${i + 1}. 错误句子: ${ex.incorrect}
+   正确句子: ${ex.correct}
+   当前类型: ${ex.category || '未标注'}
+`).join('')}
+
+**错误类型分类规则**（请选择最匹配的一个）：
+
+1. **动词时态** - 时态使用错误，例如：
+   - "I go yesterday" → "I went yesterday"
+   - "She is work" → "She is working"
+
+2. **主谓一致** - 主语和动词数量不一致，例如：
+   - "He go" → "He goes"
+   - "They was" → "They were"
+
+3. **冠词遗漏** - 缺少必要的冠词 a/an/the，例如：
+   - "I have cat" → "I have a cat"
+   - "I can see it" → "I can see it"（如果原句缺少冠词）
+
+4. **冠词误用** - 使用了错误的冠词，例如：
+   - "a apple" → "an apple"
+   - "the sun is a star" → "the sun is a star"
+
+5. **词序错误** - 单词顺序不正确，例如：
+   - "I like very much it" → "I like it very much"
+   - "Make and make look to make make" → 正确词序
+
+6. **介词错误** - 介词使用不当，例如：
+   - "arrive to" → "arrive at"
+   - "good in" → "good at"
+
+7. **代词错误** - 代词使用不当，例如：
+   - "Me like it" → "I like it"
+   - "Him is tall" → "He is tall"
+
+8. **单复数错误** - 名词单复数使用错误，例如：
+   - "two book" → "two books"
+   - "many child" → "many children"
+
+9. **动词形式** - 动词形式错误（非时态），例如：
+   - "I want go" → "I want to go"
+   - "She make me happy" → "She makes me happy"
+
+10. **be动词缺失** - 缺少必要的 be 动词，例如：
+    - "I fine" → "I am fine"
+    - "She happy" → "She is happy"
+
+请以 JSON 格式返回每个示例的正确错误类型：
+{
+  "corrections": [
+    { "index": 0, "category": "正确的错误类型" },
+    { "index": 1, "category": "正确的错误类型" },
+    ...
+  ]
+}
+
+**重要**：
+- 仔细对比 incorrect 和 correct 句子的具体差异
+- 根据差异的语法特征判断错误类型
+- category 必须是上述10种类型之一
+- 如果不确定，选择最接近的类型`;
+
+    const aiCallConfig: AICallConfig = {
+      maxRetries: 2,
+      retryDelayBase: 1000,
+      timeout: 60000,
+      operationLabel: '语法错误类型判断AI调用',
+    };
+
+    const response = await withRetry(
+      () => openai.chat.completions.create({
+        model,
+        messages: [
+          { role: 'system', content: '你是一位专业的英语语法专家，擅长分析语法问题。' },
+          { role: 'user', content: prompt }
+        ],
+        response_format: { type: 'json_object' },
+        temperature: 0.2,
+        max_tokens: 500
+      }),
+      aiCallConfig
+    );
+
+    const content = response.choices[0]?.message?.content;
+    if (!content) throw new Error('AI 未返回内容');
+
+    const result = JSON.parse(content);
+    
+    const usage = response.usage;
+    const promptTokens = usage?.prompt_tokens || 0;
+    const completionTokens = usage?.completion_tokens || 0;
+    const totalTokens = usage?.total_tokens || 0;
+    const cost = calculateAICost(model, promptTokens, completionTokens);
+    
+    console.log(`💰 语法错误类型判断 AI 调用: ${promptTokens} input + ${completionTokens} output = ${totalTokens} tokens, ¥${cost.toFixed(4)}`);
+
+    // 更新错误类型
+    if (result.corrections && Array.isArray(result.corrections)) {
+      let updatedCount = 0;
+      for (const correction of result.corrections) {
+        const index = correction.index;
+        if (typeof index === 'number' && index >= 0 && index < examples.length && correction.category) {
+          const example = examples[index];
+          const oldCategory = example.category;
+          example.category = correction.category;
+          if (oldCategory !== correction.category) {
+            updatedCount++;
+            console.log(`   ✅ "${example.incorrect?.slice(0, 30)}...": "${oldCategory}" → "${correction.category}"`);
+          }
+        }
+      }
+      console.log(`   共更新 ${updatedCount}/${examples.length} 个错误类型`);
+    }
+
+    console.log(`======================================\n`);
+    
+    return { promptTokens, completionTokens, totalTokens, cost, callCount: 1 };
+
+  } catch (error) {
+    console.error(`   ❌ AI 判断语法错误类型失败:`, error);
+    console.log(`   使用规则引擎进行降级判断...`);
+    
+    // 降级：使用规则引擎判断
+    for (const example of examples) {
+      const newCategory = inferGrammarErrorType(example.incorrect, example.correct);
+      if (newCategory && newCategory !== example.category) {
+        console.log(`   🔄 "${example.incorrect?.slice(0, 20)}...": "${example.category}" → "${newCategory}" (规则推断)`);
+        example.category = newCategory;
+      }
+    }
+    
+    console.log(`======================================\n`);
+    return createEmptyUsage();
+  }
+}
+
+/**
+ * 基于句子差异推断语法错误类型（降级方案）
+ */
+function inferGrammarErrorType(incorrect: string, correct: string): string | null {
+  if (!incorrect || !correct) return null;
+
+  const inc = incorrect.toLowerCase().trim();
+  const cor = correct.toLowerCase().trim();
+
+  // 检查 be 动词缺失
+  const beVerbs = ['am', 'is', 'are', 'was', 'were'];
+  for (const be of beVerbs) {
+    if (!inc.includes(` ${be} `) && !inc.startsWith(`${be} `) && 
+        (cor.includes(` ${be} `) || cor.startsWith(`${be} `))) {
+      return 'be动词缺失';
+    }
+  }
+
+  // 检查冠词问题
+  const articles = ['a ', 'an ', 'the '];
+  const incHasArticle = articles.some(a => inc.includes(a));
+  const corHasArticle = articles.some(a => cor.includes(a));
+  if (!incHasArticle && corHasArticle) {
+    return '冠词遗漏';
+  }
+  if (incHasArticle && corHasArticle) {
+    // 检查是否是冠词误用（如 a -> an）
+    if ((inc.includes(' a ') && cor.includes(' an ')) || 
+        (inc.includes(' an ') && cor.includes(' a '))) {
+      return '冠词误用';
+    }
+  }
+
+  // 检查词序问题（单词相同但顺序不同）
+  const incWords = inc.split(/\s+/).sort();
+  const corWords = cor.split(/\s+/).sort();
+  if (incWords.join(' ') === corWords.join(' ') && inc !== cor) {
+    return '词序错误';
+  }
+
+  // 检查时态问题
+  const pastTensePatterns = /\b(went|came|did|was|were|had|made|took|got|said)\b/;
+  if (!pastTensePatterns.test(inc) && pastTensePatterns.test(cor)) {
+    return '动词时态';
+  }
+
+  // 检查主谓一致
+  if ((inc.includes(' go ') && cor.includes(' goes ')) ||
+      (inc.includes(' have ') && cor.includes(' has ')) ||
+      (inc.includes(' do ') && cor.includes(' does '))) {
+    return '主谓一致';
+  }
+
+  // 默认返回动词形式
+  return '动词形式';
 }
 
 /**

@@ -15,6 +15,7 @@ import { toast } from "@/hooks/use-toast";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { videoAnalysisAPI, type VideoAnalysisResponse } from "@/services/api";
+import { AnalyticsEvents } from "@/config/analytics";
 
 type ReportData = VideoAnalysisResponse;
 
@@ -240,6 +241,13 @@ export const ReportDisplay = ({ data: initialData, onBack }: ReportDisplayProps)
   // 改为按 reportId 存储，而不是 studentId
   const storageKey = useMemo(() => getStorageKey(reportId), [reportId]);
 
+  // 追踪报告查看事件（组件挂载时触发一次）
+  useEffect(() => {
+    if (reportId) {
+      AnalyticsEvents.reportView(reportId);
+    }
+  }, [reportId]);
+
   const loadFromLocalStorage = useCallback(() => {
     if (typeof window === "undefined") return null;
     const storedValue = localStorage.getItem(storageKey);
@@ -396,6 +404,11 @@ export const ReportDisplay = ({ data: initialData, onBack }: ReportDisplayProps)
 
   const handleDownloadImage = async () => {
     setIsDownloading(true);
+    
+    // 追踪报告下载事件
+    if (reportId) {
+      AnalyticsEvents.reportDownload(reportId);
+    }
     
     toast({
       title: "正在生成长图...",
